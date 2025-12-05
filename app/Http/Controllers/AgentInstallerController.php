@@ -44,7 +44,8 @@ $ThisScriptUrl = "{BASE_URL}/agent/install.ps1"
 if (-not (Require-Admin)) {
     try {
         Ensure-Tls12
-        Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12; iwr -useb '$ThisScriptUrl' | iex`"
+        $elevatedCmd = "[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12; iwr -useb '$ThisScriptUrl' | iex"
+        Start-Process PowerShell -Verb RunAs -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $elevatedCmd)
         exit
     } catch {
         Write-Host "Please run this script in an elevated PowerShell (Run as Administrator)." -ForegroundColor Yellow
@@ -214,46 +215,46 @@ $agentContent = @"
 # Runs periodically to send metrics to the cloud panel.
 # --------------------------------------------------------
 
-\$RmmBaseUrl  = "{BASE_URL}"
-\$MetricsUrl  = "{BASE_URL}/api/metrics"
-\$KeyFile     = "$KeyFile"
-\$LogFile     = "$LogFile"
+`$RmmBaseUrl  = "{BASE_URL}"
+`$MetricsUrl  = "{BASE_URL}/api/metrics"
+`$KeyFile     = "$KeyFile"
+`$LogFile     = "$LogFile"
 
 function Log {
-    param([string]\$msg)
-    \$timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    "\$timestamp  \$msg" | Out-File \$LogFile -Append
+    param([string]`$msg)
+    `$timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    "`$timestamp  `$msg" | Out-File `$LogFile -Append
 }
 
 # Load API key
-if (!(Test-Path \$KeyFile)) {
+if (!(Test-Path `$KeyFile)) {
     Log "ERROR: No API key found. Exiting."
     exit
 }
 
-\$apiKey = (Get-Content \$KeyFile -Raw)
+`$apiKey = (Get-Content `$KeyFile -Raw)
 
 try {
     # Collect metrics from Netdata (raw JSON)
-    try { \$cpu  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.cpu").Content } catch { \$cpu = $null }
-    try { \$ram  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.ram").Content } catch { \$ram = $null }
-    try { \$disk = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/charts?filter=disk").Content } catch { \$disk = $null }
+    try { `$cpu  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.cpu").Content } catch { `$cpu = `$null }
+    try { `$ram  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.ram").Content } catch { `$ram = `$null }
+    try { `$disk = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/charts?filter=disk").Content } catch { `$disk = `$null }
 
-    \$payload = @{
-        hostname = \$env:COMPUTERNAME
-        cpu = \$cpu
-        ram = \$ram
-        disks = \$disk
+    `$payload = @{
+        hostname = `$env:COMPUTERNAME
+        cpu = `$cpu
+        ram = `$ram
+        disks = `$disk
         timestamp = (Get-Date).ToUniversalTime().ToString("o")
     } | ConvertTo-Json
 
-    \$apiKey = \$apiKey.Trim()
-    Invoke-RestMethod -Uri \$MetricsUrl -Method POST -Headers @{ "X-Agent-Key" = \$apiKey } -Body \$payload -ContentType "application/json"
+    `$apiKey = `$apiKey.Trim()
+    Invoke-RestMethod -Uri `$MetricsUrl -Method POST -Headers @{ "X-Agent-Key" = `$apiKey } -Body `$payload -ContentType "application/json"
 
     Log "Metrics sent."
 }
 catch {
-    Log "ERROR sending metrics: \$_"
+    Log "ERROR sending metrics: `$_"
 }
 "@
 
