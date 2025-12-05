@@ -24,6 +24,33 @@ class AgentInstallerController extends Controller
 
 $ErrorActionPreference = "Stop"
 
+# Ensure TLS 1.2 for web requests (PS5/PS7 compatible)
+function Ensure-Tls12 {
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    } catch { }
+}
+
+# Ensure the script runs elevated
+function Require-Admin {
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# If not admin, re-launch elevated and re-execute from URL
+$ThisScriptUrl = "{BASE_URL}/agent/install.ps1"
+if (-not (Require-Admin)) {
+    try {
+        Ensure-Tls12
+        Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `[System.Net.ServicePointManager]::SecurityProtocol=[System.Net.SecurityProtocolType]::Tls12; iwr -useb '$ThisScriptUrl' | iex`"
+        exit
+    } catch {
+        Write-Host "Please run this script in an elevated PowerShell (Run as Administrator)." -ForegroundColor Yellow
+        exit 1
+    }
+}
+
 # -------------------------------
 # CONFIG
 # -------------------------------
@@ -59,25 +86,82 @@ Log "===== RMM Agent Install Starting ====="
 # ===================================================================
 # STEP 1 — Install Netdata
 # ===================================================================
-Log "Installing Netdata..."
+function Test-NetdataInstalled { if (Get-Service -Name "netdata" -ErrorAction SilentlyContinue) { return $true } else { return $false } }
+function Ensure-NetdataRunning {
+    try { Set-Service -Name "netdata" -StartupType Automatic -ErrorAction SilentlyContinue } catch {}
+    try {
+        $svc = Get-Service -Name "netdata" -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -ne 'Running') { Start-Service -Name "netdata" -ErrorAction SilentlyContinue }
+    } catch {}
+}
 
-$netdataUrl = "https://github.com/netdata/netdata/releases/latest/download/netdata.msi"
-$tempInstaller = "$env:TEMP\netdata.msi"
+Log "Installing/Checking Netdata..."
+Ensure-Tls12
 
-Invoke-WebRequest -Uri $netdataUrl -OutFile $tempInstaller -UseBasicParsing
-Start-Process "msiexec.exe" -ArgumentList "/i `"$tempInstaller`" /qn /norestart" -Wait
-Remove-Item $tempInstaller -Force
+if (Test-NetdataInstalled) {
+    Log "Netdata already installed. Ensuring service is running..."
+    Ensure-NetdataRunning
 
-Start-Service -Name "netdata" -ErrorAction SilentlyContinue
-Set-Service -Name "netdata" -StartupType Automatic
+    Start-Sleep -Seconds 2
+    $apiOk = $false
+    try { Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -UseBasicParsing | Out-Null; $apiOk = $true } catch { $apiOk = $false }
+    if (-not $apiOk) {
+        Log "Netdata service running but API not reachable, attempting restart..."
+        try { Restart-Service -Name "netdata" -Force -ErrorAction SilentlyContinue } catch {}
+        Start-Sleep -Seconds 3
+        try { Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -UseBasicParsing | Out-Null; $apiOk = $true } catch { $apiOk = $false }
+    }
+    if ($apiOk) { Log "Netdata API reachable." } else { Log "WARNING: Netdata API not reachable. Continuing anyway." }
+} else {
+    try {
+        function Resolve-NetdataMsiUrl {
+            param([string]$PinnedTag = 'v2.8.2')
 
-Start-Sleep -Seconds 3
+            $urls = @()
+            try {
+                $headers = @{ 'User-Agent' = 'rmm-installer' }
+                $latest = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/netdata/netdata/releases/latest"
+                $tag = $latest.tag_name
+                if ($tag) {
+                    $urls += "https://github.com/netdata/netdata/releases/download/$tag/netdata-x64.msi"
+                    $urls += "https://github.com/netdata/netdata/releases/download/$tag/netdata.msi"
+                }
+            } catch { }
 
-try {
-    Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -TimeoutSec 5 -UseBasicParsing | Out-Null
-    Log "Netdata installed successfully."
-} catch {
-    Log "WARNING: Netdata did not respond yet. Continuing anyway."
+            # Fallback to pinned known-good tag
+            $urls += "https://github.com/netdata/netdata/releases/download/$PinnedTag/netdata-x64.msi"
+            $urls += "https://github.com/netdata/netdata/releases/download/$PinnedTag/netdata.msi"
+
+            return $urls
+        }
+
+        $tempInstaller = Join-Path $env:TEMP "netdata.msi"
+
+        $downloaded = $false
+        foreach ($u in (Resolve-NetdataMsiUrl)) {
+            try {
+                Log "Attempting Netdata download from: $u"
+                Invoke-WebRequest -Uri $u -OutFile $tempInstaller -UseBasicParsing
+                $downloaded = $true
+                $netdataUrl = $u
+                break
+            } catch {
+                Log "Download failed from: $u"
+            }
+        }
+
+        if (-not $downloaded) { throw "Unable to download Netdata MSI from known URLs." }
+
+        Start-Process "msiexec.exe" -ArgumentList "/i `"$tempInstaller`" /qn /norestart" -Wait
+        Remove-Item $tempInstaller -Force -ErrorAction SilentlyContinue
+
+        Ensure-NetdataRunning
+
+        Start-Sleep -Seconds 3
+        try { Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -UseBasicParsing | Out-Null; Log "Netdata installed successfully from $netdataUrl." } catch { Log "WARNING: Netdata did not respond yet. Continuing anyway." }
+    } catch {
+        Log "WARNING: Netdata installation failed: $_. Continuing without Netdata."
+    }
 }
 
 
@@ -99,8 +183,8 @@ Log "Enrollment sent. Waiting for approval..."
 # ===================================================================
 while ($true) {
     try {
-        $resp = Invoke-RestMethod -Uri $CheckUrl -Method POST `
-            -Body (@{ hostname = $hostname } | ConvertTo-Json) -ContentType "application/json"
+        Ensure-Tls12
+        $resp = Invoke-RestMethod -Uri $CheckUrl -Method POST -Body (@{ hostname = $hostname } | ConvertTo-Json) -ContentType "application/json"
 
         if ($resp.status -eq "approved") {
             $resp.api_key | Out-File $KeyFile -Encoding ascii -Force
@@ -150,9 +234,9 @@ if (!(Test-Path \$KeyFile)) {
 
 try {
     # Collect metrics from Netdata (raw JSON)
-    \$cpu  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.cpu" -UseBasicParsing).Content
-    \$ram  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.ram" -UseBasicParsing).Content
-    \$disk = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/charts?filter=disk" -UseBasicParsing).Content
+    try { \$cpu  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.cpu").Content } catch { \$cpu = $null }
+    try { \$ram  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.ram").Content } catch { \$ram = $null }
+    try { \$disk = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/charts?filter=disk").Content } catch { \$disk = $null }
 
     \$payload = @{
         hostname = \$env:COMPUTERNAME
@@ -162,9 +246,8 @@ try {
         timestamp = (Get-Date).ToUniversalTime().ToString("o")
     } | ConvertTo-Json
 
-    Invoke-RestMethod -Uri \$MetricsUrl -Method POST `
-        -Headers @{ "X-Agent-Key" = \$apiKey } `
-        -Body \$payload -ContentType "application/json"
+    \$apiKey = \$apiKey.Trim()
+    Invoke-RestMethod -Uri \$MetricsUrl -Method POST -Headers @{ "X-Agent-Key" = \$apiKey } -Body \$payload -ContentType "application/json"
 
     Log "Metrics sent."
 }
@@ -234,4 +317,3 @@ PS1;
         ]);
     }
 }
-
