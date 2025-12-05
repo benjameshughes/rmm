@@ -45,7 +45,8 @@ it('returns api key when device is approved', function (): void {
 
     $response->assertSuccessful()
         ->assertJson([
-            'status' => Device::STATUS_ACTIVE,
+            'status' => 'approved',
+            'device_status' => Device::STATUS_ACTIVE,
             'api_key' => 'KEY-ABC',
         ]);
 });

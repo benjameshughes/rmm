@@ -15,6 +15,15 @@
                 <flux:navbar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                     {{ __('Dashboard') }}
                 </flux:navbar.item>
+                <flux:navbar.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index')" wire:navigate>
+                    {{ __('Devices') }}
+                </flux:navbar.item>
+                <flux:navbar.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>
+                    {{ __('Pending') }}
+                </flux:navbar.item>
+                <flux:navbar.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>
+                    {{ __('Agent') }}
+                </flux:navbar.item>
             </flux:navbar>
 
             <flux:spacer />
@@ -100,6 +109,15 @@
                 <flux:navlist.group :heading="__('Platform')">
                     <flux:navlist.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                       {{ __('Dashboard') }}
+                    </flux:navlist.item>
+                    <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index')" wire:navigate>
+                      {{ __('Devices') }}
+                    </flux:navlist.item>
+                    <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>
+                      {{ __('Pending') }}
+                    </flux:navlist.item>
+                    <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>
+                      {{ __('Agent') }}
                     </flux:navlist.item>
                 </flux:navlist.group>
             </flux:navlist>
