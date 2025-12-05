@@ -22,6 +22,7 @@ class DeviceMetricsController extends Controller
                 'reason' => 'missing_key',
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['message' => 'Missing device key.'], 401);
         }
 
@@ -36,6 +37,7 @@ class DeviceMetricsController extends Controller
                 'key_prefix' => is_string($apiKey) ? substr($apiKey, 0, 8) : null,
                 'ip' => $request->ip(),
             ]);
+
             return response()->json(['message' => 'Invalid or revoked device key.'], 401);
         }
 
@@ -53,9 +55,9 @@ class DeviceMetricsController extends Controller
         // Prefer provided payload, otherwise capture all request input except known scalar fields
         $payload = $input['payload'] ?? null;
         if (! is_array($payload)) {
-            $payload = collect($input)
-                ->except(['cpu', 'ram', 'recorded_at', 'timestamp'])
-                ->toArray();
+            // Keep the original body as payload so raw CPU/RAM JSON isn't lost
+            $payload = $input;
+            unset($payload['recorded_at'], $payload['timestamp']);
         }
 
         DeviceMetric::create([
