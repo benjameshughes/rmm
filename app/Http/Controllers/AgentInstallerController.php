@@ -26,9 +26,10 @@ $ErrorActionPreference = "Stop"
 
 # Ensure TLS 1.2 for web requests (PS5/PS7 compatible)
 function Ensure-Tls12 {
-    try {
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-    } catch { }
+    $sp = [System.Net.ServicePointManager]::SecurityProtocol
+    if (-not ($sp.HasFlag([System.Net.SecurityProtocolType]::Tls12))) {
+        [System.Net.ServicePointManager]::SecurityProtocol = $sp -bor [System.Net.SecurityProtocolType]::Tls12
+    }
 }
 
 # Ensure the script runs elevated
