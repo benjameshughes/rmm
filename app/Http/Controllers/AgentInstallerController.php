@@ -304,6 +304,48 @@ Log "Scheduled task created."
 
 
 # ===================================================================
+# STEP 6 — INSTALL TRAY APP (optional)
+# ===================================================================
+
+$TrayExeUrl = "$RmmBaseUrl/agent/rmm-tray.exe"
+$TrayExePath = "$AgentRoot\rmm-tray.exe"
+
+Log "Checking for tray app..."
+
+try {
+    # Check if tray exe is available on server
+    $trayResponse = Invoke-WebRequest -Uri $TrayExeUrl -Method Head -UseBasicParsing -ErrorAction Stop
+
+    if ($trayResponse.StatusCode -eq 200) {
+        Log "Downloading tray app..."
+        Invoke-WebRequest -Uri $TrayExeUrl -OutFile $TrayExePath -UseBasicParsing
+
+        # Remove "downloaded from internet" flag (bypasses SmartScreen)
+        Unblock-File -Path $TrayExePath -ErrorAction SilentlyContinue
+
+        # Add Windows Defender exclusion for RMM folder
+        try {
+            Add-MpPreference -ExclusionPath $AgentRoot -ErrorAction SilentlyContinue
+            Log "Added Defender exclusion for $AgentRoot"
+        } catch {
+            Log "WARNING: Could not add Defender exclusion (may need manual approval)"
+        }
+
+        # Register tray app to run at startup (current user)
+        $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+        Set-ItemProperty -Path $regPath -Name "RMM-Tray" -Value "`"$TrayExePath`"" -ErrorAction SilentlyContinue
+        Log "Registered tray app for startup"
+
+        # Launch tray app now
+        Start-Process -FilePath $TrayExePath -ErrorAction SilentlyContinue
+        Log "Tray app launched"
+    }
+} catch {
+    Log "Tray app not available on server (optional component). Skipping."
+}
+
+
+# ===================================================================
 # DONE
 # ===================================================================
 

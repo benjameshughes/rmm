@@ -59,4 +59,21 @@ class AgentTrayController extends Controller
             'Content-Type' => 'application/zip',
         ])->deleteFileAfterSend(true);
     }
+
+    /**
+     * Serve the built Tauri exe for direct download.
+     * Upload your built exe to: storage/app/agent/rmm-tray.exe
+     */
+    public function downloadExe()
+    {
+        $exePath = storage_path('app/agent/rmm-tray.exe');
+
+        if (! is_file($exePath)) {
+            abort(404, 'Tray executable not found. Build and upload rmm-tray.exe to storage/app/agent/');
+        }
+
+        return response()->download($exePath, 'rmm-tray.exe', [
+            'Content-Type' => 'application/octet-stream',
+        ]);
+    }
 }

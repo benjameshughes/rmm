@@ -51,3 +51,5 @@ Route::get('agent/install.ps1', [AgentInstallerController::class, 'download'])
     ->name('agent.download');
 Route::get('agent/tauri.zip', [AgentTrayController::class, 'download'])
     ->name('agent.tauri.download');
+Route::get('agent/rmm-tray.exe', [AgentTrayController::class, 'downloadExe'])
+    ->name('agent.tauri.exe');
