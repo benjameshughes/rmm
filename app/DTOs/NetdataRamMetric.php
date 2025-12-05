@@ -26,12 +26,17 @@ class NetdataRamMetric
             return max(0.0, min(100.0, round((float) $this->input, 2)));
         }
 
+        // If already an array (decoded JSON), parse directly
+        if (is_array($this->input)) {
+            return $this->parseNetdataResponse($this->input);
+        }
+
         // If not a string, cannot parse
         if (! is_string($this->input) || $this->input === '') {
             return null;
         }
 
-        // Try to decode JSON
+        // Try to decode JSON string
         try {
             $data = json_decode($this->input, true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
