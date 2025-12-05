@@ -1,16 +1,17 @@
 <?php
 
+use App\Http\Controllers\AgentInstallerController;
+use App\Http\Controllers\AgentTrayController;
+use App\Livewire\Devices\Agent as DevicesAgent;
+use App\Livewire\Devices\Index as DevicesIndex;
+use App\Livewire\Devices\Pending as DevicesPending;
+use App\Livewire\Devices\Show as DevicesShow;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
-use App\Livewire\Devices\Index as DevicesIndex;
-use App\Livewire\Devices\Pending as DevicesPending;
-use App\Livewire\Devices\Show as DevicesShow;
-use App\Livewire\Devices\Agent as DevicesAgent;
-use App\Http\Controllers\AgentInstallerController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -48,3 +49,5 @@ Route::middleware(['auth'])->group(function () {
 // Public download for the agent installer script
 Route::get('agent/install.ps1', [AgentInstallerController::class, 'download'])
     ->name('agent.download');
+Route::get('agent/tauri.zip', [AgentTrayController::class, 'download'])
+    ->name('agent.tauri.download');

@@ -23,6 +23,11 @@
             <flux:text variant="subtle">or copy the one-liner above</flux:text>
         </div>
 
+        <div class="flex items-center gap-3">
+            <flux:button as="a" href="{{ route('agent.tauri.download') }}">Download Tauri Tray Scaffold (ZIP)</flux:button>
+            <flux:text variant="subtle">Starter project for a Windows tray app</flux:text>
+        </div>
+
         <flux:callout variant="subtle" icon="information-circle" heading="Notes">
             <ul class="list-disc ms-4">
                 <li>Requires internet access to download Netdata.</li>

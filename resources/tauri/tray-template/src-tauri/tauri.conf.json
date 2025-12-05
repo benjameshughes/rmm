@@ -1,0 +1,36 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v1/tooling/cli/schema.json",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "{APP_NAME}",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "shell": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.example.rmmtray"
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "menuOnLeftClick": true
+    },
+    "windows": [
+      {
+        "title": "{APP_NAME}",
+        "visible": false
+      }
+    ]
+  }
+}
+
