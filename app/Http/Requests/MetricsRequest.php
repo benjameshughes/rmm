@@ -21,7 +21,7 @@ class MetricsRequest extends FormRequest
         return [
             'cpu' => ['nullable'],
             'ram' => ['nullable'],
-            'payload' => ['nullable'],
+            'payload' => ['nullable', 'array'],
             'recorded_at' => ['nullable', 'date'],
             'timestamp' => ['nullable', 'date'],
         ];

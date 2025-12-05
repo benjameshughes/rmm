@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\DTOs\NetdataCpuMetric;
+use App\DTOs\NetdataRamMetric;
 use App\Http\Requests\MetricsRequest;
 use App\Models\Device;
 use App\Models\DeviceMetric;
@@ -43,11 +45,8 @@ class DeviceMetricsController extends Controller
 
         $input = $request->all();
 
-        $cpu = $input['cpu'] ?? null;
-        $cpu = is_numeric($cpu) ? (float) $cpu : null;
-
-        $ram = $input['ram'] ?? null;
-        $ram = is_numeric($ram) ? (float) $ram : null;
+        $cpu = (new NetdataCpuMetric($input['cpu'] ?? null))->getUsagePercent();
+        $ram = (new NetdataRamMetric($input['ram'] ?? null))->getUsagePercent();
 
         $recordedAt = $input['recorded_at'] ?? ($input['timestamp'] ?? null);
         $recordedAt = $recordedAt ? \Illuminate\Support\Carbon::parse($recordedAt) : now();
