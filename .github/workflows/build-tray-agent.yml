@@ -1,0 +1,52 @@
+name: Build Tray Agent
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'resources/tauri/tray-template/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Build Tauri App
+        working-directory: resources/tauri/tray-template
+        run: cargo tauri build
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmm-tray
+          path: resources/tauri/tray-template/src-tauri/target/release/benjh-rmm.exe
+          retention-days: 90
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tray-agent-${{ github.run_number }}
+          name: Tray Agent Build ${{ github.run_number }}
+          files: resources/tauri/tray-template/src-tauri/target/release/benjh-rmm.exe
+          generate_release_notes: false
+          body: |
+            Automated build of the RMM Tray Agent.
+
+            Download `rmm-tray.exe` and place it where your server can serve it at `/agent/rmm-tray.exe`.

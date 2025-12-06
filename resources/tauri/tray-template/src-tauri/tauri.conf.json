@@ -7,7 +7,7 @@
     "distDir": "../src"
   },
   "package": {
-    "productName": "{APP_NAME}",
+    "productName": "benjh-rmm",
     "version": "0.1.0"
   },
   "tauri": {
@@ -27,7 +27,7 @@
     },
     "windows": [
       {
-        "title": "{APP_NAME}",
+        "title": "benjh-rmm",
         "visible": false
       }
     ]
