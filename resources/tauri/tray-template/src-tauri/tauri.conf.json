@@ -13,7 +13,15 @@
   "tauri": {
     "allowlist": {
       "shell": {
-        "all": true
+        "all": false,
+        "open": "^(https?://.*|file://.*)$",
+        "scope": [
+          {
+            "name": "open-url",
+            "cmd": "open",
+            "args": true
+          }
+        ]
       }
     },
     "bundle": {

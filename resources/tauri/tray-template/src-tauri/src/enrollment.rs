@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::config::Config;
@@ -163,34 +164,46 @@ impl EnrollmentManager {
         }
     }
 
-    /// Wait for approval by polling the backend
-    pub async fn wait_for_approval(&self, system_info: &SystemInfo) -> Result<()> {
+    /// Wait for approval by polling the backend with graceful shutdown support
+    pub async fn wait_for_approval(
+        &self,
+        system_info: &SystemInfo,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
         info!("Waiting for device approval...");
 
         loop {
-            match self.check_status(system_info).await {
-                Ok(EnrollmentStatus::Approved) => {
-                    info!("Device approved!");
-                    return Ok(());
+            tokio::select! {
+                // Wait for cancellation signal
+                _ = cancellation_token.cancelled() => {
+                    info!("Enrollment polling cancelled - shutting down gracefully");
+                    anyhow::bail!("Enrollment cancelled by shutdown signal");
                 }
-                Ok(EnrollmentStatus::Pending) => {
-                    debug!(
-                        "Still pending, waiting {} seconds...",
-                        self.config.enrollment_poll_interval
-                    );
-                }
-                Ok(EnrollmentStatus::Revoked) => {
-                    anyhow::bail!("Device was revoked during enrollment");
-                }
-                Ok(EnrollmentStatus::Unknown(status)) => {
-                    warn!("Unknown status '{}', continuing to wait...", status);
-                }
-                Err(e) => {
-                    warn!("Error checking status: {}", e);
+                // Wait for the poll interval to elapse
+                _ = tokio::time::sleep(Duration::from_secs(self.config.enrollment_poll_interval)) => {
+                    match self.check_status(system_info).await {
+                        Ok(EnrollmentStatus::Approved) => {
+                            info!("Device approved!");
+                            return Ok(());
+                        }
+                        Ok(EnrollmentStatus::Pending) => {
+                            debug!(
+                                "Still pending, waiting {} seconds...",
+                                self.config.enrollment_poll_interval
+                            );
+                        }
+                        Ok(EnrollmentStatus::Revoked) => {
+                            anyhow::bail!("Device was revoked during enrollment");
+                        }
+                        Ok(EnrollmentStatus::Unknown(status)) => {
+                            warn!("Unknown status '{}', continuing to wait...", status);
+                        }
+                        Err(e) => {
+                            warn!("Error checking status: {}", e);
+                        }
+                    }
                 }
             }
-
-            tokio::time::sleep(Duration::from_secs(self.config.enrollment_poll_interval)).await;
         }
     }
 }

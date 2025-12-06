@@ -16,8 +16,8 @@ use tauri::{
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Initialize logging
-fn init_logging(config: &Config) {
+/// Initialize logging and return the guard that must be kept alive
+fn init_logging(config: &Config) -> tracing_appender::non_blocking::WorkerGuard {
     // Create log directory if needed
     if let Some(parent) = config.log_file.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -33,7 +33,7 @@ fn init_logging(config: &Config) {
             .unwrap_or("agent.log"),
     );
 
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // Set up subscriber with file output
     tracing_subscriber::registry()
@@ -45,6 +45,9 @@ fn init_logging(config: &Config) {
         .init();
 
     info!("Logging initialized to {:?}", config.log_file);
+
+    // Return the guard so it lives for the entire application lifetime
+    guard
 }
 
 /// Build the system tray menu
@@ -81,8 +84,8 @@ fn main() {
     // Initialize configuration
     let config = Config::default();
 
-    // Initialize logging
-    init_logging(&config);
+    // Initialize logging - keep guard alive for application lifetime
+    let _log_guard = init_logging(&config);
 
     info!("=== RMM Agent Starting ===");
     info!("Version: {}", env!("CARGO_PKG_VERSION"));

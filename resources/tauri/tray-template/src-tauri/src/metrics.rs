@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
@@ -193,8 +194,8 @@ impl MetricsCollector {
         }
     }
 
-    /// Start metrics collection loop
-    pub async fn start_metrics_loop(&self, api_key: String) {
+    /// Start metrics collection loop with graceful shutdown support
+    pub async fn start_metrics_loop(&self, api_key: String, cancellation_token: CancellationToken) {
         info!(
             "Starting metrics collection loop (interval: {}s)",
             self.config.metrics_interval
@@ -206,15 +207,25 @@ impl MetricsCollector {
         }
 
         loop {
-            match self.collect_and_submit(&api_key).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Error in metrics collection: {}", e);
+            tokio::select! {
+                // Wait for cancellation signal
+                _ = cancellation_token.cancelled() => {
+                    info!("Metrics collection loop cancelled - shutting down gracefully");
+                    break;
+                }
+                // Wait for the interval to elapse
+                _ = tokio::time::sleep(Duration::from_secs(self.config.metrics_interval)) => {
+                    match self.collect_and_submit(&api_key).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("Error in metrics collection: {}", e);
+                        }
+                    }
                 }
             }
-
-            tokio::time::sleep(Duration::from_secs(self.config.metrics_interval)).await;
         }
+
+        info!("Metrics collection loop stopped");
     }
 }
 

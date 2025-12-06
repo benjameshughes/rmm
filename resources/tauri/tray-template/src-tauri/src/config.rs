@@ -1,5 +1,18 @@
 use std::path::PathBuf;
 
+// Default interval constants (in seconds)
+/// Default interval for collecting and submitting metrics
+pub const DEFAULT_METRICS_INTERVAL_SECS: u64 = 60;
+
+/// Default interval for checking agent status with backend
+pub const DEFAULT_STATUS_CHECK_INTERVAL_SECS: u64 = 60;
+
+/// Default interval for polling enrollment status during device approval
+pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
+
+/// Default Netdata API base URL
+pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
+
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -40,10 +53,10 @@ impl Default for Config {
             data_dir,
             key_file,
             log_file,
-            metrics_interval: 60,
-            status_check_interval: 60,
-            enrollment_poll_interval: 30,
-            netdata_url: "http://127.0.0.1:19999".to_string(),
+            metrics_interval: DEFAULT_METRICS_INTERVAL_SECS,
+            status_check_interval: DEFAULT_STATUS_CHECK_INTERVAL_SECS,
+            enrollment_poll_interval: DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS,
+            netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }
     }
 }

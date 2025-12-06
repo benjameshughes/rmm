@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
@@ -48,6 +49,7 @@ pub struct Agent {
     system_info: SystemInfo,
     enrollment_manager: EnrollmentManager,
     state: Arc<RwLock<AgentState>>,
+    cancellation_token: CancellationToken,
 }
 
 impl Agent {
@@ -76,6 +78,7 @@ impl Agent {
             system_info,
             enrollment_manager,
             state: Arc::new(RwLock::new(initial_state)),
+            cancellation_token: CancellationToken::new(),
         })
     }
 
@@ -103,7 +106,8 @@ impl Agent {
         if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
             info!("Device is already enrolled, starting metrics collection");
             self.set_state(AgentState::Active).await;
-            self.start_metrics_collection(api_key).await;
+            self.start_metrics_collection(api_key, self.cancellation_token.clone())
+                .await;
         } else {
             // Need to enroll
             info!("Device not enrolled, starting enrollment process");
@@ -129,7 +133,7 @@ impl Agent {
         info!("Waiting for approval from administrator...");
         match self
             .enrollment_manager
-            .wait_for_approval(&self.system_info)
+            .wait_for_approval(&self.system_info, self.cancellation_token.clone())
             .await
         {
             Ok(_) => {
@@ -138,7 +142,8 @@ impl Agent {
 
                 // Get the API key and start metrics
                 if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
-                    self.start_metrics_collection(api_key).await;
+                    self.start_metrics_collection(api_key, self.cancellation_token.clone())
+                        .await;
                 } else {
                     let msg = "Device approved but no API key found".to_string();
                     error!("{}", msg);
@@ -155,8 +160,8 @@ impl Agent {
         Ok(())
     }
 
-    /// Start metrics collection loop
-    async fn start_metrics_collection(&self, api_key: String) {
+    /// Start metrics collection loop with graceful shutdown support
+    async fn start_metrics_collection(&self, api_key: String, cancellation_token: CancellationToken) {
         info!("Starting metrics collection");
 
         let collector = match MetricsCollector::new(
@@ -176,8 +181,16 @@ impl Agent {
             warn!("Please ensure Netdata is installed and running");
         }
 
-        // Start the metrics loop (runs forever)
-        collector.start_metrics_loop(api_key).await;
+        // Start the metrics loop with cancellation support
+        collector
+            .start_metrics_loop(api_key, cancellation_token)
+            .await;
+    }
+
+    /// Trigger graceful shutdown
+    pub fn shutdown(&self) {
+        info!("Initiating graceful shutdown");
+        self.cancellation_token.cancel();
     }
 
     /// Check current status with backend (for tray status updates)
