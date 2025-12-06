@@ -27,7 +27,11 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.example.rmmtray"
+      "identifier": "com.example.rmmtray",
+      "icon": [
+        "icons/icon.ico",
+        "icons/icon.png"
+      ]
     },
     "systemTray": {
       "iconPath": "icons/icon.png",
