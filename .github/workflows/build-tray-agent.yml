@@ -27,6 +27,11 @@ jobs:
       - name: Install Tauri CLI v1
         run: cargo install tauri-cli@1.6.5
 
+      - name: Convert PNG to ICO
+        run: |
+          npm install -g png-to-ico
+          png-to-ico resources/tauri/tray-template/src-tauri/icons/icon.png > resources/tauri/tray-template/src-tauri/icons/icon.ico
+
       - name: Build Tauri App
         working-directory: resources/tauri/tray-template
         run: cargo tauri build
