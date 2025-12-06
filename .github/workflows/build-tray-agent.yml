@@ -24,8 +24,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli
+      - name: Install Tauri CLI v1
+        run: cargo install tauri-cli@1.6.5
 
       - name: Build Tauri App
         working-directory: resources/tauri/tray-template
