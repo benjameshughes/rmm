@@ -21,24 +21,68 @@
                 </div>
                 <div><span class="text-muted-foreground">Last seen:</span> {{ $device->last_seen?->diffForHumans() ?? '—' }}</div>
                 <div><span class="text-muted-foreground">IP:</span> {{ $device->last_ip ?? '—' }}</div>
-                <div><span class="text-muted-foreground">OS:</span> {{ $device->os ?? '—' }}</div>
                 <div><span class="text-muted-foreground">API Key:</span> {{ $device->api_key ? substr($device->api_key, 0, 8).'…' : '—' }}</div>
             </div>
         </div>
 
         <div class="space-y-3">
-            <flux:heading size="md">Latest Snapshot</flux:heading>
+            <flux:heading size="md">Latest Metrics</flux:heading>
             <div class="rounded border p-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                    <div class="text-muted-foreground">CPU</div>
-                    <div class="text-lg">{{ optional($device->latestMetric)->cpu ? number_format($device->latestMetric->cpu, 2).'%' : '—' }}</div>
+                    <div class="text-muted-foreground">CPU Usage</div>
+                    <div class="text-lg">{{ optional($device->latestMetric)->cpu ? number_format($device->latestMetric->cpu, 1).'%' : '—' }}</div>
                 </div>
                 <div>
-                    <div class="text-muted-foreground">RAM</div>
-                    <div class="text-lg">{{ optional($device->latestMetric)->ram ? number_format($device->latestMetric->ram, 2).'%' : '—' }}</div>
+                    <div class="text-muted-foreground">RAM Usage</div>
+                    <div class="text-lg">{{ optional($device->latestMetric)->ram ? number_format($device->latestMetric->ram, 1).'%' : '—' }}</div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2">
+        <div class="space-y-3">
+            <flux:heading size="md">System Information</flux:heading>
+            <div class="rounded border p-4 space-y-2 text-sm">
+                <div><span class="text-muted-foreground">Operating System:</span> {{ $device->os_name ?? $device->os ?? '—' }}</div>
+                @if($device->os_version)
+                    <div><span class="text-muted-foreground">OS Version:</span> {{ $device->os_version }}</div>
+                @endif
+                @if($device->cpu_model)
+                    <div><span class="text-muted-foreground">CPU Model:</span> {{ $device->cpu_model }}</div>
+                @endif
+                @if($device->cpu_cores)
+                    <div><span class="text-muted-foreground">CPU Cores:</span> {{ $device->cpu_cores }}</div>
+                @endif
+                @if($device->total_ram_gb)
+                    <div><span class="text-muted-foreground">Total RAM:</span> {{ number_format($device->total_ram_gb, 1) }} GB</div>
+                @endif
+            </div>
+        </div>
+
+        @if($device->disks && count($device->disks) > 0)
+            <div class="space-y-3">
+                <flux:heading size="md">Disk Storage</flux:heading>
+                <div class="rounded border p-4 space-y-3 text-sm">
+                    @foreach($device->disks as $disk)
+                        <div class="pb-3 border-b last:border-b-0 last:pb-0">
+                            <div class="font-medium">{{ $disk['name'] ?? '—' }}</div>
+                            @if(isset($disk['mount_point']))
+                                <div class="text-xs text-muted-foreground">{{ $disk['mount_point'] }}</div>
+                            @endif
+                            @if(isset($disk['total_gb']) && isset($disk['available_gb']))
+                                <div class="mt-1">
+                                    <div class="text-xs">
+                                        {{ number_format($disk['available_gb'], 1) }} GB free of {{ number_format($disk['total_gb'], 1) }} GB
+                                        ({{ number_format((($disk['total_gb'] - $disk['available_gb']) / $disk['total_gb']) * 100, 1) }}% used)
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="space-y-3">

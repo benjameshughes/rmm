@@ -16,10 +16,10 @@
                 <th class="px-4 py-2 text-left">Hostname</th>
                 <th class="px-4 py-2 text-left">Status</th>
                 <th class="px-4 py-2 text-left">Last Seen</th>
-                <th class="px-4 py-2 text-left">IP</th>
                 <th class="px-4 py-2 text-left">OS</th>
                 <th class="px-4 py-2 text-left">CPU</th>
                 <th class="px-4 py-2 text-left">RAM</th>
+                <th class="px-4 py-2 text-left">Metrics</th>
                 <th class="px-4 py-2 text-left">Actions</th>
             </tr>
             </thead>
@@ -41,10 +41,39 @@
                         @endif
                     </td>
                     <td class="px-4 py-2">{{ $device->last_seen?->diffForHumans() ?? '—' }}</td>
-                    <td class="px-4 py-2">{{ $device->last_ip ?? '—' }}</td>
-                    <td class="px-4 py-2">{{ $device->os ?? '—' }}</td>
-                    <td class="px-4 py-2">{{ optional($device->latestMetric)->cpu ? number_format($device->latestMetric->cpu, 2).'%' : '—' }}</td>
-                    <td class="px-4 py-2">{{ optional($device->latestMetric)->ram ? number_format($device->latestMetric->ram, 2).'%' : '—' }}</td>
+                    <td class="px-4 py-2">
+                        @if($device->os_name && $device->os_version)
+                            <div>{{ $device->os_name }}</div>
+                            <div class="text-xs text-muted-foreground">{{ $device->os_version }}</div>
+                        @else
+                            {{ $device->os ?? '—' }}
+                        @endif
+                    </td>
+                    <td class="px-4 py-2">
+                        @if($device->cpu_model)
+                            <div>{{ $device->cpu_model }}</div>
+                            @if($device->cpu_cores)
+                                <div class="text-xs text-muted-foreground">{{ $device->cpu_cores }} cores</div>
+                            @endif
+                        @else
+                            —
+                        @endif
+                    </td>
+                    <td class="px-4 py-2">
+                        @if($device->total_ram_gb)
+                            {{ number_format($device->total_ram_gb, 1) }} GB
+                        @else
+                            —
+                        @endif
+                    </td>
+                    <td class="px-4 py-2">
+                        @if(optional($device->latestMetric)->cpu !== null && optional($device->latestMetric)->ram !== null)
+                            <div>CPU: {{ number_format($device->latestMetric->cpu, 1) }}%</div>
+                            <div class="text-xs text-muted-foreground">RAM: {{ number_format($device->latestMetric->ram, 1) }}%</div>
+                        @else
+                            —
+                        @endif
+                    </td>
                     <td class="px-4 py-2">
                         <flux:button as="a" size="xs" variant="outline" :href="route('devices.show', $device)" wire:navigate>View</flux:button>
                     </td>

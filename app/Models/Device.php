@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Device extends Model
@@ -19,12 +19,20 @@ class Device extends Model
         'api_key',
         'status',
         'os',
+        'os_name',
+        'os_version',
+        'cpu_model',
+        'cpu_cores',
+        'total_ram_gb',
+        'disks',
         'last_ip',
         'last_seen',
     ];
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_REVOKED = 'revoked';
 
     /**
@@ -36,6 +44,7 @@ class Device extends Model
     {
         return [
             'last_seen' => 'datetime',
+            'disks' => 'array',
         ];
     }
 
@@ -64,6 +73,6 @@ class Device extends Model
             return false;
         }
 
-        return now()->diffInSeconds($this->last_seen) < 120;
+        return now()->diffInSeconds($this->last_seen) < 300;
     }
 }

@@ -36,6 +36,12 @@ class DeviceEnrollmentController extends Controller
                 'hostname' => $data['hostname'],
                 'hardware_fingerprint' => $data['hardware_fingerprint'] ?? null,
                 'os' => $data['os'] ?? null,
+                'os_name' => $data['os_name'] ?? null,
+                'os_version' => $data['os_version'] ?? null,
+                'cpu_model' => $data['cpu_model'] ?? null,
+                'cpu_cores' => $data['cpu_cores'] ?? null,
+                'total_ram_gb' => $data['total_ram_gb'] ?? null,
+                'disks' => $data['disks'] ?? null,
                 'status' => Device::STATUS_PENDING,
                 'last_ip' => $request->ip(),
             ]);
@@ -45,6 +51,12 @@ class DeviceEnrollmentController extends Controller
                 'hostname' => $data['hostname'],
                 'hardware_fingerprint' => $data['hardware_fingerprint'] ?? $device->hardware_fingerprint,
                 'os' => $data['os'] ?? $device->os,
+                'os_name' => $data['os_name'] ?? $device->os_name,
+                'os_version' => $data['os_version'] ?? $device->os_version,
+                'cpu_model' => $data['cpu_model'] ?? $device->cpu_model,
+                'cpu_cores' => $data['cpu_cores'] ?? $device->cpu_cores,
+                'total_ram_gb' => $data['total_ram_gb'] ?? $device->total_ram_gb,
+                'disks' => $data['disks'] ?? $device->disks,
                 'last_ip' => $request->ip(),
             ])->save();
         }
