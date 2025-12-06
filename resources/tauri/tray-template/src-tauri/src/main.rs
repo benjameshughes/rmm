@@ -6,6 +6,7 @@ mod enrollment;
 mod metrics;
 mod storage;
 mod sysinfo;
+mod updater;
 
 use agent::{Agent, AgentState};
 use config::Config;
@@ -14,7 +15,9 @@ use tauri::{
     api::notification::Notification, CustomMenuItem, Manager, SystemTray, SystemTrayEvent,
     SystemTrayMenu, SystemTrayMenuItem,
 };
-use tracing::{error, info};
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
+use updater::{UpdateInfo, Updater};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Initialize logging and return the guard that must be kept alive
@@ -55,7 +58,9 @@ fn init_logging(config: &Config) -> tracing_appender::non_blocking::WorkerGuard 
 fn build_tray_menu() -> SystemTrayMenu {
     SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("status", "Status: Initializing...").disabled())
+        .add_item(CustomMenuItem::new("version", format!("Version: {}", env!("CARGO_PKG_VERSION"))).disabled())
         .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(CustomMenuItem::new("check_update", "Check for Updates"))
         .add_item(CustomMenuItem::new("install", "Install / Repair Agent"))
         .add_item(CustomMenuItem::new("open_log", "Open Agent Log"))
         .add_item(CustomMenuItem::new("open_panel", "Open Panel"))
@@ -121,6 +126,57 @@ fn main() {
                                     .body(&body)
                                     .show() {
                                     error!("Failed to show notification: {}", e);
+                                }
+                            }
+                        });
+                    }
+                    "check_update" => {
+                        info!("Checking for updates...");
+                        let app_handle = app.app_handle();
+                        tauri::async_runtime::spawn(async move {
+                            match Updater::new() {
+                                Ok(updater) => {
+                                    match updater.check_for_update().await {
+                                        Ok(Some(update)) => {
+                                            info!("Update available: {} -> {}", update.current_version, update.latest_version);
+
+                                            // Show notification
+                                            let body = format!(
+                                                "Version {} is available (current: {}). Click Install/Repair to update.",
+                                                update.latest_version, update.current_version
+                                            );
+                                            let _ = Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                                .title("Update Available")
+                                                .body(&body)
+                                                .show();
+
+                                            // Store update info for later
+                                            if let Some(update_state) = app_handle.try_state::<Arc<RwLock<Option<UpdateInfo>>>>() {
+                                                *update_state.write().await = Some(update);
+                                            }
+
+                                            // Update menu item to show update available
+                                            let tray = app_handle.tray_handle();
+                                            let _ = tray.get_item("check_update").set_title("Update Available!");
+                                        }
+                                        Ok(None) => {
+                                            info!("No updates available");
+                                            let _ = Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                                .title("No Updates")
+                                                .body("You're running the latest version.")
+                                                .show();
+                                        }
+                                        Err(e) => {
+                                            warn!("Update check failed: {}", e);
+                                            let _ = Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                                .title("Update Check Failed")
+                                                .body(&format!("Could not check for updates: {}", e))
+                                                .show();
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to create updater: {}", e);
                                 }
                             }
                         });
@@ -195,6 +251,9 @@ fn main() {
         .setup(|app| {
             let app_handle = app.app_handle();
 
+            // Store for pending updates
+            app.manage(Arc::new(RwLock::new(None::<UpdateInfo>)));
+
             // Initialize and start the agent
             tauri::async_runtime::spawn(async move {
                 // Create agent
@@ -228,6 +287,33 @@ fn main() {
                         }
 
                         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    }
+                });
+
+                // Check for updates on startup
+                let app_handle_update = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    // Wait a bit before checking for updates
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+                    if let Ok(updater) = Updater::new() {
+                        if let Ok(Some(update)) = updater.check_for_update().await {
+                            info!("Update available on startup: {} -> {}", update.current_version, update.latest_version);
+
+                            let _ = Notification::new(&app_handle_update.config().tauri.bundle.identifier)
+                                .title("Update Available")
+                                .body(&format!("Version {} is available", update.latest_version))
+                                .show();
+
+                            // Update menu
+                            let tray = app_handle_update.tray_handle();
+                            let _ = tray.get_item("check_update").set_title("Update Available!");
+
+                            // Store update info
+                            if let Some(update_state) = app_handle_update.try_state::<Arc<RwLock<Option<UpdateInfo>>>>() {
+                                *update_state.write().await = Some(update);
+                            }
+                        }
                     }
                 });
 
