@@ -14,7 +14,7 @@
     "allowlist": {
       "shell": {
         "all": false,
-        "open": "^(https?://.*|file://.*)$",
+        "open": true,
         "scope": [
           {
             "name": "open-url",
@@ -22,6 +22,9 @@
             "args": true
           }
         ]
+      },
+      "notification": {
+        "all": true
       }
     },
     "bundle": {

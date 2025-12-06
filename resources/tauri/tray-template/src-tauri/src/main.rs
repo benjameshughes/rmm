@@ -11,7 +11,8 @@ use agent::{Agent, AgentState};
 use config::Config;
 use std::sync::Arc;
 use tauri::{
-    CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
+    api::notification::Notification, CustomMenuItem, Manager, SystemTray, SystemTrayEvent,
+    SystemTrayMenu, SystemTrayMenuItem,
 };
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -104,15 +105,69 @@ fn main() {
                     // Menu shows on left click via config
                 }
                 SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                    "status" => {
+                        // Get current state and show notification
+                        let app_handle = app.app_handle();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
+                                let state = agent.get_state().await;
+                                let body = state.as_display();
+
+                                info!("Status requested: {}", body);
+
+                                // Show notification (Tauri v1 API)
+                                if let Err(e) = Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                    .title("RMM Agent Status")
+                                    .body(&body)
+                                    .show() {
+                                    error!("Failed to show notification: {}", e);
+                                }
+                            }
+                        });
+                    }
                     "install" => {
-                        let url = format!("{}/agent/install.ps1", config.base_url);
-                        info!("Opening install script: {}", url);
-                        let _ = tauri::api::shell::open(&app.shell_scope(), url, None);
+                        // Re-trigger enrollment check by spawning new enrollment
+                        info!("Install/Repair requested - triggering enrollment check");
+                        let app_handle = app.app_handle();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
+                                let state = agent.get_state().await;
+                                info!("Current state before install/repair: {:?}", state);
+
+                                // For now, just check status which will update tray
+                                if let Err(e) = agent.check_status().await {
+                                    error!("Status check failed during install/repair: {}", e);
+                                }
+                            }
+                        });
                     }
                     "open_log" => {
-                        info!("Opening log file: {:?}", config.log_file);
-                        let log_path = config.log_file.to_string_lossy().to_string();
-                        let _ = tauri::api::shell::open(&app.shell_scope(), log_path, None);
+                        // Open the log directory in file explorer
+                        info!("Opening log directory: {:?}", config.log_file.parent());
+
+                        if let Some(log_dir) = config.log_file.parent() {
+                            let log_dir_str = log_dir.to_string_lossy().to_string();
+
+                            #[cfg(target_os = "windows")]
+                            {
+                                // On Windows, open Explorer to the directory
+                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
+                            }
+
+                            #[cfg(target_os = "macos")]
+                            {
+                                // On macOS, open Finder to the directory
+                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
+                            }
+
+                            #[cfg(target_os = "linux")]
+                            {
+                                // On Linux, open file manager to the directory
+                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
+                            }
+                        } else {
+                            error!("Could not determine log directory");
+                        }
                     }
                     "open_panel" => {
                         let url = format!("{}/devices", config.base_url);
@@ -120,7 +175,16 @@ fn main() {
                         let _ = tauri::api::shell::open(&app.shell_scope(), url, None);
                     }
                     "quit" => {
-                        info!("Quit requested");
+                        info!("Quit requested - initiating graceful shutdown");
+                        let app_handle = app.app_handle();
+
+                        // Trigger graceful shutdown on agent if available
+                        if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
+                            agent.shutdown();
+                        }
+
+                        // Give a moment for cleanup, then exit
+                        std::thread::sleep(std::time::Duration::from_millis(500));
                         std::process::exit(0);
                     }
                     _ => {}
