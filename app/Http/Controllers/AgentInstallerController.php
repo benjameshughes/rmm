@@ -307,7 +307,7 @@ Log "Scheduled task created."
 # STEP 6 — INSTALL TRAY APP (optional)
 # ===================================================================
 
-$TrayExeUrl = "$RmmBaseUrl/agent/benjh-rmm.exe"
+$TrayExeUrl = "https://github.com/benjameshughes/rmm/releases/latest/download/benjh-rmm.exe"
 $TrayExePath = "$AgentRoot\benjh-rmm.exe"
 
 Log "Checking for tray app..."
