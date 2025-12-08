@@ -86,6 +86,61 @@ Log "===== RMM Agent Install Starting ====="
 
 
 # ===================================================================
+# STEP 0 — REMOVE EXISTING INSTALLATION (Clean Install)
+# ===================================================================
+
+Log "Checking for existing RMM installation..."
+
+# Kill tray app if running
+$trayProcessName = "benjh-rmm"
+$runningTray = Get-Process -Name $trayProcessName -ErrorAction SilentlyContinue
+if ($runningTray) {
+    Log "Stopping running tray app..."
+    Stop-Process -Name $trayProcessName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# Remove scheduled task
+try {
+    $existingTask = Get-ScheduledTask -TaskName "RMM-Metrics-Agent" -ErrorAction SilentlyContinue
+    if ($existingTask) {
+        Log "Removing existing scheduled task..."
+        Unregister-ScheduledTask -TaskName "RMM-Metrics-Agent" -Confirm:$false -ErrorAction SilentlyContinue
+    }
+} catch { }
+
+# Remove startup registry entry
+try {
+    $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+    $existingReg = Get-ItemProperty -Path $regPath -Name "RMM-Tray" -ErrorAction SilentlyContinue
+    if ($existingReg) {
+        Log "Removing startup registry entry..."
+        Remove-ItemProperty -Path $regPath -Name "RMM-Tray" -ErrorAction SilentlyContinue
+    }
+} catch { }
+
+# Remove old files (keep the directory)
+$filesToRemove = @(
+    "$AgentRoot\benjh-rmm.exe",
+    "$AgentRoot\agent-metrics.ps1",
+    "$AgentRoot\agent.key",
+    "$AgentRoot\config.json"
+)
+
+foreach ($file in $filesToRemove) {
+    if (Test-Path $file) {
+        Log "Removing $file..."
+        Remove-Item -Path $file -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Clear old logs (optional - keep last log for debugging)
+# Remove-Item -Path "$AgentRoot\*.log" -Force -ErrorAction SilentlyContinue
+
+Log "Cleanup complete. Proceeding with fresh install..."
+
+
+# ===================================================================
 # STEP 1 — Install Netdata
 # ===================================================================
 function Test-NetdataInstalled { if (Get-Service -Name "netdata" -ErrorAction SilentlyContinue) { return $true } else { return $false } }
