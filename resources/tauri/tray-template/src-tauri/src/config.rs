@@ -43,7 +43,12 @@ impl Default for Config {
         let data_dir = PathBuf::from(r"C:\ProgramData\RMM");
 
         #[cfg(target_os = "macos")]
-        let data_dir = PathBuf::from("/Library/Application Support/RMM");
+        let data_dir = {
+            // Use user's Application Support directory (doesn't require root)
+            dirs::data_dir()
+                .map(|p| p.join("RMM"))
+                .unwrap_or_else(|| PathBuf::from("/tmp/RMM"))
+        };
 
         #[cfg(target_os = "linux")]
         let data_dir = PathBuf::from("/var/lib/rmm");

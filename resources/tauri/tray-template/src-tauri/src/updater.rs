@@ -102,7 +102,9 @@ impl Updater {
         let updates_dir = PathBuf::from(r"C:\ProgramData\RMM\updates");
 
         #[cfg(target_os = "macos")]
-        let updates_dir = PathBuf::from("/Library/Application Support/RMM/updates");
+        let updates_dir = dirs::data_dir()
+            .map(|p| p.join("RMM").join("updates"))
+            .unwrap_or_else(|| PathBuf::from("/tmp/RMM/updates"));
 
         #[cfg(target_os = "linux")]
         let updates_dir = PathBuf::from("/var/lib/rmm/updates");

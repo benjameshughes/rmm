@@ -213,7 +213,7 @@
     </div>
 
     <script>
-      const { invoke } = window.__TAURI__.tauri;
+      const { invoke } = window.__TAURI__.core;
       let logContent = '';
 
       // Load logs on startup
@@ -274,7 +274,7 @@
       }
 
       function closeWindow() {
-        window.__TAURI__.window.appWindow.hide();
+        window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
       }
 
       // Initialize

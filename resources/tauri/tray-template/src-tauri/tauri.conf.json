@@ -1,45 +1,14 @@
 {
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v1/tooling/cli/schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "benjh-rmm",
+  "version": "0.2.0",
+  "identifier": "com.example.rmmtray",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "../src",
-    "distDir": "../src"
+    "frontendDist": "../src"
   },
-  "package": {
-    "productName": "benjh-rmm",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "shell": {
-        "all": false,
-        "open": true,
-        "scope": [
-          {
-            "name": "open-url",
-            "cmd": "open",
-            "args": true
-          }
-        ]
-      },
-      "notification": {
-        "all": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.example.rmmtray",
-      "icon": [
-        "icons/icon.ico",
-        "icons/icon.png"
-      ]
-    },
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "menuOnLeftClick": true
-    },
+  "app": {
     "windows": [
       {
         "label": "status",
@@ -91,7 +60,27 @@
         "center": true,
         "resizable": false
       }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "menuOnLeftClick": true
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
     ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
   }
 }
-

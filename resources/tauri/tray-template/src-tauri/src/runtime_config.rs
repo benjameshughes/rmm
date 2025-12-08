@@ -31,7 +31,9 @@ impl RuntimeConfig {
         let config_dir = PathBuf::from(r"C:\ProgramData\RMM");
 
         #[cfg(target_os = "macos")]
-        let config_dir = PathBuf::from("/Library/Application Support/RMM");
+        let config_dir = dirs::data_dir()
+            .map(|p| p.join("RMM"))
+            .unwrap_or_else(|| PathBuf::from("/tmp/RMM"));
 
         #[cfg(target_os = "linux")]
         let config_dir = PathBuf::from("/var/lib/rmm");

@@ -371,7 +371,7 @@
     </div>
 
     <script>
-      const { invoke } = window.__TAURI__.tauri;
+      const { invoke } = window.__TAURI__.core;
 
       let statusInfo = null;
       let refreshInterval = null;
@@ -507,7 +507,7 @@
       }
 
       function closeWindow() {
-        window.__TAURI__.window.appWindow.hide();
+        window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
       }
 
       // Auto-refresh every 30 seconds

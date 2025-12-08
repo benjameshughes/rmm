@@ -170,7 +170,7 @@
     </div>
 
     <script>
-      const { invoke } = window.__TAURI__.tauri;
+      const { invoke } = window.__TAURI__.core;
 
       // Retry wrapper for commands that need agent state
       async function invokeWithRetry(command, args = {}, retries = 5, delay = 1000) {
@@ -196,7 +196,7 @@
       }
 
       function hideWindow() {
-        window.__TAURI__.window.appWindow.hide();
+        window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
       }
 
       // Initialize
