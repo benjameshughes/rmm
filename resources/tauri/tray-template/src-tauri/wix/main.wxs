@@ -124,12 +124,14 @@
             Return='ignore'/>
 
         <InstallExecuteSequence>
-            <Custom Action='StopService' Before='InstallValidate'>
+            <!-- Uninstall: Stop then uninstall service before removing files -->
+            <Custom Action='StopService' Before='RemoveFiles'>
                 (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
             </Custom>
             <Custom Action='UninstallService' After='StopService'>
                 (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
             </Custom>
+            <!-- Install: Install then start service after files are in place -->
             <Custom Action='InstallService' After='InstallFiles'>
                 NOT Installed AND NOT REMOVE
             </Custom>
