@@ -362,16 +362,24 @@ Log "Scheduled task created."
 # STEP 6 — INSTALL TRAY APP (optional)
 # ===================================================================
 
-$TrayExeUrl = "https://github.com/benjameshughes/rmm/releases/latest/download/benjh-rmm.exe"
 $TrayExePath = "$AgentRoot\benjh-rmm.exe"
+$GitHubRepo = "benjameshughes/rmm"
 
-Log "Checking for tray app..."
+Log "Checking for tray app from GitHub releases..."
 
 try {
-    # Check if tray exe is available on server
-    $trayResponse = Invoke-WebRequest -Uri $TrayExeUrl -Method Head -UseBasicParsing -ErrorAction Stop
+    # Query GitHub API for latest release
+    $headers = @{ 'User-Agent' = 'rmm-installer' }
+    $releaseUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
+    $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -ErrorAction Stop
 
-    if ($trayResponse.StatusCode -eq 200) {
+    # Find the .exe asset (regardless of exact name)
+    $exeAsset = $release.assets | Where-Object { $_.name -like "*.exe" } | Select-Object -First 1
+
+    if ($exeAsset) {
+        $TrayExeUrl = $exeAsset.browser_download_url
+        Log "Found tray app: $($exeAsset.name) from release $($release.tag_name)"
+
         # Stop running tray app if present (prevents file lock during update)
         $trayProcessName = "benjh-rmm"
         $runningTray = Get-Process -Name $trayProcessName -ErrorAction SilentlyContinue
@@ -381,7 +389,7 @@ try {
             Start-Sleep -Seconds 2  # Give it time to fully exit
         }
 
-        Log "Downloading tray app..."
+        Log "Downloading tray app from $TrayExeUrl..."
         Invoke-WebRequest -Uri $TrayExeUrl -OutFile $TrayExePath -UseBasicParsing
 
         # Remove "downloaded from internet" flag (bypasses SmartScreen)
@@ -403,9 +411,11 @@ try {
         # Launch tray app now
         Start-Process -FilePath $TrayExePath -ErrorAction SilentlyContinue
         Log "Tray app launched"
+    } else {
+        Log "No .exe asset found in latest release. Skipping tray app."
     }
 } catch {
-    Log "Tray app not available on server (optional component). Skipping."
+    Log "Tray app not available from GitHub releases: $_. Skipping."
 }
 
 
