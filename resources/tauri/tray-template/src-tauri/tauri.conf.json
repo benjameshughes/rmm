@@ -42,13 +42,54 @@
     },
     "windows": [
       {
-        "title": "RMM Agent Settings",
-        "width": 650,
-        "height": 750,
-        "resizable": true,
+        "label": "status",
+        "title": "RMM Agent - Status",
+        "url": "index.html",
+        "width": 550,
+        "height": 500,
         "visible": false,
         "center": true,
-        "label": "main"
+        "resizable": true
+      },
+      {
+        "label": "settings",
+        "title": "RMM Agent - Settings",
+        "url": "settings.html",
+        "width": 500,
+        "height": 400,
+        "visible": false,
+        "center": true,
+        "resizable": true
+      },
+      {
+        "label": "logs",
+        "title": "RMM Agent - Logs",
+        "url": "logs.html",
+        "width": 700,
+        "height": 500,
+        "visible": false,
+        "center": true,
+        "resizable": true
+      },
+      {
+        "label": "updates",
+        "title": "RMM Agent - Updates",
+        "url": "updates.html",
+        "width": 450,
+        "height": 350,
+        "visible": false,
+        "center": true,
+        "resizable": false
+      },
+      {
+        "label": "enrollment",
+        "title": "RMM Agent - Awaiting Approval",
+        "url": "enrollment.html",
+        "width": 400,
+        "height": 300,
+        "visible": false,
+        "center": true,
+        "resizable": false
       }
     ]
   }

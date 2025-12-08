@@ -1,0 +1,283 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RMM Agent Settings</title>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f9fafb;
+        --bg-tertiary: #f3f4f6;
+        --text-primary: #111827;
+        --text-secondary: #6b7280;
+        --border: #e5e7eb;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --shadow: rgba(0, 0, 0, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-primary: #111827;
+          --bg-secondary: #1f2937;
+          --bg-tertiary: #374151;
+          --text-primary: #f9fafb;
+          --text-secondary: #9ca3af;
+          --border: #374151;
+          --accent: #3b82f6;
+          --accent-hover: #60a5fa;
+          --success: #10b981;
+          --warning: #f59e0b;
+          --error: #ef4444;
+          --shadow: rgba(0, 0, 0, 0.3);
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        padding: 20px;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .section {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 16px;
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
+
+      .form-group {
+        margin-bottom: 16px;
+      }
+
+      .form-group:last-child {
+        margin-bottom: 0;
+      }
+
+      label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+      }
+
+      input, select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      input:focus, select:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-family: inherit;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover {
+        background: var(--border);
+      }
+
+      .footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      .success-message {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid var(--success);
+        color: var(--success);
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+
+      .error-message {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--error);
+        color: var(--error);
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Settings</h1>
+      </div>
+
+      <div id="success" class="success-message hidden">Settings saved successfully!</div>
+      <div id="error" class="error-message hidden"></div>
+
+      <div class="section">
+        <div class="section-title">Server Configuration</div>
+        <div class="form-group">
+          <label for="server-url">Server URL</label>
+          <input type="text" id="server-url" placeholder="https://example.com" />
+        </div>
+        <div class="form-group">
+          <label for="netdata-url">Netdata URL</label>
+          <input type="text" id="netdata-url" placeholder="http://127.0.0.1:19999" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Metrics</div>
+        <div class="form-group">
+          <label for="metrics-interval">Metrics Collection Interval</label>
+          <select id="metrics-interval">
+            <option value="30">30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="120">2 minutes</option>
+            <option value="300">5 minutes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="footer">
+        <button class="btn-secondary" onclick="closeWindow()">Cancel</button>
+        <button class="btn-primary" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+
+    <script>
+      const { invoke } = window.__TAURI__;
+
+      // Load settings on startup
+      async function loadSettings() {
+        try {
+          const config = await invoke('get_config_values');
+          document.getElementById('server-url').value = config.server_url || '';
+          document.getElementById('netdata-url').value = config.netdata_url || '';
+          document.getElementById('metrics-interval').value = config.metrics_interval || 60;
+        } catch (error) {
+          showError(`Failed to load settings: ${error}`);
+        }
+      }
+
+      async function saveSettings() {
+        const serverUrl = document.getElementById('server-url').value.trim();
+        const netdataUrl = document.getElementById('netdata-url').value.trim();
+        const metricsInterval = parseInt(document.getElementById('metrics-interval').value);
+
+        if (!serverUrl) {
+          showError('Server URL is required');
+          return;
+        }
+
+        try {
+          // Save server URL
+          await invoke('set_server_url', { url: serverUrl });
+
+          // TODO: Add commands to save other settings once implemented in backend
+
+          showSuccess();
+          setTimeout(() => {
+            closeWindow();
+          }, 1500);
+        } catch (error) {
+          showError(`Failed to save settings: ${error}`);
+        }
+      }
+
+      function showSuccess() {
+        document.getElementById('success').classList.remove('hidden');
+        document.getElementById('error').classList.add('hidden');
+      }
+
+      function showError(message) {
+        const errorEl = document.getElementById('error');
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        document.getElementById('success').classList.add('hidden');
+      }
+
+      function closeWindow() {
+        window.__TAURI__.window.appWindow.hide();
+      }
+
+      // Initialize
+      loadSettings();
+    </script>
+  </body>
+</html>

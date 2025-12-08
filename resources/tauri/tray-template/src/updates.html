@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RMM Agent Updates</title>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f9fafb;
+        --bg-tertiary: #f3f4f6;
+        --text-primary: #111827;
+        --text-secondary: #6b7280;
+        --border: #e5e7eb;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --shadow: rgba(0, 0, 0, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-primary: #111827;
+          --bg-secondary: #1f2937;
+          --bg-tertiary: #374151;
+          --text-primary: #f9fafb;
+          --text-secondary: #9ca3af;
+          --border: #374151;
+          --accent: #3b82f6;
+          --accent-hover: #60a5fa;
+          --success: #10b981;
+          --warning: #f59e0b;
+          --error: #ef4444;
+          --shadow: rgba(0, 0, 0, 0.3);
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        padding: 20px;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .section {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 16px;
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .info-value {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+
+      button {
+        width: 100%;
+        padding: 12px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-family: inherit;
+        margin-bottom: 8px;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+
+      .btn-success {
+        background: var(--success);
+        color: white;
+      }
+
+      .btn-success:hover:not(:disabled) {
+        background: #059669;
+      }
+
+      .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--border);
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: var(--text-secondary);
+      }
+
+      .error-message {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--error);
+        color: var(--error);
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+
+      .success-message {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid var(--success);
+        color: var(--success);
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        text-align: center;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-tertiary);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 12px 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.3s;
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Updates</h1>
+      </div>
+
+      <div id="error" class="error-message hidden"></div>
+      <div id="success" class="success-message hidden"></div>
+
+      <!-- Current Version -->
+      <div class="section">
+        <div class="section-title">Current Version</div>
+        <div class="info-row">
+          <span class="info-label">Version</span>
+          <span class="info-value" id="current-version">-</span>
+        </div>
+      </div>
+
+      <!-- Check for Updates -->
+      <div id="check-section" class="section">
+        <button class="btn-primary" onclick="checkForUpdates()">Check for Updates</button>
+      </div>
+
+      <!-- Checking State -->
+      <div id="checking" class="section hidden">
+        <div class="loading">Checking for updates...</div>
+      </div>
+
+      <!-- Update Available -->
+      <div id="update-available" class="section hidden">
+        <div class="section-title">Update Available</div>
+        <div class="info-row">
+          <span class="info-label">New Version</span>
+          <span class="info-value" id="new-version">-</span>
+        </div>
+        <div style="margin-top: 16px;">
+          <button class="btn-primary" onclick="downloadUpdate()">Download Update</button>
+        </div>
+      </div>
+
+      <!-- Downloading State -->
+      <div id="downloading" class="section hidden">
+        <div class="section-title">Downloading Update</div>
+        <div class="loading">Downloading...</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 50%;"></div>
+        </div>
+      </div>
+
+      <!-- Ready to Install -->
+      <div id="ready-to-install" class="section hidden">
+        <div class="section-title">Update Ready</div>
+        <div class="loading">Update downloaded successfully!</div>
+        <div style="margin-top: 16px;">
+          <button class="btn-success" onclick="installUpdate()">Install & Restart</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <button class="btn-secondary" onclick="closeWindow()">Close</button>
+      </div>
+    </div>
+
+    <script>
+      const { invoke } = window.__TAURI__;
+      let updateInfo = null;
+      let downloadedPath = null;
+
+      // Load current version
+      async function loadVersion() {
+        try {
+          const version = await invoke('get_version');
+          document.getElementById('current-version').textContent = `v${version}`;
+        } catch (error) {
+          showError(`Failed to load version: ${error}`);
+        }
+      }
+
+      async function checkForUpdates() {
+        hideAllSections();
+        document.getElementById('checking').classList.remove('hidden');
+
+        try {
+          const update = await invoke('check_update_available');
+
+          if (update) {
+            updateInfo = update;
+            document.getElementById('new-version').textContent = `v${update.latest_version}`;
+            hideAllSections();
+            document.getElementById('update-available').classList.remove('hidden');
+          } else {
+            hideAllSections();
+            document.getElementById('check-section').classList.remove('hidden');
+            showSuccess('You are running the latest version!');
+          }
+        } catch (error) {
+          hideAllSections();
+          document.getElementById('check-section').classList.remove('hidden');
+          showError(`Failed to check for updates: ${error}`);
+        }
+      }
+
+      async function downloadUpdate() {
+        if (!updateInfo) {
+          return;
+        }
+
+        hideAllSections();
+        document.getElementById('downloading').classList.remove('hidden');
+
+        try {
+          const path = await invoke('trigger_update_download');
+          downloadedPath = path;
+
+          hideAllSections();
+          document.getElementById('ready-to-install').classList.remove('hidden');
+        } catch (error) {
+          hideAllSections();
+          document.getElementById('update-available').classList.remove('hidden');
+          showError(`Failed to download update: ${error}`);
+        }
+      }
+
+      function installUpdate() {
+        // Show message and close
+        showSuccess('Installing update... The application will restart.');
+        setTimeout(() => {
+          // TODO: Trigger actual update installation
+          // This would call a Tauri command that runs the update script
+          closeWindow();
+        }, 2000);
+      }
+
+      function hideAllSections() {
+        document.getElementById('check-section').classList.add('hidden');
+        document.getElementById('checking').classList.add('hidden');
+        document.getElementById('update-available').classList.add('hidden');
+        document.getElementById('downloading').classList.add('hidden');
+        document.getElementById('ready-to-install').classList.add('hidden');
+        document.getElementById('error').classList.add('hidden');
+        document.getElementById('success').classList.add('hidden');
+      }
+
+      function showError(message) {
+        const errorEl = document.getElementById('error');
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+      }
+
+      function showSuccess(message) {
+        const successEl = document.getElementById('success');
+        successEl.textContent = message;
+        successEl.classList.remove('hidden');
+      }
+
+      function closeWindow() {
+        window.__TAURI__.window.appWindow.hide();
+      }
+
+      // Initialize
+      loadVersion();
+    </script>
+  </body>
+</html>

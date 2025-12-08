@@ -248,7 +248,7 @@ rm -- "$0"
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct UpdateInfo {
     pub current_version: String,
     pub latest_version: String,

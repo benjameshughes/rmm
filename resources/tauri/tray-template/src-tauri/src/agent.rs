@@ -96,9 +96,9 @@ impl Agent {
         }
     }
 
-    /// Start the agent
-    pub async fn start(&self) -> Result<()> {
-        info!("Starting RMM Agent");
+    /// Start the agent (non-blocking)
+    pub async fn start(self: Arc<Self>, app_handle: tauri::AppHandle) -> Result<()> {
+        info!("Starting RMM Agent (non-blocking)");
         info!("Device: {}", self.system_info.hostname);
         info!("Fingerprint: {}", self.system_info.hardware_fingerprint);
 
@@ -106,19 +106,40 @@ impl Agent {
         if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
             info!("Device is already enrolled, starting metrics collection");
             self.set_state(AgentState::Active).await;
-            self.start_metrics_collection(api_key, self.cancellation_token.clone())
-                .await;
+            self.spawn_metrics_task(api_key, app_handle);
         } else {
             // Need to enroll
             info!("Device not enrolled, starting enrollment process");
-            self.enroll_device().await?;
+            self.spawn_enrollment_task(app_handle);
         }
 
         Ok(())
     }
 
-    /// Enroll the device
-    async fn enroll_device(&self) -> Result<()> {
+    /// Spawn metrics collection task
+    fn spawn_metrics_task(self: &Arc<Self>, api_key: String, _app_handle: tauri::AppHandle) {
+        let agent = Arc::clone(self);
+        let cancellation_token = agent.cancellation_token.clone();
+
+        tauri::async_runtime::spawn(async move {
+            agent.start_metrics_collection(api_key, cancellation_token).await;
+        });
+    }
+
+    /// Spawn enrollment task
+    fn spawn_enrollment_task(self: &Arc<Self>, app_handle: tauri::AppHandle) {
+        let agent = Arc::clone(self);
+
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = agent.enroll_device_async(app_handle).await {
+                error!("Enrollment failed: {}", e);
+                agent.set_state(AgentState::Error(format!("Enrollment failed: {}", e))).await;
+            }
+        });
+    }
+
+    /// Async enrollment process
+    async fn enroll_device_async(&self, _app_handle: tauri::AppHandle) -> Result<()> {
         info!("Enrolling device with backend");
 
         // Submit enrollment request
@@ -159,6 +180,7 @@ impl Agent {
 
         Ok(())
     }
+
 
     /// Start metrics collection loop with graceful shutdown support
     async fn start_metrics_collection(&self, api_key: String, cancellation_token: CancellationToken) {

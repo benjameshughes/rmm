@@ -60,22 +60,31 @@ fn init_logging(config: &Config) -> tracing_appender::non_blocking::WorkerGuard 
 /// Build the system tray menu
 fn build_tray_menu() -> SystemTrayMenu {
     SystemTrayMenu::new()
-        .add_item(CustomMenuItem::new("status", "Status: Initializing...").disabled())
-        .add_item(CustomMenuItem::new("version", format!("Version: {}", env!("CARGO_PKG_VERSION"))).disabled())
+        .add_item(CustomMenuItem::new("status_label", "Status: Initializing...").disabled())
+        .add_item(CustomMenuItem::new("version", format!("v{}", env!("CARGO_PKG_VERSION"))).disabled())
         .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(CustomMenuItem::new("check_update", "Check for Updates"))
-        .add_item(CustomMenuItem::new("install", "Install / Repair Agent"))
-        .add_item(CustomMenuItem::new("open_log", "Open Agent Log"))
+        .add_item(CustomMenuItem::new("open_status", "Status & Info"))
+        .add_item(CustomMenuItem::new("open_settings", "Settings"))
+        .add_item(CustomMenuItem::new("open_logs", "View Logs"))
+        .add_item(CustomMenuItem::new("open_updates", "Updates"))
+        .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(CustomMenuItem::new("open_dashboard", "Open Web Dashboard"))
-        .add_item(CustomMenuItem::new("open_settings", "Agent Settings..."))
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(CustomMenuItem::new("quit", "Quit"))
+}
+
+/// Show a window by label
+fn show_window(app: &tauri::AppHandle, label: &str) {
+    if let Some(window) = app.get_window(label) {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 /// Update the tray status label
 fn update_tray_status(app_handle: &tauri::AppHandle, state: &AgentState) {
     let tray = app_handle.tray_handle();
-    let status_item = tray.get_item("status");
+    let status_item = tray.get_item("status_label");
     let _ = status_item.set_title(&state.status_label());
 }
 
@@ -176,6 +185,59 @@ fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+#[tauri::command]
+async fn get_log_contents(lines: Option<usize>) -> Result<String, String> {
+    let config = Config::default();
+    let log_path = config.log_file;
+
+    match tokio::fs::read_to_string(&log_path).await {
+        Ok(content) => {
+            let lines_vec: Vec<&str> = content.lines().collect();
+            let take_lines = lines.unwrap_or(200);
+            let start = if lines_vec.len() > take_lines { lines_vec.len() - take_lines } else { 0 };
+            Ok(lines_vec[start..].join("\n"))
+        }
+        Err(e) => Err(format!("Failed to read logs: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn check_update_available() -> Result<Option<UpdateInfo>, String> {
+    match Updater::new() {
+        Ok(updater) => updater.check_for_update().await.map_err(|e| e.to_string()),
+        Err(e) => Err(e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn trigger_update_download(
+    update_state: tauri::State<'_, Arc<RwLock<UpdateState>>>
+) -> Result<String, String> {
+    let state = update_state.read().await;
+    if let Some(ref update) = state.available {
+        match Updater::new() {
+            Ok(updater) => {
+                let path = updater.download_update(update).await.map_err(|e| e.to_string())?;
+                Ok(path.to_string_lossy().to_string())
+            }
+            Err(e) => Err(e.to_string())
+        }
+    } else {
+        Err("No update available".to_string())
+    }
+}
+
+#[tauri::command]
+fn get_config_values() -> Result<serde_json::Value, String> {
+    let config = Config::default();
+    Ok(serde_json::json!({
+        "server_url": config.base_url,
+        "netdata_url": config.netdata_url,
+        "metrics_interval": config.metrics_interval,
+        "log_file": config.log_file.to_string_lossy()
+    }))
+}
+
 fn main() {
     // Initialize configuration
     let config = Config::default();
@@ -197,9 +259,19 @@ fn main() {
             get_status_info,
             get_server_url,
             set_server_url,
-            get_version
+            get_version,
+            get_log_contents,
+            check_update_available,
+            trigger_update_download,
+            get_config_values
         ])
         .system_tray(tray)
+        .on_window_event(|event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
+                event.window().hide().unwrap();
+                api.prevent_close();
+            }
+        })
         .on_system_tray_event(|app, event| {
             let config = Config::default();
             match event {
@@ -207,27 +279,23 @@ fn main() {
                     // Menu shows on left click via config
                 }
                 SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
-                    "status" => {
-                        // Get current state and show notification
-                        let app_handle = app.app_handle();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
-                                let state = agent.get_state().await;
-                                let body = state.as_display();
-
-                                info!("Status requested: {}", body);
-
-                                // Show notification (Tauri v1 API)
-                                if let Err(e) = Notification::new(&app_handle.config().tauri.bundle.identifier)
-                                    .title("RMM Agent Status")
-                                    .body(&body)
-                                    .show() {
-                                    error!("Failed to show notification: {}", e);
-                                }
-                            }
-                        });
+                    "open_status" => {
+                        info!("Opening status window");
+                        show_window(&app.app_handle(), "status");
                     }
-                    "check_update" => {
+                    "open_settings" => {
+                        info!("Opening settings window");
+                        show_window(&app.app_handle(), "settings");
+                    }
+                    "open_logs" => {
+                        info!("Opening logs window");
+                        show_window(&app.app_handle(), "logs");
+                    }
+                    "open_updates" => {
+                        info!("Opening updates window");
+                        show_window(&app.app_handle(), "updates");
+                    }
+                    "_check_update_old" => {
                         info!("Checking for updates...");
                         let app_handle = app.app_handle();
                         tauri::async_runtime::spawn(async move {
@@ -278,64 +346,13 @@ fn main() {
                             }
                         });
                     }
-                    "install" => {
-                        // Re-trigger enrollment check by spawning new enrollment
-                        info!("Install/Repair requested - triggering enrollment check");
-                        let app_handle = app.app_handle();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
-                                let state = agent.get_state().await;
-                                info!("Current state before install/repair: {:?}", state);
-
-                                // For now, just check status which will update tray
-                                if let Err(e) = agent.check_status().await {
-                                    error!("Status check failed during install/repair: {}", e);
-                                }
-                            }
-                        });
-                    }
-                    "open_log" => {
-                        // Open the log directory in file explorer
-                        info!("Opening log directory: {:?}", config.log_file.parent());
-
-                        if let Some(log_dir) = config.log_file.parent() {
-                            let log_dir_str = log_dir.to_string_lossy().to_string();
-
-                            #[cfg(target_os = "windows")]
-                            {
-                                // On Windows, open Explorer to the directory
-                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
-                            }
-
-                            #[cfg(target_os = "macos")]
-                            {
-                                // On macOS, open Finder to the directory
-                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
-                            }
-
-                            #[cfg(target_os = "linux")]
-                            {
-                                // On Linux, open file manager to the directory
-                                let _ = tauri::api::shell::open(&app.shell_scope(), &log_dir_str, None);
-                            }
-                        } else {
-                            error!("Could not determine log directory");
-                        }
-                    }
                     "open_dashboard" => {
                         let url = format!("{}/devices", config.base_url);
                         info!("Opening dashboard: {}", url);
                         let _ = tauri::api::shell::open(&app.shell_scope(), url, None);
                     }
-                    "open_settings" => {
-                        info!("Opening settings window");
-                        if let Some(window) = app.get_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
                     "quit" => {
-                        info!("Quit requested - initiating graceful shutdown");
+                        info!("Quit requested - shutting down");
                         let app_handle = app.app_handle();
 
                         // Trigger graceful shutdown on agent if available
@@ -344,8 +361,8 @@ fn main() {
                         }
 
                         // Give a moment for cleanup, then exit
-                        std::thread::sleep(std::time::Duration::from_millis(500));
-                        std::process::exit(0);
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                        app_handle.exit(0);
                     }
                     _ => {}
                 },
@@ -425,8 +442,8 @@ fn main() {
                     }
                 });
 
-                // Start the main agent (this will block on enrollment or metrics loop)
-                if let Err(e) = agent.start().await {
+                // Start the main agent (non-blocking)
+                if let Err(e) = agent.clone().start(app_handle.clone()).await {
                     error!("Agent failed to start: {}", e);
                     update_tray_status(
                         &app_handle,
