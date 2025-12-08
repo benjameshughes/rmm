@@ -57,9 +57,12 @@ hex = "0.4"
 # Directories
 dirs = "6"
 
+# Base64 encoding for encrypted data
+base64 = "0.21"
+
 # Windows-specific
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser"] }
+winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser", "dpapi", "wincrypt"] }
 
 [features]
 default = []

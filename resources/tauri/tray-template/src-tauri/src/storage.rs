@@ -6,6 +6,89 @@ use tracing::{debug, info};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+#[cfg(windows)]
+use winapi::um::dpapi::{CryptProtectData, CryptUnprotectData};
+#[cfg(windows)]
+use winapi::um::wincrypt::CRYPTOAPI_BLOB;
+#[cfg(windows)]
+use std::ptr;
+#[cfg(windows)]
+use base64::{Engine as _, engine::general_purpose};
+
+/// Encrypt data using Windows DPAPI
+#[cfg(windows)]
+fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
+    unsafe {
+        let mut input_blob = CRYPTOAPI_BLOB {
+            cbData: data.len() as u32,
+            pbData: data.as_ptr() as *mut u8,
+        };
+
+        let mut output_blob = CRYPTOAPI_BLOB {
+            cbData: 0,
+            pbData: ptr::null_mut(),
+        };
+
+        let result = CryptProtectData(
+            &mut input_blob,
+            ptr::null(),      // Description
+            ptr::null_mut(),  // Optional entropy
+            ptr::null_mut(),  // Reserved
+            ptr::null_mut(),  // Prompt struct
+            0,                // Flags
+            &mut output_blob,
+        );
+
+        if result == 0 {
+            anyhow::bail!("DPAPI encryption failed");
+        }
+
+        let encrypted = std::slice::from_raw_parts(output_blob.pbData, output_blob.cbData as usize).to_vec();
+
+        // Free the blob allocated by CryptProtectData
+        winapi::um::winbase::LocalFree(output_blob.pbData as *mut _);
+
+        Ok(encrypted)
+    }
+}
+
+/// Decrypt data using Windows DPAPI
+#[cfg(windows)]
+fn decrypt_dpapi(encrypted_data: &[u8]) -> Result<Vec<u8>> {
+    unsafe {
+        let mut input_blob = CRYPTOAPI_BLOB {
+            cbData: encrypted_data.len() as u32,
+            pbData: encrypted_data.as_ptr() as *mut u8,
+        };
+
+        let mut output_blob = CRYPTOAPI_BLOB {
+            cbData: 0,
+            pbData: ptr::null_mut(),
+        };
+
+        let result = CryptUnprotectData(
+            &mut input_blob,
+            ptr::null_mut(),  // Description
+            ptr::null_mut(),  // Optional entropy
+            ptr::null_mut(),  // Reserved
+            ptr::null_mut(),  // Prompt struct
+            0,                // Flags
+            &mut output_blob,
+        );
+
+        if result == 0 {
+            anyhow::bail!("DPAPI decryption failed");
+        }
+
+        let decrypted = std::slice::from_raw_parts(output_blob.pbData, output_blob.cbData as usize).to_vec();
+
+        // Free the blob allocated by CryptUnprotectData
+        winapi::um::winbase::LocalFree(output_blob.pbData as *mut _);
+
+        Ok(decrypted)
+    }
+}
+
 /// Storage manager for API key
 pub struct Storage {
     key_path: std::path::PathBuf,
@@ -28,10 +111,34 @@ impl Storage {
     /// Read the stored API key
     pub async fn read_key(&self) -> Result<String> {
         debug!("Reading API key from {:?}", self.key_path);
-        let key = fs::read_to_string(&self.key_path)
-            .await
-            .context("Failed to read API key file")?;
-        Ok(key.trim().to_string())
+
+        #[cfg(windows)]
+        {
+            // On Windows, read base64-encoded encrypted data and decrypt with DPAPI
+            let encrypted_b64 = fs::read_to_string(&self.key_path)
+                .await
+                .context("Failed to read API key file")?;
+
+            let encrypted = general_purpose::STANDARD.decode(encrypted_b64.trim())
+                .context("Failed to decode base64 encrypted data")?;
+
+            let decrypted = decrypt_dpapi(&encrypted)
+                .context("Failed to decrypt API key with DPAPI")?;
+
+            let key = String::from_utf8(decrypted)
+                .context("Decrypted data is not valid UTF-8")?;
+
+            Ok(key.trim().to_string())
+        }
+
+        #[cfg(not(windows))]
+        {
+            // On Unix, read plaintext key
+            let key = fs::read_to_string(&self.key_path)
+                .await
+                .context("Failed to read API key file")?;
+            Ok(key.trim().to_string())
+        }
     }
 
     /// Save the API key with secure file permissions
@@ -45,14 +152,29 @@ impl Storage {
                 .context("Failed to create key file directory")?;
         }
 
-        // Write the API key file
-        fs::write(&self.key_path, key.trim())
-            .await
-            .context("Failed to write API key file")?;
-
-        // Set secure file permissions (owner read/write only - 0o600)
-        #[cfg(unix)]
+        #[cfg(windows)]
         {
+            // On Windows, encrypt with DPAPI before writing
+            let encrypted = encrypt_dpapi(key.trim().as_bytes())
+                .context("Failed to encrypt API key with DPAPI")?;
+
+            let encrypted_b64 = general_purpose::STANDARD.encode(&encrypted);
+
+            fs::write(&self.key_path, encrypted_b64)
+                .await
+                .context("Failed to write encrypted API key file")?;
+
+            debug!("API key encrypted with DPAPI and saved");
+        }
+
+        #[cfg(not(windows))]
+        {
+            // On Unix, write plaintext key
+            fs::write(&self.key_path, key.trim())
+                .await
+                .context("Failed to write API key file")?;
+
+            // Set secure file permissions (owner read/write only - 0o600)
             let metadata = fs::metadata(&self.key_path)
                 .await
                 .context("Failed to read key file metadata")?;
@@ -62,13 +184,6 @@ impl Storage {
                 .await
                 .context("Failed to set secure permissions on key file")?;
             debug!("Set key file permissions to 0600 (owner read/write only)");
-        }
-
-        // On Windows, file permissions work differently (ACLs)
-        // The default behavior is generally secure for user-specific files
-        #[cfg(windows)]
-        {
-            debug!("Windows detected - relying on default user file ACLs for security");
         }
 
         info!("API key saved successfully");

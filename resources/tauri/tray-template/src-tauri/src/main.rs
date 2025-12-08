@@ -16,6 +16,7 @@ use config::Config;
 use runtime_config::RuntimeConfig;
 use std::sync::Arc;
 use tracing::{info, warn};
+use chrono::{Duration, Utc};
 
 #[cfg(windows)]
 use tracing::error;
@@ -41,6 +42,35 @@ const SERVICE_NAME: &str = "RMMAgent";
 const SERVICE_DISPLAY_NAME: &str = "RMM Monitoring Agent";
 #[cfg(windows)]
 const SERVICE_DESCRIPTION: &str = "Remote Monitoring and Management Agent - collects system metrics and enables remote management";
+
+/// Service exit codes
+#[cfg(windows)]
+#[repr(u32)]
+enum ServiceExitCodes {
+    Success = 0,
+    GeneralError = 1,
+    EnrollmentFailed = 2,
+    ConfigurationError = 3,
+    NetdataUnavailable = 4,
+}
+
+#[cfg(windows)]
+impl ServiceExitCodes {
+    fn from_error(error: &anyhow::Error) -> u32 {
+        let error_msg = format!("{:?}", error);
+
+        if error_msg.contains("enroll") || error_msg.contains("Enrollment") {
+            Self::EnrollmentFailed as u32
+        } else if error_msg.contains("config") || error_msg.contains("URL") || error_msg.contains("invalid") {
+            Self::ConfigurationError as u32
+        } else if error_msg.contains("netdata") || error_msg.contains("Netdata") {
+            // Netdata unavailable is a warning, not a fatal error
+            Self::Success as u32
+        } else {
+            Self::GeneralError as u32
+        }
+    }
+}
 
 /// RMM Agent - Remote Monitoring and Management Service
 #[derive(Parser)]
@@ -105,6 +135,47 @@ fn init_logging(config: &Config) -> WorkerGuard {
 
     info!("Logging initialized to {:?}", config.log_file);
     guard
+}
+
+/// Clean up log files older than 30 days
+async fn cleanup_old_logs(config: &Config) {
+    let log_dir = match config.log_file.parent() {
+        Some(dir) => dir,
+        None => return,
+    };
+
+    let cutoff_date = Utc::now() - Duration::days(30);
+
+    match tokio::fs::read_dir(log_dir).await {
+        Ok(mut entries) => {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+
+                // Only process .log files
+                if path.extension().and_then(|s| s.to_str()) != Some("log") {
+                    continue;
+                }
+
+                // Check file modified time
+                if let Ok(metadata) = entry.metadata().await {
+                    if let Ok(modified) = metadata.modified() {
+                        let modified_datetime = chrono::DateTime::<Utc>::from(modified);
+
+                        if modified_datetime < cutoff_date {
+                            if let Err(e) = tokio::fs::remove_file(&path).await {
+                                warn!("Failed to delete old log file {:?}: {}", path, e);
+                            } else {
+                                info!("Deleted old log file: {:?}", path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to read log directory for cleanup: {}", e);
+        }
+    }
 }
 
 /// Initialize console logging for status/install commands
@@ -196,6 +267,12 @@ fn run_service() -> Result<()> {
     // Create tokio runtime
     let rt = tokio::runtime::Runtime::new()?;
 
+    // Clean up old logs (async, non-blocking)
+    let config_clone = config.clone();
+    rt.spawn(async move {
+        cleanup_old_logs(&config_clone).await;
+    });
+
     // Create agent
     let agent = rt.block_on(async {
         Agent::with_config(config.clone()).await
@@ -232,16 +309,23 @@ fn run_service() -> Result<()> {
     // Run the agent
     let result = rt.block_on(agent.run());
 
-    if let Err(ref e) = result {
-        error!("Agent error: {}", e);
-    }
+    let exit_code = match &result {
+        Ok(_) => {
+            info!("Agent stopped normally");
+            ServiceExitCodes::Success as u32
+        }
+        Err(e) => {
+            error!("Agent error: {}", e);
+            ServiceExitCodes::from_error(e)
+        }
+    };
 
     // Report stopped status
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
         current_state: ServiceState::Stopped,
         controls_accepted: ServiceControlAccept::empty(),
-        exit_code: ServiceExitCode::Win32(if result.is_ok() { 0 } else { 1 }),
+        exit_code: ServiceExitCode::Win32(exit_code),
         checkpoint: 0,
         wait_hint: std::time::Duration::default(),
         process_id: None,
@@ -447,6 +531,13 @@ fn main() -> Result<()> {
             let _guard = init_logging(&config);
 
             let rt = tokio::runtime::Runtime::new()?;
+
+            // Clean up old logs (async, non-blocking)
+            let config_clone = config.clone();
+            rt.spawn(async move {
+                cleanup_old_logs(&config_clone).await;
+            });
+
             rt.block_on(run_agent(config))?;
         }
         Some(Commands::Install) => {
@@ -494,6 +585,13 @@ fn main() -> Result<()> {
                 // On non-Windows, just run in console mode
                 let _guard = init_logging(&config);
                 let rt = tokio::runtime::Runtime::new()?;
+
+                // Clean up old logs (async, non-blocking)
+                let config_clone = config.clone();
+                rt.spawn(async move {
+                    cleanup_old_logs(&config_clone).await;
+                });
+
                 rt.block_on(run_agent(config))?;
             }
         }

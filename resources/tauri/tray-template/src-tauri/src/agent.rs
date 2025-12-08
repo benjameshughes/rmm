@@ -53,33 +53,9 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// Create a new agent instance
+    /// Create a new agent instance with default config
     pub async fn new() -> Result<Self> {
-        let config = Config::default();
-        config
-            .ensure_data_dir()
-            .context("Failed to create data directory")?;
-
-        let system_info = SystemInfo::gather().context("Failed to gather system information")?;
-        info!("System info: {}", system_info.summary());
-
-        let storage = Storage::new(&config.key_file);
-        let enrollment_manager = EnrollmentManager::new(config.clone(), storage)?;
-
-        // Determine initial state
-        let initial_state = if enrollment_manager.is_enrolled().await {
-            AgentState::Active
-        } else {
-            AgentState::NotEnrolled
-        };
-
-        Ok(Self {
-            config,
-            system_info,
-            enrollment_manager,
-            state: Arc::new(RwLock::new(initial_state)),
-            cancellation_token: CancellationToken::new(),
-        })
+        Self::with_config(Config::default()).await
     }
 
     /// Create agent with a specific config (for URL override)
