@@ -221,7 +221,7 @@
     </div>
 
     <script>
-      const { invoke } = window.__TAURI__;
+      const { invoke } = window.__TAURI__.tauri;
 
       // Load settings on startup
       async function loadSettings() {

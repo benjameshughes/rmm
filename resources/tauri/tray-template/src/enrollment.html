@@ -170,7 +170,7 @@
     </div>
 
     <script>
-      const { invoke } = window.__TAURI__;
+      const { invoke } = window.__TAURI__.tauri;
 
       // Load device hostname
       async function loadHostname() {
