@@ -1,94 +1,102 @@
 <div class="space-y-6">
-    <flux:heading size="xl">Devices</flux:heading>
+    <div class="flex items-center justify-between">
+        <flux:heading size="xl">Devices</flux:heading>
+        <flux:button as="a" :href="route('devices.pending')" wire:navigate>
+            Pending Approvals
+        </flux:button>
+    </div>
     <flux:separator variant="subtle" />
 
-    <div class="flex items-center justify-between gap-4">
-        <flux:input wire:model.live.debounce.300ms="search" placeholder="Search hostname, IP, OS..." class="w-full max-w-md" />
-        <div class="flex gap-2">
-            <flux:button as="a" :href="route('devices.pending')" wire:navigate>Pending</flux:button>
-        </div>
+    <div class="flex items-center gap-4">
+        <flux:input wire:model.live.debounce.300ms="search" placeholder="Search hostname, IP, OS..." class="max-w-sm" icon="magnifying-glass" />
     </div>
 
-    <div class="overflow-hidden rounded border">
-        <table class="w-full text-sm">
-            <thead class="bg-muted/40">
-            <tr>
-                <th class="px-4 py-2 text-left">Hostname</th>
-                <th class="px-4 py-2 text-left">Status</th>
-                <th class="px-4 py-2 text-left">Last Seen</th>
-                <th class="px-4 py-2 text-left">OS</th>
-                <th class="px-4 py-2 text-left">CPU</th>
-                <th class="px-4 py-2 text-left">RAM</th>
-                <th class="px-4 py-2 text-left">Metrics</th>
-                <th class="px-4 py-2 text-left">Actions</th>
-            </tr>
-            </thead>
-            <tbody>
-            @forelse ($devices as $device)
-                <tr class="border-t">
-                    <td class="px-4 py-2 font-medium">{{ $device->hostname }}</td>
-                    <td class="px-4 py-2">
-                        @if($device->status === \App\Models\Device::STATUS_ACTIVE)
-                            @if($device->isOnline())
-                                <flux:badge color="green">Online</flux:badge>
+    <flux:card>
+        <flux:table :paginate="$devices">
+            <flux:table.columns>
+                <flux:table.column>Device</flux:table.column>
+                <flux:table.column>Status</flux:table.column>
+                <flux:table.column>System</flux:table.column>
+                <flux:table.column>Current Load</flux:table.column>
+                <flux:table.column>Last Seen</flux:table.column>
+                <flux:table.column></flux:table.column>
+            </flux:table.columns>
+            <flux:table.rows>
+                @forelse ($devices as $device)
+                    <flux:table.row>
+                        <flux:table.cell>
+                            <div>
+                                <flux:text class="font-medium">{{ $device->hostname }}</flux:text>
+                                <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400 font-mono">{{ $device->last_ip ?? '—' }}</flux:text>
+                            </div>
+                        </flux:table.cell>
+                        <flux:table.cell>
+                            @if($device->status === \App\Models\Device::STATUS_ACTIVE)
+                                @if($device->isOnline())
+                                    <flux:badge color="green">Online</flux:badge>
+                                @else
+                                    <flux:badge color="red">Offline</flux:badge>
+                                @endif
+                            @elseif($device->status === \App\Models\Device::STATUS_PENDING)
+                                <flux:badge color="amber">Pending</flux:badge>
                             @else
-                                <flux:badge color="red">Offline</flux:badge>
+                                <flux:badge color="gray">Revoked</flux:badge>
                             @endif
-                        @elseif($device->status === \App\Models\Device::STATUS_PENDING)
-                            <flux:badge color="amber">Pending</flux:badge>
-                        @else
-                            <flux:badge color="gray">Revoked</flux:badge>
-                        @endif
-                    </td>
-                    <td class="px-4 py-2">{{ $device->last_seen?->diffForHumans() ?? '—' }}</td>
-                    <td class="px-4 py-2">
-                        @if($device->os_name && $device->os_version)
-                            <div>{{ $device->os_name }}</div>
-                            <div class="text-xs text-muted-foreground">{{ $device->os_version }}</div>
-                        @else
-                            {{ $device->os ?? '—' }}
-                        @endif
-                    </td>
-                    <td class="px-4 py-2">
-                        @if($device->cpu_model)
-                            <div>{{ $device->cpu_model }}</div>
-                            @if($device->cpu_cores)
-                                <div class="text-xs text-muted-foreground">{{ $device->cpu_cores }} cores</div>
+                        </flux:table.cell>
+                        <flux:table.cell>
+                            @if($device->os_name)
+                                <div>
+                                    <flux:text>{{ $device->os_name }}</flux:text>
+                                    @if($device->cpu_cores)
+                                        <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $device->cpu_cores }} cores &bull; {{ $device->total_ram_gb ? number_format($device->total_ram_gb).'GB' : '—' }}</flux:text>
+                                    @endif
+                                </div>
+                            @else
+                                <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $device->os ?? '—' }}</flux:text>
                             @endif
-                        @else
-                            —
-                        @endif
-                    </td>
-                    <td class="px-4 py-2">
-                        @if($device->total_ram_gb)
-                            {{ number_format($device->total_ram_gb, 1) }} GB
-                        @else
-                            —
-                        @endif
-                    </td>
-                    <td class="px-4 py-2">
-                        @if(optional($device->latestMetric)->cpu !== null && optional($device->latestMetric)->ram !== null)
-                            <div>CPU: {{ number_format($device->latestMetric->cpu, 1) }}%</div>
-                            <div class="text-xs text-muted-foreground">RAM: {{ number_format($device->latestMetric->ram, 1) }}%</div>
-                        @else
-                            —
-                        @endif
-                    </td>
-                    <td class="px-4 py-2">
-                        <flux:button as="a" size="xs" variant="outline" :href="route('devices.show', $device)" wire:navigate>View</flux:button>
-                    </td>
-                </tr>
-            @empty
-                <tr>
-                    <td class="px-4 py-8 text-center text-muted-foreground" colspan="8">No devices found</td>
-                </tr>
-            @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    <div>
-        {{ $devices->links() }}
-    </div>
+                        </flux:table.cell>
+                        <flux:table.cell>
+                            @if(optional($device->latestMetric)->cpu !== null)
+                                <div class="flex items-center gap-3">
+                                    <div class="text-center">
+                                        <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">CPU</flux:text>
+                                        <flux:text class="font-medium {{ $device->latestMetric->cpu > 80 ? 'text-red-600 dark:text-red-400' : '' }}">
+                                            {{ number_format($device->latestMetric->cpu, 0) }}%
+                                        </flux:text>
+                                    </div>
+                                    <div class="text-center">
+                                        <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">RAM</flux:text>
+                                        <flux:text class="font-medium {{ $device->latestMetric->ram > 80 ? 'text-red-600 dark:text-red-400' : '' }}">
+                                            {{ number_format($device->latestMetric->ram, 0) }}%
+                                        </flux:text>
+                                    </div>
+                                    @if($device->latestMetric->alerts_critical > 0)
+                                        <flux:badge size="sm" color="red">{{ $device->latestMetric->alerts_critical }}</flux:badge>
+                                    @elseif($device->latestMetric->alerts_warning > 0)
+                                        <flux:badge size="sm" color="amber">{{ $device->latestMetric->alerts_warning }}</flux:badge>
+                                    @endif
+                                </div>
+                            @else
+                                <flux:text class="text-zinc-500 dark:text-zinc-400">—</flux:text>
+                            @endif
+                        </flux:table.cell>
+                        <flux:table.cell>
+                            <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $device->last_seen?->diffForHumans() ?? '—' }}</flux:text>
+                        </flux:table.cell>
+                        <flux:table.cell>
+                            <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $device)" wire:navigate>
+                                View
+                            </flux:button>
+                        </flux:table.cell>
+                    </flux:table.row>
+                @empty
+                    <flux:table.row>
+                        <flux:table.cell colspan="6">
+                            <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">No devices found</div>
+                        </flux:table.cell>
+                    </flux:table.row>
+                @endforelse
+            </flux:table.rows>
+        </flux:table>
+    </flux:card>
 </div>
-

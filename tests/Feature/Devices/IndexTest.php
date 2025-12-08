@@ -34,6 +34,6 @@ it('lists devices with status and snapshots', function (): void {
         ->assertSee('Devices')
         ->assertSee('ONLINE-PC')
         ->assertSee('OFFLINE-PC')
-        ->assertSee('12.3%')
-        ->assertSee('56.8%');
+        ->assertSee('12%')
+        ->assertSee('57%');
 });

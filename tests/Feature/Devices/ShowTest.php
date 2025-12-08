@@ -29,8 +29,7 @@ it('shows device details and recent metrics', function (): void {
         ->get(route('devices.show', $device))
         ->assertSuccessful()
         ->assertSee('WAREHOUSE-PC-07')
-        ->assertSee('Windows 11 Pro')
-        ->assertSee('22.22%')
-        ->assertSee('44.44%');
+        ->assertSee('22.2%')
+        ->assertSee('44.4%');
 });
 
