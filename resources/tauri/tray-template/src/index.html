@@ -376,15 +376,32 @@
       let statusInfo = null;
       let refreshInterval = null;
 
+      // Retry wrapper for commands that need agent state
+      async function invokeWithRetry(command, args = {}, retries = 5, delay = 1000) {
+        for (let i = 0; i < retries; i++) {
+          try {
+            return await invoke(command, args);
+          } catch (e) {
+            if (i === retries - 1) throw e;
+            // Update loading message on retry
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl && !loadingEl.classList.contains('hidden')) {
+              loadingEl.textContent = `Agent initializing... (attempt ${i + 2}/${retries})`;
+            }
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
+
       // Load status on startup
       async function loadStatus() {
         try {
-          // Get version
+          // Get version (doesn't need agent state, no retry needed)
           const version = await invoke('get_version');
           document.getElementById('version-badge').textContent = `v${version}`;
 
-          // Get status info
-          statusInfo = await invoke('get_status_info');
+          // Get status info (needs agent state, use retry)
+          statusInfo = await invokeWithRetry('get_status_info');
           updateUI(statusInfo);
 
           // Hide loading, show content

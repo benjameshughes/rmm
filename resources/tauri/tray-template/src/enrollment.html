@@ -172,10 +172,22 @@
     <script>
       const { invoke } = window.__TAURI__.tauri;
 
+      // Retry wrapper for commands that need agent state
+      async function invokeWithRetry(command, args = {}, retries = 5, delay = 1000) {
+        for (let i = 0; i < retries; i++) {
+          try {
+            return await invoke(command, args);
+          } catch (e) {
+            if (i === retries - 1) throw e;
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
+
       // Load device hostname
       async function loadHostname() {
         try {
-          const statusInfo = await invoke('get_status_info');
+          const statusInfo = await invokeWithRetry('get_status_info');
           document.getElementById('hostname').textContent = statusInfo.hostname;
         } catch (error) {
           document.getElementById('hostname').textContent = 'Unknown';

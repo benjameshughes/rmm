@@ -223,10 +223,22 @@
     <script>
       const { invoke } = window.__TAURI__.tauri;
 
+      // Retry wrapper for commands that need agent state
+      async function invokeWithRetry(command, args = {}, retries = 5, delay = 1000) {
+        for (let i = 0; i < retries; i++) {
+          try {
+            return await invoke(command, args);
+          } catch (e) {
+            if (i === retries - 1) throw e;
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
+
       // Load settings on startup
       async function loadSettings() {
         try {
-          const config = await invoke('get_config_values');
+          const config = await invokeWithRetry('get_config_values');
           document.getElementById('server-url').value = config.server_url || '';
           document.getElementById('netdata-url').value = config.netdata_url || '';
           document.getElementById('metrics-interval').value = config.metrics_interval || 60;
