@@ -100,6 +100,19 @@ if ($runningTray) {
     Start-Sleep -Seconds 2
 }
 
+# Uninstall existing MSI if present (by product name)
+try {
+    $installedProduct = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*benjh-rmm*" -or $_.Name -like "*RMM*Tray*" } | Select-Object -First 1
+    if ($installedProduct) {
+        Log "Uninstalling existing MSI: $($installedProduct.Name)..."
+        $installedProduct.Uninstall() | Out-Null
+        Start-Sleep -Seconds 2
+        Log "MSI uninstalled"
+    }
+} catch {
+    Log "No existing MSI found or uninstall failed: $_"
+}
+
 # Remove scheduled task
 try {
     $existingTask = Get-ScheduledTask -TaskName "RMM-Metrics-Agent" -ErrorAction SilentlyContinue
@@ -109,7 +122,7 @@ try {
     }
 } catch { }
 
-# Remove startup registry entry
+# Remove startup registry entry (legacy, MSI handles its own)
 try {
     $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
     $existingReg = Get-ItemProperty -Path $regPath -Name "RMM-Tray" -ErrorAction SilentlyContinue
@@ -119,7 +132,7 @@ try {
     }
 } catch { }
 
-# Remove old files (keep the directory)
+# Remove old standalone files (keep the directory for agent data)
 $filesToRemove = @(
     "$AgentRoot\benjh-rmm.exe",
     "$AgentRoot\agent-metrics.ps1",
@@ -359,13 +372,13 @@ Log "Scheduled task created."
 
 
 # ===================================================================
-# STEP 6 — INSTALL TRAY APP (optional)
+# STEP 6 — INSTALL TRAY APP VIA MSI (optional)
 # ===================================================================
 
-$TrayExePath = "$AgentRoot\benjh-rmm.exe"
 $GitHubRepo = "benjameshughes/rmm"
+$TempMsiPath = Join-Path $env:TEMP "rmm-tray.msi"
 
-Log "Checking for tray app from GitHub releases..."
+Log "Checking for tray app MSI from GitHub releases..."
 
 try {
     # Query GitHub API for latest release
@@ -373,12 +386,12 @@ try {
     $releaseUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
     $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -ErrorAction Stop
 
-    # Find the .exe asset (regardless of exact name)
-    $exeAsset = $release.assets | Where-Object { $_.name -like "*.exe" } | Select-Object -First 1
+    # Find the .msi asset (regardless of exact name)
+    $msiAsset = $release.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 
-    if ($exeAsset) {
-        $TrayExeUrl = $exeAsset.browser_download_url
-        Log "Found tray app: $($exeAsset.name) from release $($release.tag_name)"
+    if ($msiAsset) {
+        $MsiUrl = $msiAsset.browser_download_url
+        Log "Found tray app MSI: $($msiAsset.name) from release $($release.tag_name)"
 
         # Stop running tray app if present (prevents file lock during update)
         $trayProcessName = "benjh-rmm"
@@ -386,33 +399,46 @@ try {
         if ($runningTray) {
             Log "Stopping running tray app for update..."
             Stop-Process -Name $trayProcessName -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2  # Give it time to fully exit
+            Start-Sleep -Seconds 2
         }
 
-        Log "Downloading tray app from $TrayExeUrl..."
-        Invoke-WebRequest -Uri $TrayExeUrl -OutFile $TrayExePath -UseBasicParsing
+        Log "Downloading MSI from $MsiUrl..."
+        Invoke-WebRequest -Uri $MsiUrl -OutFile $TempMsiPath -UseBasicParsing
 
-        # Remove "downloaded from internet" flag (bypasses SmartScreen)
-        Unblock-File -Path $TrayExePath -ErrorAction SilentlyContinue
+        # Unblock the downloaded file
+        Unblock-File -Path $TempMsiPath -ErrorAction SilentlyContinue
 
         # Add Windows Defender exclusion for RMM folder
         try {
             Add-MpPreference -ExclusionPath $AgentRoot -ErrorAction SilentlyContinue
-            Log "Added Defender exclusion for $AgentRoot"
+            Add-MpPreference -ExclusionPath "$env:ProgramFiles\benjh-rmm" -ErrorAction SilentlyContinue
+            Log "Added Defender exclusions"
         } catch {
             Log "WARNING: Could not add Defender exclusion (may need manual approval)"
         }
 
-        # Register tray app to run at startup (current user)
-        $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
-        Set-ItemProperty -Path $regPath -Name "RMM-Tray" -Value "`"$TrayExePath`"" -ErrorAction SilentlyContinue
-        Log "Registered tray app for startup"
+        # Install MSI silently
+        Log "Installing tray app MSI..."
+        $msiArgs = "/i `"$TempMsiPath`" /qn /norestart"
+        $process = Start-Process "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
 
-        # Launch tray app now
-        Start-Process -FilePath $TrayExePath -ErrorAction SilentlyContinue
-        Log "Tray app launched"
+        if ($process.ExitCode -eq 0) {
+            Log "Tray app MSI installed successfully"
+
+            # Clean up temp MSI
+            Remove-Item $TempMsiPath -Force -ErrorAction SilentlyContinue
+
+            # Launch tray app (MSI typically installs to Program Files)
+            $installedExe = "$env:ProgramFiles\benjh-rmm\benjh-rmm.exe"
+            if (Test-Path $installedExe) {
+                Start-Process -FilePath $installedExe -ErrorAction SilentlyContinue
+                Log "Tray app launched from $installedExe"
+            }
+        } else {
+            Log "WARNING: MSI installation returned exit code $($process.ExitCode)"
+        }
     } else {
-        Log "No .exe asset found in latest release. Skipping tray app."
+        Log "No .msi asset found in latest release. Skipping tray app."
     }
 } catch {
     Log "Tray app not available from GitHub releases: $_. Skipping."

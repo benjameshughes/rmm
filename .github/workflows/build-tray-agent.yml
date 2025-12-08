@@ -45,8 +45,8 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rmm-tray
-          path: resources/tauri/tray-template/src-tauri/target/release/benjh-rmm.exe
+          name: rmm-tray-msi
+          path: resources/tauri/tray-template/src-tauri/target/release/bundle/msi/*.msi
           retention-days: 90
 
       - name: Create Release
@@ -55,9 +55,9 @@ jobs:
         with:
           tag_name: tray-agent-${{ github.run_number }}
           name: Tray Agent Build ${{ github.run_number }}
-          files: resources/tauri/tray-template/src-tauri/target/release/benjh-rmm.exe
+          files: resources/tauri/tray-template/src-tauri/target/release/bundle/msi/*.msi
           generate_release_notes: false
           body: |
-            Automated build of the RMM Tray Agent.
+            Automated build of the RMM Tray Agent (MSI Installer).
 
-            Download `rmm-tray.exe` and place it where your server can serve it at `/agent/rmm-tray.exe`.
+            The installer script will automatically download and install this MSI.

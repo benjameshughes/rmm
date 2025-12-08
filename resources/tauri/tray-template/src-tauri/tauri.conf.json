@@ -72,11 +72,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi"],
     "icon": [
       "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "upgradeCode": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      }
+    }
   },
   "plugins": {
     "shell": {
