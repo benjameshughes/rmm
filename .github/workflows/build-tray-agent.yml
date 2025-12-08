@@ -1,4 +1,4 @@
-name: Build Tray Agent
+name: Build RMM Agent
 
 on:
   push:
@@ -21,43 +21,63 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "resources/tauri/tray-template/src-tauri -> target"
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Install cargo-wix
+        run: cargo install cargo-wix
 
-      - name: Install Tauri CLI v2
-        run: cargo install tauri-cli@^2
+      - name: Install WiX Toolset
+        run: |
+          # Download WiX 3.14 (required by cargo-wix)
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile wix.zip
+          Expand-Archive wix.zip -DestinationPath "$env:USERPROFILE\.wix"
+          echo "$env:USERPROFILE\.wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Release Binary
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: cargo build --release
 
       - name: Convert PNG to ICO
         run: magick resources/tauri/tray-template/src-tauri/icons/icon.png -define icon:auto-resize=256,128,64,48,32,16 resources/tauri/tray-template/src-tauri/icons/icon.ico
 
-      - name: Build Tauri App
-        working-directory: resources/tauri/tray-template
-        run: cargo tauri build
+      - name: Build MSI
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: cargo wix --no-build --nocapture
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rmm-tray-msi
-          path: resources/tauri/tray-template/src-tauri/target/release/bundle/msi/*.msi
+          name: rmm-agent-msi
+          path: resources/tauri/tray-template/src-tauri/target/wix/*.msi
           retention-days: 90
 
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: tray-agent-${{ github.run_number }}
-          name: Tray Agent Build ${{ github.run_number }}
-          files: resources/tauri/tray-template/src-tauri/target/release/bundle/msi/*.msi
+          tag_name: agent-${{ github.run_number }}
+          name: RMM Agent Build ${{ github.run_number }}
+          files: resources/tauri/tray-template/src-tauri/target/wix/*.msi
           generate_release_notes: false
           body: |
-            Automated build of the RMM Tray Agent (MSI Installer).
+            Automated build of the RMM Agent (MSI Installer).
 
-            The installer script will automatically download and install this MSI.
+            ## Installation
+            Run the MSI installer or use PowerShell:
+            ```powershell
+            irm https://your-server/agent/install.ps1 | iex
+            ```
+
+            ## After Installation
+            The `rmm` command will be available in PATH:
+            ```powershell
+            rmm status           # Show agent status
+            rmm --url <URL>      # Set server URL
+            rmm --reset          # Clear API key
+            ```

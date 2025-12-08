@@ -37,7 +37,7 @@ impl AgentState {
         }
     }
 
-    /// Get a status label for tray menu
+    /// Get a status label
     pub fn status_label(&self) -> String {
         format!("Status: {}", self.as_display())
     }
@@ -82,6 +82,34 @@ impl Agent {
         })
     }
 
+    /// Create agent with a specific config (for URL override)
+    pub async fn with_config(config: Config) -> Result<Self> {
+        config
+            .ensure_data_dir()
+            .context("Failed to create data directory")?;
+
+        let system_info = SystemInfo::gather().context("Failed to gather system information")?;
+        info!("System info: {}", system_info.summary());
+
+        let storage = Storage::new(&config.key_file);
+        let enrollment_manager = EnrollmentManager::new(config.clone(), storage)?;
+
+        // Determine initial state
+        let initial_state = if enrollment_manager.is_enrolled().await {
+            AgentState::Active
+        } else {
+            AgentState::NotEnrolled
+        };
+
+        Ok(Self {
+            config,
+            system_info,
+            enrollment_manager,
+            state: Arc::new(RwLock::new(initial_state)),
+            cancellation_token: CancellationToken::new(),
+        })
+    }
+
     /// Get the current agent state
     pub async fn get_state(&self) -> AgentState {
         self.state.read().await.clone()
@@ -96,50 +124,34 @@ impl Agent {
         }
     }
 
-    /// Start the agent (non-blocking)
-    pub async fn start(self: Arc<Self>, app_handle: tauri::AppHandle) -> Result<()> {
-        info!("Starting RMM Agent (non-blocking)");
+    /// Get the cancellation token for graceful shutdown
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
+    }
+
+    /// Start the agent (blocking - runs until cancelled)
+    pub async fn run(self: Arc<Self>) -> Result<()> {
+        info!("Starting RMM Agent");
         info!("Device: {}", self.system_info.hostname);
         info!("Fingerprint: {}", self.system_info.hardware_fingerprint);
+        info!("Server URL: {}", self.config.base_url);
 
         // Check if already enrolled
         if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
             info!("Device is already enrolled, starting metrics collection");
             self.set_state(AgentState::Active).await;
-            self.spawn_metrics_task(api_key, app_handle);
+            self.run_metrics_loop(api_key).await;
         } else {
-            // Need to enroll
+            // Need to enroll first
             info!("Device not enrolled, starting enrollment process");
-            self.spawn_enrollment_task(app_handle);
+            self.run_enrollment_then_metrics().await?;
         }
 
         Ok(())
     }
 
-    /// Spawn metrics collection task
-    fn spawn_metrics_task(self: &Arc<Self>, api_key: String, _app_handle: tauri::AppHandle) {
-        let agent = Arc::clone(self);
-        let cancellation_token = agent.cancellation_token.clone();
-
-        tauri::async_runtime::spawn(async move {
-            agent.start_metrics_collection(api_key, cancellation_token).await;
-        });
-    }
-
-    /// Spawn enrollment task
-    fn spawn_enrollment_task(self: &Arc<Self>, app_handle: tauri::AppHandle) {
-        let agent = Arc::clone(self);
-
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = agent.enroll_device_async(app_handle).await {
-                error!("Enrollment failed: {}", e);
-                agent.set_state(AgentState::Error(format!("Enrollment failed: {}", e))).await;
-            }
-        });
-    }
-
-    /// Async enrollment process
-    async fn enroll_device_async(&self, _app_handle: tauri::AppHandle) -> Result<()> {
+    /// Run enrollment process, then start metrics collection
+    async fn run_enrollment_then_metrics(&self) -> Result<()> {
         info!("Enrolling device with backend");
 
         // Submit enrollment request
@@ -163,8 +175,7 @@ impl Agent {
 
                 // Get the API key and start metrics
                 if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
-                    self.start_metrics_collection(api_key, self.cancellation_token.clone())
-                        .await;
+                    self.run_metrics_loop(api_key).await;
                 } else {
                     let msg = "Device approved but no API key found".to_string();
                     error!("{}", msg);
@@ -181,9 +192,8 @@ impl Agent {
         Ok(())
     }
 
-
-    /// Start metrics collection loop with graceful shutdown support
-    async fn start_metrics_collection(&self, api_key: String, cancellation_token: CancellationToken) {
+    /// Run the metrics collection loop (blocks until cancelled)
+    async fn run_metrics_loop(&self, api_key: String) {
         info!("Starting metrics collection");
 
         let collector = match MetricsCollector::new(
@@ -205,7 +215,7 @@ impl Agent {
 
         // Start the metrics loop with cancellation support
         collector
-            .start_metrics_loop(api_key, cancellation_token)
+            .start_metrics_loop(api_key, self.cancellation_token.clone())
             .await;
     }
 
@@ -215,7 +225,7 @@ impl Agent {
         self.cancellation_token.cancel();
     }
 
-    /// Check current status with backend (for tray status updates)
+    /// Check current status with backend
     pub async fn check_status(&self) -> Result<AgentState> {
         debug!("Checking status with backend");
 
@@ -248,53 +258,21 @@ impl Agent {
         }
     }
 
-    /// Start status monitoring loop (for tray updates)
-    pub async fn start_status_monitor(self: Arc<Self>) {
-        info!(
-            "Starting status monitor (interval: {}s)",
-            self.config.status_check_interval
-        );
-
-        loop {
-            match self.check_status().await {
-                Ok(_) => {}
-                Err(e) => {
-                    debug!("Status check error: {}", e);
-                }
-            }
-
-            tokio::time::sleep(std::time::Duration::from_secs(
-                self.config.status_check_interval,
-            ))
-            .await;
-        }
+    /// Clear API key and force re-enrollment
+    pub async fn reset(&self) -> Result<()> {
+        info!("Resetting agent - clearing API key");
+        self.enrollment_manager.clear_api_key().await?;
+        self.set_state(AgentState::NotEnrolled).await;
+        Ok(())
     }
 
     /// Get system information
     pub fn system_info(&self) -> &SystemInfo {
         &self.system_info
     }
-}
 
-// TODO: Future command execution module
-// This will handle PowerShell command execution from the backend
-// Structure:
-// - Command queue polling
-// - PowerShell script execution with output capture
-// - Result reporting back to backend
-// - Security: validate commands, sandboxing, etc.
-//
-// pub mod commands {
-//     use anyhow::Result;
-//
-//     pub struct CommandExecutor {
-//         // TODO: Implementation
-//     }
-//
-//     impl CommandExecutor {
-//         pub async fn execute_powershell(&self, script: &str) -> Result<String> {
-//             // TODO: Execute PowerShell script and capture output
-//             unimplemented!()
-//         }
-//     }
-// }
+    /// Get the config
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+}

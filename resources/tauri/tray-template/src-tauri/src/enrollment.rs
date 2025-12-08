@@ -69,6 +69,12 @@ impl EnrollmentManager {
         }
     }
 
+    /// Clear the stored API key (for reset/re-enrollment)
+    pub async fn clear_api_key(&self) -> Result<()> {
+        info!("Clearing stored API key");
+        self.storage.delete_key().await
+    }
+
     /// Enroll the device with the backend
     pub async fn enroll(&self, system_info: &SystemInfo) -> Result<()> {
         info!("Enrolling device: {}", system_info.hostname);

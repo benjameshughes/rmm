@@ -1,34 +1,65 @@
 [package]
-name = "rmm-tray"
-version = "0.2.0"
-description = "{APP_NAME}"
-authors = ["You <you@example.com>"]
+name = "rmm"
+version = "0.3.0"
+description = "RMM Agent - Remote Monitoring and Management Service"
+authors = ["Ben Hughes"]
 edition = "2021"
 
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
+[[bin]]
+name = "rmm"
+path = "src/main.rs"
+
+# WiX MSI packaging metadata
+[package.metadata.wix]
+upgrade-guid = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+path-guid = "B2C3D4E5-F6A7-8901-BCDE-F12345678901"
+license = false
+eula = false
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-shell = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-reqwest = { version = "0.11", features = ["json", "rustls-tls", "stream"], default-features = false }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "sync"] }
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# Windows service support
+windows-service = "0.7"
+
+# Async runtime
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "sync", "signal"] }
 tokio-util = "0.7"
 futures-util = "0.3"
-anyhow = "1"
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "stream"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# System info
 sysinfo = "0.30"
+
+# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+
+# Time handling
 chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
 thiserror = "1"
+
+# Crypto for fingerprinting
 sha2 = "0.10"
 hex = "0.4"
+
+# Directories
 dirs = "6"
 
-[features]
-default = ["custom-protocol"]
-custom-protocol = []
+# Windows-specific
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser"] }
 
+[features]
+default = []

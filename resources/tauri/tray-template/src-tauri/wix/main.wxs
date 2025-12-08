@@ -1,0 +1,141 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  RMM Agent MSI Installer
+  - Installs rmm.exe to Program Files
+  - Adds install directory to system PATH
+  - Registers and starts the Windows service
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+    <Product
+        Id='*'
+        Name='RMM Agent'
+        UpgradeCode='A1B2C3D4-E5F6-7890-ABCD-EF1234567890'
+        Manufacturer='Ben Hughes'
+        Language='1033'
+        Codepage='1252'
+        Version='0.3.0'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='RMM Agent - Remote Monitoring and Management'
+            Manufacturer='Ben Hughes'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252'
+            Platform='x64'/>
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='RMM Agent Installation'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='ProgramFiles64Folder' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='RMM Agent'>
+                    <Component Id='RmmExeComponent' Guid='C3D4E5F6-A7B8-9012-CDEF-123456789012' Win64='yes'>
+                        <File
+                            Id='RmmExe'
+                            Name='rmm.exe'
+                            DiskId='1'
+                            Source='$(var.CargoTargetBinDir)\rmm.exe'
+                            KeyPath='yes'/>
+                    </Component>
+
+                    <!-- Add to PATH -->
+                    <Component Id='PathComponent' Guid='D4E5F6A7-B8C9-0123-DEF0-234567890123' Win64='yes' KeyPath='yes'>
+                        <Environment
+                            Id='PathEnv'
+                            Name='PATH'
+                            Value='[APPLICATIONFOLDER]'
+                            Permanent='no'
+                            Part='last'
+                            Action='set'
+                            System='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <!-- Data directory -->
+            <Directory Id='CommonAppDataFolder'>
+                <Directory Id='RMMDataFolder' Name='RMM'>
+                    <Component Id='DataFolderComponent' Guid='E5F6A7B8-C9D0-1234-EF01-345678901234' Win64='yes'>
+                        <CreateFolder/>
+                        <RegistryValue Root='HKLM' Key='Software\RMM Agent' Name='DataFolder' Type='string' Value='[RMMDataFolder]' KeyPath='yes'/>
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id='MainFeature'
+            Title='RMM Agent'
+            Description='Installs the RMM monitoring agent and adds it to PATH.'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            <ComponentRef Id='RmmExeComponent'/>
+            <ComponentRef Id='PathComponent'/>
+            <ComponentRef Id='DataFolderComponent'/>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+
+        <!-- Add/Remove Programs metadata -->
+        <Property Id='ARPHELPLINK' Value='https://github.com/benjameshughes/rmm'/>
+        <Property Id='ARPURLINFOABOUT' Value='https://github.com/benjameshughes/rmm'/>
+
+        <!-- Post-install action: Install and start service -->
+        <CustomAction
+            Id='InstallService'
+            FileKey='RmmExe'
+            ExeCommand='install'
+            Execute='deferred'
+            Impersonate='no'
+            Return='check'/>
+
+        <CustomAction
+            Id='StartService'
+            FileKey='RmmExe'
+            ExeCommand='start'
+            Execute='deferred'
+            Impersonate='no'
+            Return='ignore'/>
+
+        <CustomAction
+            Id='StopService'
+            FileKey='RmmExe'
+            ExeCommand='stop'
+            Execute='deferred'
+            Impersonate='no'
+            Return='ignore'/>
+
+        <CustomAction
+            Id='UninstallService'
+            FileKey='RmmExe'
+            ExeCommand='uninstall'
+            Execute='deferred'
+            Impersonate='no'
+            Return='ignore'/>
+
+        <InstallExecuteSequence>
+            <Custom Action='StopService' Before='InstallValidate'>
+                (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
+            </Custom>
+            <Custom Action='UninstallService' After='StopService'>
+                (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
+            </Custom>
+            <Custom Action='InstallService' After='InstallFiles'>
+                NOT Installed AND NOT REMOVE
+            </Custom>
+            <Custom Action='StartService' After='InstallService'>
+                NOT Installed AND NOT REMOVE
+            </Custom>
+        </InstallExecuteSequence>
+    </Product>
+</Wix>

@@ -15,7 +15,7 @@ class AgentInstallerController extends Controller
 # ===================================================================
 #  RMM Agent Installer
 #  - Installs Netdata (metrics collector)
-#  - Installs RMM Tray Agent (handles enrollment & metrics)
+#  - Installs RMM Agent as Windows Service (handles enrollment & metrics)
 # ===================================================================
 
 $ErrorActionPreference = "Stop"
@@ -77,7 +77,33 @@ Log "===== RMM Agent Install Starting ====="
 
 Log "Checking for existing RMM installation..."
 
-# Kill tray app if running
+# Stop and remove existing RMM service if present
+$serviceName = "RMMAgent"
+try {
+    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Log "Stopping existing RMM service..."
+        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+
+        Log "Removing existing RMM service..."
+        sc.exe delete $serviceName | Out-Null
+        Start-Sleep -Seconds 1
+    }
+} catch {
+    Log "No existing service or removal failed: $_"
+}
+
+# Kill any running agent process
+$agentProcessName = "rmm-agent"
+$runningAgent = Get-Process -Name $agentProcessName -ErrorAction SilentlyContinue
+if ($runningAgent) {
+    Log "Stopping running agent process..."
+    Stop-Process -Name $agentProcessName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# Kill legacy tray app if running
 $trayProcessName = "benjh-rmm"
 $runningTray = Get-Process -Name $trayProcessName -ErrorAction SilentlyContinue
 if ($runningTray) {
@@ -88,7 +114,7 @@ if ($runningTray) {
 
 # Uninstall existing MSI if present
 try {
-    $installedProduct = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*benjh-rmm*" -or $_.Name -like "*RMM*Tray*" } | Select-Object -First 1
+    $installedProduct = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*benjh-rmm*" -or $_.Name -like "*RMM*" } | Select-Object -First 1
     if ($installedProduct) {
         Log "Uninstalling existing MSI: $($installedProduct.Name)..."
         $installedProduct.Uninstall() | Out-Null
@@ -118,11 +144,10 @@ try {
     }
 } catch { }
 
-# Remove old standalone files (agent handles its own data now)
+# Remove old standalone files (keep agent.key for re-enrollment preservation)
 $filesToRemove = @(
     "$AgentRoot\benjh-rmm.exe",
-    "$AgentRoot\agent-metrics.ps1",
-    "$AgentRoot\config.json"
+    "$AgentRoot\agent-metrics.ps1"
 )
 
 foreach ($file in $filesToRemove) {
@@ -219,62 +244,73 @@ if (Test-NetdataInstalled) {
 
 
 # ===================================================================
-# STEP 3 — INSTALL RMM TRAY AGENT
+# STEP 3 — INSTALL RMM AGENT AS WINDOWS SERVICE
 # ===================================================================
 
 $GitHubRepo = "benjameshughes/rmm"
-$TempMsiPath = Join-Path $env:TEMP "rmm-tray.msi"
+$ServerUrl = "{BASE_URL}"
+$TempMsiPath = Join-Path $env:TEMP "rmm-agent.msi"
 
-Log "Checking for tray app MSI from GitHub releases..."
+Log "Downloading RMM Agent from GitHub releases..."
 
 try {
     $headers = @{ 'User-Agent' = 'rmm-installer' }
     $releaseUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
     $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -ErrorAction Stop
 
+    # Look for the MSI installer (preferred - sets up PATH and service)
     $msiAsset = $release.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 
     if ($msiAsset) {
         $MsiUrl = $msiAsset.browser_download_url
-        Log "Found tray app MSI: $($msiAsset.name) from release $($release.tag_name)"
+        Log "Found MSI: $($msiAsset.name) from release $($release.tag_name)"
 
         Log "Downloading MSI from $MsiUrl..."
         Invoke-WebRequest -Uri $MsiUrl -OutFile $TempMsiPath -UseBasicParsing
-
         Unblock-File -Path $TempMsiPath -ErrorAction SilentlyContinue
 
-        # Add Windows Defender exclusions
+        # Add Windows Defender exclusion
         try {
+            Add-MpPreference -ExclusionPath "$env:ProgramFiles\RMM Agent" -ErrorAction SilentlyContinue
             Add-MpPreference -ExclusionPath $AgentRoot -ErrorAction SilentlyContinue
-            Add-MpPreference -ExclusionPath "$env:ProgramFiles\benjh-rmm" -ErrorAction SilentlyContinue
             Log "Added Defender exclusions"
         } catch {
             Log "WARNING: Could not add Defender exclusion"
         }
 
-        Log "Installing tray app MSI..."
-        $msiArgs = "/i `"$TempMsiPath`" /qn /norestart"
-        $process = Start-Process "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
+        Log "Installing MSI (this will install service and add to PATH)..."
+        $process = Start-Process "msiexec.exe" -ArgumentList "/i `"$TempMsiPath`" /qn /norestart" -Wait -PassThru
 
         if ($process.ExitCode -eq 0) {
-            Log "Tray app MSI installed successfully"
+            Log "MSI installed successfully"
             Remove-Item $TempMsiPath -Force -ErrorAction SilentlyContinue
 
-            # Launch tray app - it will handle enrollment automatically
-            $installedExe = "$env:ProgramFiles\benjh-rmm\benjh-rmm.exe"
-            if (Test-Path $installedExe) {
-                Start-Process -FilePath $installedExe -ErrorAction SilentlyContinue
-                Log "Tray app launched - it will handle device enrollment"
+            # Refresh PATH for current session
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+            # Configure server URL (rmm should now be in PATH)
+            Log "Configuring server URL: $ServerUrl"
+            & rmm --url $ServerUrl 2>&1 | Out-Null
+
+            Start-Sleep -Seconds 2
+
+            # Verify service is running
+            $service = Get-Service -Name "RMMAgent" -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq 'Running') {
+                Log "RMM Agent service is running"
+            } else {
+                Log "WARNING: Service may not have started correctly. Check logs at $AgentRoot\agent.log"
             }
         } else {
-            Log "WARNING: MSI installation returned exit code $($process.ExitCode)"
+            Log "ERROR: MSI installation failed with exit code $($process.ExitCode)"
+            exit 1
         }
     } else {
-        Log "ERROR: No .msi asset found in latest release."
+        Log "ERROR: No MSI installer found in latest release."
         exit 1
     }
 } catch {
-    Log "ERROR: Failed to download/install tray app: $_"
+    Log "ERROR: Failed to download/install agent: $_"
     exit 1
 }
 
@@ -284,11 +320,17 @@ try {
 # ===================================================================
 
 Log "===== RMM Agent Installation Complete! ====="
-Log "The tray app will now handle device enrollment and metrics collection."
+Log "The agent service will now handle device enrollment and metrics collection."
 Write-Host ""
 Write-Host "Installation finished successfully!" -ForegroundColor Green
-Write-Host "The RMM agent is now running in your system tray." -ForegroundColor Green
+Write-Host "The RMM agent is now running as a Windows service." -ForegroundColor Green
 Write-Host "Check the web panel to approve this device." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "The 'rmm' command is now available in PATH. Useful commands:" -ForegroundColor Cyan
+Write-Host "  rmm status      - Show agent status"
+Write-Host "  rmm stop        - Stop the service"
+Write-Host "  rmm start       - Start the service"
+Write-Host "  rmm --reset     - Force re-enrollment"
 PS1;
 
         $content = str_replace('{BASE_URL}', $base, $script);

@@ -14,8 +14,11 @@ it('serves the agent installer script with correct base url', function (): void 
         ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
         ->assertSee(url('/'))
         ->assertSee('INSTALL NETDATA')
-        ->assertSee('INSTALL RMM TRAY AGENT')
-        ->assertSee('benjameshughes/rmm');
+        ->assertSee('INSTALL RMM AGENT AS WINDOWS SERVICE')
+        ->assertSee('benjameshughes/rmm')
+        ->assertSee('rmm --url')
+        ->assertSee('RMMAgent')
+        ->assertSee('rmm status');
 });
 
 it('shows agent page with download link for authenticated users', function (): void {
