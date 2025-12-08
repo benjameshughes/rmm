@@ -13,9 +13,9 @@ it('serves the agent installer script with correct base url', function (): void 
     $response->assertSuccessful()
         ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
         ->assertSee(url('/'))
-        ->assertSee('/api/enroll')
-        ->assertSee('/api/check')
-        ->assertSee('/api/metrics');
+        ->assertSee('INSTALL NETDATA')
+        ->assertSee('INSTALL RMM TRAY AGENT')
+        ->assertSee('benjameshughes/rmm');
 });
 
 it('shows agent page with download link for authenticated users', function (): void {
@@ -27,4 +27,3 @@ it('shows agent page with download link for authenticated users', function (): v
         ->assertSee('Agent Installer')
         ->assertSee(route('agent.download'));
 });
-

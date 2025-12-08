@@ -13,18 +13,14 @@ class AgentInstallerController extends Controller
 
         $script = <<<'PS1'
 # ===================================================================
-#  RMM Unified Agent Installer
-#  - Installs Netdata
-#  - Enrolls device with cloud RMM
-#  - Polls for approval
-#  - Stores API key securely
-#  - Starts Metrics Agent
-#  - Registers Scheduled Tasks
+#  RMM Agent Installer
+#  - Installs Netdata (metrics collector)
+#  - Installs RMM Tray Agent (handles enrollment & metrics)
 # ===================================================================
 
 $ErrorActionPreference = "Stop"
 
-# Ensure TLS 1.2 for web requests (PS5/PS7 compatible)
+# Ensure TLS 1.2 for web requests
 function Ensure-Tls12 {
     $sp = [System.Net.ServicePointManager]::SecurityProtocol
     if (-not ($sp.HasFlag([System.Net.SecurityProtocolType]::Tls12))) {
@@ -39,7 +35,7 @@ function Require-Admin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# If not admin, re-launch elevated and re-execute from URL
+# If not admin, re-launch elevated
 $ThisScriptUrl = "{BASE_URL}/agent/install.ps1"
 if (-not (Require-Admin)) {
     try {
@@ -56,20 +52,10 @@ if (-not (Require-Admin)) {
 # -------------------------------
 # CONFIG
 # -------------------------------
-$RmmBaseUrl   = "{BASE_URL}"
-$EnrollUrl    = "$RmmBaseUrl/api/enroll"
-$CheckUrl     = "$RmmBaseUrl/api/check"
-$MetricsUrl   = "$RmmBaseUrl/api/metrics"
+$AgentRoot = "C:\ProgramData\RMM"
+$LogFile   = "$AgentRoot\agent.log"
 
-$AgentRoot    = "C:\ProgramData\RMM"
-$KeyFile      = "$AgentRoot\agent.key"
-$LogFile      = "$AgentRoot\agent.log"
-$AgentScript  = "$AgentRoot\agent-metrics.ps1"
-
-
-# -------------------------------
 # Ensure folders exist
-# -------------------------------
 if (!(Test-Path $AgentRoot)) {
     New-Item -Path $AgentRoot -ItemType Directory | Out-Null
 }
@@ -86,7 +72,7 @@ Log "===== RMM Agent Install Starting ====="
 
 
 # ===================================================================
-# STEP 0 — REMOVE EXISTING INSTALLATION (Clean Install)
+# STEP 1 — CLEANUP EXISTING INSTALLATION
 # ===================================================================
 
 Log "Checking for existing RMM installation..."
@@ -100,7 +86,7 @@ if ($runningTray) {
     Start-Sleep -Seconds 2
 }
 
-# Uninstall existing MSI if present (by product name)
+# Uninstall existing MSI if present
 try {
     $installedProduct = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*benjh-rmm*" -or $_.Name -like "*RMM*Tray*" } | Select-Object -First 1
     if ($installedProduct) {
@@ -113,16 +99,16 @@ try {
     Log "No existing MSI found or uninstall failed: $_"
 }
 
-# Remove scheduled task
+# Remove legacy scheduled task (from older PS1-based metrics)
 try {
     $existingTask = Get-ScheduledTask -TaskName "RMM-Metrics-Agent" -ErrorAction SilentlyContinue
     if ($existingTask) {
-        Log "Removing existing scheduled task..."
+        Log "Removing legacy scheduled task..."
         Unregister-ScheduledTask -TaskName "RMM-Metrics-Agent" -Confirm:$false -ErrorAction SilentlyContinue
     }
 } catch { }
 
-# Remove startup registry entry (legacy, MSI handles its own)
+# Remove legacy startup registry entry
 try {
     $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
     $existingReg = Get-ItemProperty -Path $regPath -Name "RMM-Tray" -ErrorAction SilentlyContinue
@@ -132,31 +118,32 @@ try {
     }
 } catch { }
 
-# Remove old standalone files (keep the directory for agent data)
+# Remove old standalone files (agent handles its own data now)
 $filesToRemove = @(
     "$AgentRoot\benjh-rmm.exe",
     "$AgentRoot\agent-metrics.ps1",
-    "$AgentRoot\agent.key",
     "$AgentRoot\config.json"
 )
 
 foreach ($file in $filesToRemove) {
     if (Test-Path $file) {
-        Log "Removing $file..."
+        Log "Removing legacy file: $file"
         Remove-Item -Path $file -Force -ErrorAction SilentlyContinue
     }
 }
 
-# Clear old logs (optional - keep last log for debugging)
-# Remove-Item -Path "$AgentRoot\*.log" -Force -ErrorAction SilentlyContinue
-
-Log "Cleanup complete. Proceeding with fresh install..."
+Log "Cleanup complete."
 
 
 # ===================================================================
-# STEP 1 — Install Netdata
+# STEP 2 — INSTALL NETDATA
 # ===================================================================
-function Test-NetdataInstalled { if (Get-Service -Name "netdata" -ErrorAction SilentlyContinue) { return $true } else { return $false } }
+
+function Test-NetdataInstalled {
+    if (Get-Service -Name "netdata" -ErrorAction SilentlyContinue) { return $true }
+    return $false
+}
+
 function Ensure-NetdataRunning {
     try { Set-Service -Name "netdata" -StartupType Automatic -ErrorAction SilentlyContinue } catch {}
     try {
@@ -186,7 +173,6 @@ if (Test-NetdataInstalled) {
     try {
         function Resolve-NetdataMsiUrl {
             param([string]$PinnedTag = 'v2.8.2')
-
             $urls = @()
             try {
                 $headers = @{ 'User-Agent' = 'rmm-installer' }
@@ -197,17 +183,14 @@ if (Test-NetdataInstalled) {
                     $urls += "https://github.com/netdata/netdata/releases/download/$tag/netdata.msi"
                 }
             } catch { }
-
-            # Fallback to pinned known-good tag
             $urls += "https://github.com/netdata/netdata/releases/download/$PinnedTag/netdata-x64.msi"
             $urls += "https://github.com/netdata/netdata/releases/download/$PinnedTag/netdata.msi"
-
             return $urls
         }
 
         $tempInstaller = Join-Path $env:TEMP "netdata.msi"
-
         $downloaded = $false
+
         foreach ($u in (Resolve-NetdataMsiUrl)) {
             try {
                 Log "Attempting Netdata download from: $u"
@@ -228,7 +211,7 @@ if (Test-NetdataInstalled) {
         Ensure-NetdataRunning
 
         Start-Sleep -Seconds 3
-        try { Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -UseBasicParsing | Out-Null; Log "Netdata installed successfully from $netdataUrl." } catch { Log "WARNING: Netdata did not respond yet. Continuing anyway." }
+        try { Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/info" -UseBasicParsing | Out-Null; Log "Netdata installed successfully." } catch { Log "WARNING: Netdata did not respond yet. Continuing anyway." }
     } catch {
         Log "WARNING: Netdata installation failed: $_. Continuing without Netdata."
     }
@@ -236,143 +219,7 @@ if (Test-NetdataInstalled) {
 
 
 # ===================================================================
-# STEP 2 — ENROLL DEVICE (no API key yet)
-# ===================================================================
-$hostname = $env:COMPUTERNAME
-$body = @{ hostname = $hostname } | ConvertTo-Json
-
-Log "Sending enrollment request for $hostname..."
-
-Invoke-RestMethod -Uri $EnrollUrl -Method POST -Body $body -ContentType "application/json" | Out-Null
-
-Log "Enrollment sent. Waiting for approval..."
-
-
-# ===================================================================
-# STEP 3 — Poll for approval / receive API key
-# ===================================================================
-while ($true) {
-    try {
-        Ensure-Tls12
-        $resp = Invoke-RestMethod -Uri $CheckUrl -Method POST -Body (@{ hostname = $hostname } | ConvertTo-Json) -ContentType "application/json"
-
-        if ($resp.status -eq "approved") {
-            $resp.api_key | Out-File $KeyFile -Encoding ascii -Force
-            Log "Device approved. API key saved."
-            break
-        }
-
-        Log "Waiting for approval..."
-    } catch {
-        Log "Error polling approval: $_"
-    }
-
-    Start-Sleep -Seconds 10
-}
-
-Log "Enrollment complete."
-
-
-# ===================================================================
-# STEP 4 — CREATE METRICS AGENT SCRIPT
-# ===================================================================
-
-$agentContent = @"
-# --------------------------------------------------------
-# RMM Metrics Agent (auto-generated)
-# Runs periodically to send metrics to the cloud panel.
-# --------------------------------------------------------
-
-`$RmmBaseUrl  = "{BASE_URL}"
-`$MetricsUrl  = "{BASE_URL}/api/metrics"
-`$KeyFile     = "$KeyFile"
-`$LogFile     = "$LogFile"
-
-function Log {
-    param([string]`$msg)
-    `$timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    "`$timestamp  `$msg" | Out-File `$LogFile -Append
-}
-
-# Load API key
-if (!(Test-Path `$KeyFile)) {
-    Log "ERROR: No API key found. Exiting."
-    exit
-}
-
-`$apiKey = (Get-Content `$KeyFile -Raw)
-
-try {
-    # Collect metrics from Netdata (raw JSON)
-    try { `$cpu  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.cpu").Content } catch { `$cpu = `$null }
-    try { `$ram  = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/data?chart=system.ram").Content } catch { `$ram = `$null }
-    try { `$disk = (Invoke-WebRequest -Uri "http://127.0.0.1:19999/api/v1/charts?filter=disk").Content } catch { `$disk = `$null }
-
-    `$payload = @{
-        hostname = `$env:COMPUTERNAME
-        cpu = `$cpu
-        ram = `$ram
-        disks = `$disk
-        timestamp = (Get-Date).ToUniversalTime().ToString("o")
-    } | ConvertTo-Json
-
-    `$apiKey = `$apiKey.Trim()
-    Invoke-RestMethod -Uri `$MetricsUrl -Method POST -Headers @{ "X-Agent-Key" = `$apiKey } -Body `$payload -ContentType "application/json"
-
-    Log "Metrics sent."
-}
-catch {
-    Log "ERROR sending metrics: `$_"
-}
-"@
-
-Set-Content -Path $AgentScript -Value $agentContent -Force
-
-
-Log "Metrics agent script created."
-
-
-# ===================================================================
-# STEP 5 — REGISTER SCHEDULED TASK FOR METRICS LOOP (every 1 minute)
-# ===================================================================
-
-Log "Registering Scheduled Task: RMM Metrics Sender..."
-
-try { Unregister-ScheduledTask -TaskName "RMM-Metrics-Agent" -Confirm:$false -ErrorAction Stop } catch { }
-
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AgentScript`""
-
-$repeatInterval = New-TimeSpan -Minutes 1
-$repeatDuration = New-TimeSpan -Days 3650
-
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval $repeatInterval `
-    -RepetitionDuration $repeatDuration
-
-$startupTrigger = New-ScheduledTaskTrigger -AtStartup
-
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -MultipleInstances IgnoreNew
-
-Register-ScheduledTask -TaskName "RMM-Metrics-Agent" `
-    -Action $action `
-    -Trigger @($trigger, $startupTrigger) `
-    -Principal $principal `
-    -Settings $settings `
-    -Force | Out-Null
-
-try { Start-ScheduledTask -TaskName "RMM-Metrics-Agent" } catch { }
-
-Log "Scheduled task created."
-
-
-# ===================================================================
-# STEP 6 — INSTALL TRAY APP VIA MSI (optional)
+# STEP 3 — INSTALL RMM TRAY AGENT
 # ===================================================================
 
 $GitHubRepo = "benjameshughes/rmm"
@@ -381,67 +228,54 @@ $TempMsiPath = Join-Path $env:TEMP "rmm-tray.msi"
 Log "Checking for tray app MSI from GitHub releases..."
 
 try {
-    # Query GitHub API for latest release
     $headers = @{ 'User-Agent' = 'rmm-installer' }
     $releaseUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
     $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -ErrorAction Stop
 
-    # Find the .msi asset (regardless of exact name)
     $msiAsset = $release.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 
     if ($msiAsset) {
         $MsiUrl = $msiAsset.browser_download_url
         Log "Found tray app MSI: $($msiAsset.name) from release $($release.tag_name)"
 
-        # Stop running tray app if present (prevents file lock during update)
-        $trayProcessName = "benjh-rmm"
-        $runningTray = Get-Process -Name $trayProcessName -ErrorAction SilentlyContinue
-        if ($runningTray) {
-            Log "Stopping running tray app for update..."
-            Stop-Process -Name $trayProcessName -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2
-        }
-
         Log "Downloading MSI from $MsiUrl..."
         Invoke-WebRequest -Uri $MsiUrl -OutFile $TempMsiPath -UseBasicParsing
 
-        # Unblock the downloaded file
         Unblock-File -Path $TempMsiPath -ErrorAction SilentlyContinue
 
-        # Add Windows Defender exclusion for RMM folder
+        # Add Windows Defender exclusions
         try {
             Add-MpPreference -ExclusionPath $AgentRoot -ErrorAction SilentlyContinue
             Add-MpPreference -ExclusionPath "$env:ProgramFiles\benjh-rmm" -ErrorAction SilentlyContinue
             Log "Added Defender exclusions"
         } catch {
-            Log "WARNING: Could not add Defender exclusion (may need manual approval)"
+            Log "WARNING: Could not add Defender exclusion"
         }
 
-        # Install MSI silently
         Log "Installing tray app MSI..."
         $msiArgs = "/i `"$TempMsiPath`" /qn /norestart"
         $process = Start-Process "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
 
         if ($process.ExitCode -eq 0) {
             Log "Tray app MSI installed successfully"
-
-            # Clean up temp MSI
             Remove-Item $TempMsiPath -Force -ErrorAction SilentlyContinue
 
-            # Launch tray app (MSI typically installs to Program Files)
+            # Launch tray app - it will handle enrollment automatically
             $installedExe = "$env:ProgramFiles\benjh-rmm\benjh-rmm.exe"
             if (Test-Path $installedExe) {
                 Start-Process -FilePath $installedExe -ErrorAction SilentlyContinue
-                Log "Tray app launched from $installedExe"
+                Log "Tray app launched - it will handle device enrollment"
             }
         } else {
             Log "WARNING: MSI installation returned exit code $($process.ExitCode)"
         }
     } else {
-        Log "No .msi asset found in latest release. Skipping tray app."
+        Log "ERROR: No .msi asset found in latest release."
+        exit 1
     }
 } catch {
-    Log "Tray app not available from GitHub releases: $_. Skipping."
+    Log "ERROR: Failed to download/install tray app: $_"
+    exit 1
 }
 
 
@@ -449,8 +283,12 @@ try {
 # DONE
 # ===================================================================
 
-Log "🎉 RMM Agent Installation Complete!"
+Log "===== RMM Agent Installation Complete! ====="
+Log "The tray app will now handle device enrollment and metrics collection."
+Write-Host ""
 Write-Host "Installation finished successfully!" -ForegroundColor Green
+Write-Host "The RMM agent is now running in your system tray." -ForegroundColor Green
+Write-Host "Check the web panel to approve this device." -ForegroundColor Yellow
 PS1;
 
         $content = str_replace('{BASE_URL}', $base, $script);
