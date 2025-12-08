@@ -317,6 +317,15 @@ try {
     $trayResponse = Invoke-WebRequest -Uri $TrayExeUrl -Method Head -UseBasicParsing -ErrorAction Stop
 
     if ($trayResponse.StatusCode -eq 200) {
+        # Stop running tray app if present (prevents file lock during update)
+        $trayProcessName = "benjh-rmm"
+        $runningTray = Get-Process -Name $trayProcessName -ErrorAction SilentlyContinue
+        if ($runningTray) {
+            Log "Stopping running tray app for update..."
+            Stop-Process -Name $trayProcessName -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2  # Give it time to fully exit
+        }
+
         Log "Downloading tray app..."
         Invoke-WebRequest -Uri $TrayExeUrl -OutFile $TrayExePath -UseBasicParsing
 

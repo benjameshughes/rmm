@@ -4,12 +4,15 @@ mod agent;
 mod config;
 mod enrollment;
 mod metrics;
+mod runtime_config;
 mod storage;
 mod sysinfo;
 mod updater;
 
 use agent::{Agent, AgentState};
 use config::Config;
+use runtime_config::RuntimeConfig;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{
     api::notification::Notification, CustomMenuItem, Manager, SystemTray, SystemTrayEvent,
@@ -63,7 +66,8 @@ fn build_tray_menu() -> SystemTrayMenu {
         .add_item(CustomMenuItem::new("check_update", "Check for Updates"))
         .add_item(CustomMenuItem::new("install", "Install / Repair Agent"))
         .add_item(CustomMenuItem::new("open_log", "Open Agent Log"))
-        .add_item(CustomMenuItem::new("open_panel", "Open Panel"))
+        .add_item(CustomMenuItem::new("open_dashboard", "Open Web Dashboard"))
+        .add_item(CustomMenuItem::new("open_settings", "Agent Settings..."))
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(CustomMenuItem::new("quit", "Quit"))
 }
@@ -75,6 +79,40 @@ fn update_tray_status(app_handle: &tauri::AppHandle, state: &AgentState) {
     let _ = status_item.set_title(&state.status_label());
 }
 
+/// Update state for tracking updates
+#[derive(Debug, Clone)]
+pub struct UpdateState {
+    pub available: Option<UpdateInfo>,
+    pub downloaded_path: Option<PathBuf>,
+}
+
+impl Default for UpdateState {
+    fn default() -> Self {
+        Self {
+            available: None,
+            downloaded_path: None,
+        }
+    }
+}
+
+/// Status information for the settings panel
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StatusInfo {
+    pub connection_status: String,
+    pub server_url: String,
+    pub agent_version: String,
+    pub hostname: String,
+    pub os_name: String,
+    pub os_version: String,
+    pub cpu_model: String,
+    pub cpu_cores: usize,
+    pub total_ram_gb: f64,
+    pub disks: Vec<crate::sysinfo::DiskInfo>,
+    pub network_interfaces: Vec<crate::sysinfo::NetworkInterface>,
+    pub netdata_available: bool,
+    pub last_metrics_submission: Option<String>,
+}
+
 #[tauri::command]
 async fn get_agent_state(agent: tauri::State<'_, Arc<Agent>>) -> Result<String, String> {
     let state = agent.get_state().await;
@@ -84,6 +122,58 @@ async fn get_agent_state(agent: tauri::State<'_, Arc<Agent>>) -> Result<String, 
 #[tauri::command]
 async fn get_system_info(agent: tauri::State<'_, Arc<Agent>>) -> Result<String, String> {
     Ok(agent.system_info().summary())
+}
+
+#[tauri::command]
+async fn get_status_info(
+    agent: tauri::State<'_, Arc<Agent>>,
+    runtime_config: tauri::State<'_, Arc<RwLock<RuntimeConfig>>>,
+) -> Result<StatusInfo, String> {
+    let state = agent.get_state().await;
+    let system_info = agent.system_info();
+    let config_lock = runtime_config.read().await;
+    let config = Config::with_runtime_config(&*config_lock);
+
+    Ok(StatusInfo {
+        connection_status: state.as_display(),
+        server_url: config.base_url.clone(),
+        agent_version: env!("CARGO_PKG_VERSION").to_string(),
+        hostname: system_info.hostname.clone(),
+        os_name: system_info.os_name.clone(),
+        os_version: system_info.os_version.clone(),
+        cpu_model: system_info.cpu_model.clone(),
+        cpu_cores: system_info.cpu_cores,
+        total_ram_gb: system_info.total_ram_gb,
+        disks: system_info.disks.clone(),
+        network_interfaces: system_info.network_interfaces.clone(),
+        netdata_available: false, // TODO: Check actual netdata status
+        last_metrics_submission: None, // TODO: Track last submission time
+    })
+}
+
+#[tauri::command]
+async fn get_server_url(
+    runtime_config: tauri::State<'_, Arc<RwLock<RuntimeConfig>>>,
+) -> Result<String, String> {
+    let config_lock = runtime_config.read().await;
+    let config = Config::with_runtime_config(&*config_lock);
+    Ok(config.base_url)
+}
+
+#[tauri::command]
+async fn set_server_url(
+    url: String,
+    runtime_config: tauri::State<'_, Arc<RwLock<RuntimeConfig>>>,
+) -> Result<(), String> {
+    let mut config_lock = runtime_config.write().await;
+    config_lock.server_url = Some(url);
+    config_lock.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 fn main() {
@@ -101,7 +191,14 @@ fn main() {
     let tray = SystemTray::new().with_menu(build_tray_menu());
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_agent_state, get_system_info])
+        .invoke_handler(tauri::generate_handler![
+            get_agent_state,
+            get_system_info,
+            get_status_info,
+            get_server_url,
+            set_server_url,
+            get_version
+        ])
         .system_tray(tray)
         .on_system_tray_event(|app, event| {
             let config = Config::default();
@@ -151,8 +248,8 @@ fn main() {
                                                 .show();
 
                                             // Store update info for later
-                                            if let Some(update_state) = app_handle.try_state::<Arc<RwLock<Option<UpdateInfo>>>>() {
-                                                *update_state.write().await = Some(update);
+                                            if let Some(update_state) = app_handle.try_state::<Arc<RwLock<UpdateState>>>() {
+                                                update_state.write().await.available = Some(update);
                                             }
 
                                             // Update menu item to show update available
@@ -225,10 +322,17 @@ fn main() {
                             error!("Could not determine log directory");
                         }
                     }
-                    "open_panel" => {
+                    "open_dashboard" => {
                         let url = format!("{}/devices", config.base_url);
-                        info!("Opening panel: {}", url);
+                        info!("Opening dashboard: {}", url);
                         let _ = tauri::api::shell::open(&app.shell_scope(), url, None);
+                    }
+                    "open_settings" => {
+                        info!("Opening settings window");
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
                     }
                     "quit" => {
                         info!("Quit requested - initiating graceful shutdown");
@@ -251,8 +355,12 @@ fn main() {
         .setup(|app| {
             let app_handle = app.app_handle();
 
+            // Load runtime configuration
+            let runtime_config = RuntimeConfig::load().unwrap_or_default();
+            app.manage(Arc::new(RwLock::new(runtime_config)));
+
             // Store for pending updates
-            app.manage(Arc::new(RwLock::new(None::<UpdateInfo>)));
+            app.manage(Arc::new(RwLock::new(UpdateState::default())));
 
             // Initialize and start the agent
             tauri::async_runtime::spawn(async move {
@@ -310,8 +418,8 @@ fn main() {
                             let _ = tray.get_item("check_update").set_title("Update Available!");
 
                             // Store update info
-                            if let Some(update_state) = app_handle_update.try_state::<Arc<RwLock<Option<UpdateInfo>>>>() {
-                                *update_state.write().await = Some(update);
+                            if let Some(update_state) = app_handle_update.try_state::<Arc<RwLock<UpdateState>>>() {
+                                update_state.write().await.available = Some(update);
                             }
                         }
                     }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sysinfo::{CpuRefreshKind, Disks, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, Disks, Networks, RefreshKind, System};
 use tracing::debug;
 
 /// System information for device enrollment
@@ -15,6 +15,7 @@ pub struct SystemInfo {
     pub total_ram_bytes: u64,
     pub total_ram_gb: f64,
     pub disks: Vec<DiskInfo>,
+    pub network_interfaces: Vec<NetworkInterface>,
     pub hardware_fingerprint: String,
 }
 
@@ -27,6 +28,14 @@ pub struct DiskInfo {
     pub available_bytes: u64,
     pub total_gb: f64,
     pub available_gb: f64,
+}
+
+/// Network interface information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub mac_address: String,
+    pub ip_addresses: Vec<String>,
 }
 
 impl SystemInfo {
@@ -78,17 +87,29 @@ impl SystemInfo {
             })
             .collect();
 
+        // Get network interface information
+        let networks = Networks::new_with_refreshed_list();
+        let network_interfaces: Vec<NetworkInterface> = networks
+            .iter()
+            .map(|(interface_name, data)| NetworkInterface {
+                name: interface_name.clone(),
+                mac_address: data.mac_address().to_string(),
+                ip_addresses: vec![], // IP addresses not directly available via sysinfo
+            })
+            .collect();
+
         // Generate hardware fingerprint
         let hardware_fingerprint = Self::generate_fingerprint(&hostname, &cpu_model, cpu_cores);
 
         debug!(
-            "System info gathered: {} - {} {} - {} cores - {:.2} GB RAM - {} disks",
+            "System info gathered: {} - {} {} - {} cores - {:.2} GB RAM - {} disks - {} network interfaces",
             hostname,
             os_name,
             os_version,
             cpu_cores,
             total_ram_gb,
-            disk_info.len()
+            disk_info.len(),
+            network_interfaces.len()
         );
 
         Ok(SystemInfo {
@@ -100,6 +121,7 @@ impl SystemInfo {
             total_ram_bytes,
             total_ram_gb,
             disks: disk_info,
+            network_interfaces,
             hardware_fingerprint,
         })
     }
@@ -151,8 +173,8 @@ impl SystemInfo {
     /// Get a summary string for display
     pub fn summary(&self) -> String {
         format!(
-            "{} - {} {} - {} cores - {:.1} GB RAM",
-            self.hostname, self.os_name, self.os_version, self.cpu_cores, self.total_ram_gb
+            "{} - {} {} - {} cores - {:.1} GB RAM - {} interfaces",
+            self.hostname, self.os_name, self.os_version, self.cpu_cores, self.total_ram_gb, self.network_interfaces.len()
         )
     }
 }

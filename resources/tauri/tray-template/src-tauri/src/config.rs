@@ -13,6 +13,9 @@ pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
+/// Default base URL placeholder (replaced at build time)
+pub const DEFAULT_BASE_URL: &str = "{BASE_URL}";
+
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -68,6 +71,18 @@ impl Config {
             base_url,
             ..Default::default()
         }
+    }
+
+    /// Create configuration with runtime config overrides applied
+    pub fn with_runtime_config(runtime: &crate::runtime_config::RuntimeConfig) -> Self {
+        let mut config = Self::default();
+
+        // Apply overrides from runtime config
+        config.base_url = runtime.effective_server_url(&config.base_url);
+        config.netdata_url = runtime.effective_netdata_url(&config.netdata_url);
+        config.metrics_interval = runtime.effective_metrics_interval(config.metrics_interval);
+
+        config
     }
 
     /// Ensure data directory exists

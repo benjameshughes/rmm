@@ -4,13 +4,517 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{APP_NAME}</title>
-    <style>body{font-family:system-ui,Segoe UI,Arial;padding:16px}code{background:#f2f2f2;padding:2px 4px;border-radius:4px}</style>
+    <title>RMM Agent Settings</title>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f9fafb;
+        --bg-tertiary: #f3f4f6;
+        --text-primary: #111827;
+        --text-secondary: #6b7280;
+        --border: #e5e7eb;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --shadow: rgba(0, 0, 0, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-primary: #111827;
+          --bg-secondary: #1f2937;
+          --bg-tertiary: #374151;
+          --text-primary: #f9fafb;
+          --text-secondary: #9ca3af;
+          --border: #374151;
+          --accent: #3b82f6;
+          --accent-hover: #60a5fa;
+          --success: #10b981;
+          --warning: #f59e0b;
+          --error: #ef4444;
+          --shadow: rgba(0, 0, 0, 0.3);
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        padding: 20px;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header h1 {
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .badge {
+        background: var(--bg-tertiary);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+
+      .section {
+        background: var(--bg-primary);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow);
+        margin-bottom: 16px;
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .status-dot.active {
+        background: var(--success);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+      }
+
+      .status-dot.pending {
+        background: var(--warning);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+      }
+
+      .status-dot.error {
+        background: var(--error);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+      }
+
+      .status-text {
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .info-value {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+
+      .server-url-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .server-url {
+        flex: 1;
+        font-size: 14px;
+        color: var(--text-primary);
+      }
+
+      input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-family: inherit;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover {
+        background: var(--border);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th {
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      td {
+        font-size: 14px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 20px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+      }
+
+      .error-message {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--error);
+        color: var(--error);
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+    </style>
   </head>
   <body>
-    <h1>{APP_NAME}</h1>
-    <p>This is a minimal Tauri tray app scaffold. The app runs in the system tray.</p>
-    <p>Edit <code>src-tauri/src/main.rs</code> to add your background polling logic.</p>
-  </body>
-  </html>
+    <div class="container">
+      <div class="header">
+        <h1>RMM Agent</h1>
+        <span class="badge" id="version-badge">v0.0.0</span>
+      </div>
 
+      <div id="loading" class="section loading">
+        Loading agent information...
+      </div>
+
+      <div id="error" class="error-message hidden"></div>
+
+      <div id="content" class="hidden">
+        <!-- Connection Status -->
+        <div class="section">
+          <div class="section-title">Connection Status</div>
+          <div class="status-row">
+            <div class="status-dot" id="status-dot"></div>
+            <span class="status-text" id="status-text">Unknown</span>
+          </div>
+        </div>
+
+        <!-- Server Configuration -->
+        <div class="section">
+          <div class="section-title">Server Configuration</div>
+          <div class="server-url-row" id="url-display">
+            <span class="server-url" id="server-url"></span>
+            <button class="btn-secondary" onclick="editServerUrl()">Edit</button>
+          </div>
+          <div class="server-url-row hidden" id="url-edit">
+            <input type="text" id="server-url-input" placeholder="https://example.com" />
+            <button class="btn-primary" onclick="saveServerUrl()">Save</button>
+            <button class="btn-secondary" onclick="cancelEditUrl()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="section">
+          <div class="section-title">System Information</div>
+          <div class="info-row">
+            <span class="info-label">Hostname</span>
+            <span class="info-value" id="hostname">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Operating System</span>
+            <span class="info-value" id="os">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">CPU</span>
+            <span class="info-value" id="cpu">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Memory</span>
+            <span class="info-value" id="memory">-</span>
+          </div>
+        </div>
+
+        <!-- Disks -->
+        <div class="section">
+          <div class="section-title">Storage</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Mount Point</th>
+                <th>Total</th>
+                <th>Available</th>
+              </tr>
+            </thead>
+            <tbody id="disks-table"></tbody>
+          </table>
+        </div>
+
+        <!-- Network Interfaces -->
+        <div class="section">
+          <div class="section-title">Network Interfaces</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>MAC Address</th>
+              </tr>
+            </thead>
+            <tbody id="network-table"></tbody>
+          </table>
+        </div>
+
+        <!-- Agent Status -->
+        <div class="section">
+          <div class="section-title">Agent Status</div>
+          <div class="info-row">
+            <span class="info-label">Netdata Available</span>
+            <span class="info-value" id="netdata-status">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Last Metrics Submission</span>
+            <span class="info-value" id="last-submission">-</span>
+          </div>
+        </div>
+
+        <div class="footer">
+          <button class="btn-secondary" onclick="closeWindow()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { invoke } = window.__TAURI__.invoke;
+
+      let statusInfo = null;
+      let refreshInterval = null;
+
+      // Load status on startup
+      async function loadStatus() {
+        try {
+          // Get version
+          const version = await invoke('get_version');
+          document.getElementById('version-badge').textContent = `v${version}`;
+
+          // Get status info
+          statusInfo = await invoke('get_status_info');
+          updateUI(statusInfo);
+
+          // Hide loading, show content
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('content').classList.remove('hidden');
+        } catch (error) {
+          showError(`Failed to load agent information: ${error}`);
+        }
+      }
+
+      function updateUI(info) {
+        // Connection status
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        statusText.textContent = info.connection_status;
+
+        // Update dot color based on status
+        statusDot.className = 'status-dot';
+        if (info.connection_status === 'Online' || info.connection_status === 'Active') {
+          statusDot.classList.add('active');
+        } else if (info.connection_status.includes('Pending')) {
+          statusDot.classList.add('pending');
+        } else {
+          statusDot.classList.add('error');
+        }
+
+        // Server URL
+        document.getElementById('server-url').textContent = info.server_url;
+        document.getElementById('server-url-input').value = info.server_url;
+
+        // System info
+        document.getElementById('hostname').textContent = info.hostname;
+        document.getElementById('os').textContent = `${info.os_name} ${info.os_version}`;
+        document.getElementById('cpu').textContent = `${info.cpu_model} (${info.cpu_cores} cores)`;
+        document.getElementById('memory').textContent = `${info.total_ram_gb.toFixed(1)} GB`;
+
+        // Disks
+        const disksTable = document.getElementById('disks-table');
+        disksTable.innerHTML = '';
+        info.disks.forEach(disk => {
+          const row = disksTable.insertRow();
+          row.innerHTML = `
+            <td>${disk.name}</td>
+            <td>${disk.mount_point}</td>
+            <td>${disk.total_gb.toFixed(1)} GB</td>
+            <td>${disk.available_gb.toFixed(1)} GB</td>
+          `;
+        });
+
+        // Network interfaces
+        const networkTable = document.getElementById('network-table');
+        networkTable.innerHTML = '';
+        info.network_interfaces.forEach(iface => {
+          const row = networkTable.insertRow();
+          row.innerHTML = `
+            <td>${iface.name}</td>
+            <td>${iface.mac_address}</td>
+          `;
+        });
+
+        // Agent status
+        document.getElementById('netdata-status').textContent = info.netdata_available ? 'Yes' : 'No';
+        document.getElementById('last-submission').textContent = info.last_metrics_submission || 'Never';
+      }
+
+      function showError(message) {
+        const errorEl = document.getElementById('error');
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+      }
+
+      function editServerUrl() {
+        document.getElementById('url-display').classList.add('hidden');
+        document.getElementById('url-edit').classList.remove('hidden');
+        document.getElementById('server-url-input').focus();
+      }
+
+      function cancelEditUrl() {
+        document.getElementById('url-edit').classList.add('hidden');
+        document.getElementById('url-display').classList.remove('hidden');
+      }
+
+      async function saveServerUrl() {
+        const newUrl = document.getElementById('server-url-input').value.trim();
+
+        if (!newUrl) {
+          alert('Please enter a valid URL');
+          return;
+        }
+
+        try {
+          await invoke('set_server_url', { url: newUrl });
+          document.getElementById('server-url').textContent = newUrl;
+          cancelEditUrl();
+
+          // Refresh status
+          await loadStatus();
+        } catch (error) {
+          alert(`Failed to save server URL: ${error}`);
+        }
+      }
+
+      function closeWindow() {
+        window.__TAURI__.window.appWindow.hide();
+      }
+
+      // Auto-refresh every 30 seconds
+      function startAutoRefresh() {
+        refreshInterval = setInterval(async () => {
+          try {
+            statusInfo = await invoke('get_status_info');
+            updateUI(statusInfo);
+          } catch (error) {
+            console.error('Auto-refresh failed:', error);
+          }
+        }, 30000);
+      }
+
+      // Stop auto-refresh when window is hidden
+      window.addEventListener('beforeunload', () => {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+      });
+
+      // Initialize
+      loadStatus();
+      startAutoRefresh();
+    </script>
+  </body>
+</html>

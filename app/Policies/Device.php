@@ -30,6 +30,6 @@ class Device
      */
     public function delete(User $user, Device $device)
     {
-        return $user->can('delete-device')
+        return $user->can('delete-device');
     }
 }

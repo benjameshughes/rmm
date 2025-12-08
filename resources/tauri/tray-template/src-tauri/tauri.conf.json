@@ -42,8 +42,13 @@
     },
     "windows": [
       {
-        "title": "benjh-rmm",
-        "visible": false
+        "title": "RMM Agent Settings",
+        "width": 650,
+        "height": 750,
+        "resizable": true,
+        "visible": false,
+        "center": true,
+        "label": "main"
       }
     ]
   }
