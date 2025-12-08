@@ -156,6 +156,22 @@ async fn get_system_info(agent: tauri::State<'_, Arc<Agent>>) -> Result<String, 
     Ok(agent.system_info().summary())
 }
 
+/// Check if Netdata API is reachable
+async fn check_netdata_available(url: &str) -> bool {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    match client.get(format!("{}/api/v1/info", url)).send().await {
+        Ok(resp) => resp.status().is_success(),
+        Err(_) => false,
+    }
+}
+
 #[tauri::command]
 async fn get_status_info(
     app_handle: tauri::AppHandle,
@@ -163,6 +179,9 @@ async fn get_status_info(
 ) -> Result<StatusInfo, String> {
     let config_lock = runtime_config.read().await;
     let config = Config::with_runtime_config(&*config_lock);
+
+    // Check Netdata availability
+    let netdata_available = check_netdata_available(&config.netdata_url).await;
 
     // Try to get agent - it might not be ready yet
     if let Some(agent) = app_handle.try_state::<Arc<Agent>>() {
@@ -181,7 +200,7 @@ async fn get_status_info(
             total_ram_gb: system_info.total_ram_gb,
             disks: system_info.disks.clone(),
             network_interfaces: system_info.network_interfaces.clone(),
-            netdata_available: false,
+            netdata_available,
             last_metrics_submission: None,
         })
     } else {
@@ -198,7 +217,7 @@ async fn get_status_info(
             total_ram_gb: 0.0,
             disks: vec![],
             network_interfaces: vec![],
-            netdata_available: false,
+            netdata_available,
             last_metrics_submission: None,
         })
     }
@@ -234,8 +253,10 @@ async fn get_log_contents(lines: Option<usize>) -> Result<String, String> {
     let config = Config::default();
     let log_path = config.log_file;
 
-    match tokio::fs::read_to_string(&log_path).await {
-        Ok(content) => {
+    // Read as bytes and convert with lossy UTF-8 to handle any encoding issues
+    match tokio::fs::read(&log_path).await {
+        Ok(bytes) => {
+            let content = String::from_utf8_lossy(&bytes);
             let lines_vec: Vec<&str> = content.lines().collect();
             let take_lines = lines.unwrap_or(200);
             let start = if lines_vec.len() > take_lines { lines_vec.len() - take_lines } else { 0 };
