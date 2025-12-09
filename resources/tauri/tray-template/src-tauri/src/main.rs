@@ -103,6 +103,21 @@ enum Commands {
     Stop,
     /// Show current configuration and status
     Status,
+    /// View agent logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(short = 'n', long, default_value = "50")]
+        lines: usize,
+        /// Follow log output (like tail -f)
+        #[arg(short, long)]
+        follow: bool,
+    },
+    /// Force re-enrollment of this device
+    Reenroll {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 /// Initialize logging and return the guard that must be kept alive
@@ -499,6 +514,155 @@ fn show_status() -> Result<()> {
     Ok(())
 }
 
+fn show_logs(config: &Config, lines: usize, follow: bool) -> Result<()> {
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    use std::thread;
+    use std::time::Duration;
+
+    let log_dir = config.log_file.parent().unwrap_or(&config.data_dir);
+
+    // Find the most recent log file (rolling logs may have dates)
+    let log_file = if config.log_file.exists() {
+        config.log_file.clone()
+    } else {
+        // Look for dated log files
+        let mut log_files: Vec<_> = std::fs::read_dir(log_dir)
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.starts_with("agent.log"))
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        log_files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+
+        log_files
+            .last()
+            .map(|e| e.path())
+            .unwrap_or_else(|| config.log_file.clone())
+    };
+
+    if !log_file.exists() {
+        println!("No log file found at {:?}", log_file);
+        println!("The service may not have started yet.");
+        return Ok(());
+    }
+
+    println!("Reading logs from: {:?}\n", log_file);
+
+    if follow {
+        // Follow mode - tail -f style
+        let file = std::fs::File::open(&log_file)?;
+        let mut reader = BufReader::new(file);
+
+        // First, print last N lines
+        let content = std::fs::read_to_string(&log_file)?;
+        let all_lines: Vec<&str> = content.lines().collect();
+        let start = all_lines.len().saturating_sub(lines);
+        for line in &all_lines[start..] {
+            println!("{}", line);
+        }
+
+        // Seek to end for following
+        reader.seek(SeekFrom::End(0))?;
+
+        println!("\n--- Following log (Ctrl+C to stop) ---\n");
+
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => {
+                    // No new data, wait a bit
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Ok(_) => {
+                    print!("{}", line);
+                }
+                Err(e) => {
+                    eprintln!("Error reading log: {}", e);
+                    break;
+                }
+            }
+        }
+    } else {
+        // Static mode - show last N lines
+        let content = std::fs::read_to_string(&log_file)?;
+        let all_lines: Vec<&str> = content.lines().collect();
+        let start = all_lines.len().saturating_sub(lines);
+
+        for line in &all_lines[start..] {
+            println!("{}", line);
+        }
+    }
+
+    Ok(())
+}
+
+fn reenroll_device(force: bool) -> Result<()> {
+    use std::io::Write;
+
+    if !force {
+        println!("This will:");
+        println!("  1. Stop the RMM service");
+        println!("  2. Clear the stored API key");
+        println!("  3. Restart the service for fresh enrollment");
+        println!();
+        print!("Continue? [y/N] ");
+        std::io::stdout().flush()?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    let config = Config::default();
+
+    // 1. Stop service
+    println!("Stopping service...");
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("sc")
+            .args(["stop", SERVICE_NAME])
+            .output();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    // 2. Clear API key
+    if config.key_file.exists() {
+        std::fs::remove_file(&config.key_file)?;
+        println!("API key cleared.");
+    } else {
+        println!("No API key found (already cleared).");
+    }
+
+    // 3. Restart service
+    println!("Starting service...");
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("sc")
+            .args(["start", SERVICE_NAME])
+            .output();
+    }
+
+    println!();
+    println!("Re-enrollment initiated!");
+    println!("The device will appear as 'pending' in the web panel.");
+    println!("Approve it to complete re-enrollment.");
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -560,6 +724,12 @@ fn main() -> Result<()> {
         Some(Commands::Status) => {
             show_status()?;
         }
+        Some(Commands::Logs { lines, follow }) => {
+            show_logs(&config, lines, follow)?;
+        }
+        Some(Commands::Reenroll { force }) => {
+            reenroll_device(force)?;
+        }
         None => {
             // No command - check if we're being run as a service
             #[cfg(windows)]
@@ -579,6 +749,8 @@ fn main() -> Result<()> {
                         eprintln!("  rmm start            Start the service");
                         eprintln!("  rmm stop             Stop the service");
                         eprintln!("  rmm status           Show configuration");
+                        eprintln!("  rmm logs             View agent logs");
+                        eprintln!("  rmm reenroll         Force re-enrollment");
                         eprintln!("  rmm --url <URL>      Set server URL");
                         eprintln!("  rmm --reset          Clear API key");
                     }
