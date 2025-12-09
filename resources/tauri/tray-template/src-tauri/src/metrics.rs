@@ -317,7 +317,7 @@ impl MetricsCollector {
     /// Fetch data for a specific context using v3 API
     async fn fetch_context_data(&self, context: &str) -> Result<NetdataDataResponse> {
         let url = format!(
-            "{}/api/v3/data?contexts={}&format=json2&points=1&time_group=average",
+            "{}/api/v3/data?contexts={}&format=json&options=jsonwrap&points=1&time_group=average",
             self.config.netdata_url, context
         );
         debug!("Fetching context data from: {}", url);
