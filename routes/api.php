@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DeviceCommandController;
 use App\Http\Controllers\Api\DeviceEnrollmentController;
 use App\Http\Controllers\Api\DeviceMetricsController;
 use App\Http\Controllers\Api\HeartbeatController;
@@ -16,3 +17,13 @@ Route::post('/heartbeat', [HeartbeatController::class, 'store'])
 
 Route::match(['GET', 'POST'], '/check', [DeviceEnrollmentController::class, 'check'])
     ->middleware('throttle:api.check');
+
+// Command execution endpoints (agent polls these)
+Route::get('/commands/pending', [DeviceCommandController::class, 'pending'])
+    ->middleware('throttle:api.heartbeat');
+
+Route::post('/commands/{commandId}/started', [DeviceCommandController::class, 'started'])
+    ->middleware('throttle:api.metrics');
+
+Route::post('/commands/{commandId}/result', [DeviceCommandController::class, 'result'])
+    ->middleware('throttle:api.metrics');

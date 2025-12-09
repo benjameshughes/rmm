@@ -65,6 +65,16 @@ class Device extends Model
         return $this->hasOne(DeviceMetric::class)->latestOfMany('recorded_at');
     }
 
+    public function commands(): HasMany
+    {
+        return $this->hasMany(DeviceCommand::class);
+    }
+
+    public function pendingCommands(): HasMany
+    {
+        return $this->hasMany(DeviceCommand::class)->where('status', DeviceCommand::STATUS_PENDING);
+    }
+
     public function issueApiKey(): string
     {
         $this->api_key = Str::random(64);
