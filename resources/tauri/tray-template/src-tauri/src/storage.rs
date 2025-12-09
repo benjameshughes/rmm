@@ -123,11 +123,33 @@ impl Storage {
                 .await
                 .context("Failed to read API key file")?;
 
-            let encrypted = general_purpose::STANDARD.decode(encrypted_b64.trim())
-                .context("Failed to decode base64 encrypted data")?;
+            let encrypted = match general_purpose::STANDARD.decode(encrypted_b64.trim()) {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::warn!("Failed to decode base64 encrypted data (corrupted key file): {}", e);
+                    // Delete the corrupted key file
+                    if let Err(del_err) = fs::remove_file(&self.key_path).await {
+                        tracing::error!("Failed to delete corrupted key file: {}", del_err);
+                    } else {
+                        tracing::info!("Deleted corrupted key file: {:?}", self.key_path);
+                    }
+                    anyhow::bail!("Corrupted key file (failed to decode base64) - deleted, will re-enroll");
+                }
+            };
 
-            let decrypted = decrypt_dpapi(&encrypted)
-                .context("Failed to decrypt API key with DPAPI")?;
+            let decrypted = match decrypt_dpapi(&encrypted) {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::warn!("Failed to decrypt API key with DPAPI (corrupted or wrong machine): {}", e);
+                    // Delete the corrupted key file
+                    if let Err(del_err) = fs::remove_file(&self.key_path).await {
+                        tracing::error!("Failed to delete corrupted key file: {}", del_err);
+                    } else {
+                        tracing::info!("Deleted corrupted key file: {:?}", self.key_path);
+                    }
+                    anyhow::bail!("Corrupted key file (DPAPI decryption failed) - deleted, will re-enroll");
+                }
+            };
 
             let key = String::from_utf8(decrypted)
                 .context("Decrypted data is not valid UTF-8")?;

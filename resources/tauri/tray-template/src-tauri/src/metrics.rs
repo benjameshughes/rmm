@@ -594,20 +594,31 @@ impl MetricsCollector {
 
     /// Collect and submit metrics in one operation
     pub async fn collect_and_submit(&self, api_key: &str) -> Result<()> {
+        // Always collect metrics - even if Netdata is down, we send what we can
         let metrics = self.collect_metrics().await;
 
-        if metrics.cpu.is_none() && metrics.memory.is_none() {
-            warn!("No metrics collected (Netdata may be unavailable)");
-            return Ok(());
+        // Submit whatever metrics we have (even if Netdata is unavailable)
+        // The payload will have hostname and timestamp at minimum
+        match self.submit_metrics(&metrics, api_key).await {
+            Ok(_) => {
+                if metrics.cpu.is_some() || metrics.memory.is_some() {
+                    info!(
+                        "Metrics submitted: CPU={:.1}%, RAM={:.1}%",
+                        metrics.cpu.as_ref().map(|c| c.usage_percent).unwrap_or(0.0),
+                        metrics.memory.as_ref().map(|m| m.usage_percent).unwrap_or(0.0)
+                    );
+                } else {
+                    warn!("Metrics submitted with no Netdata data (Netdata may be unavailable)");
+                }
+                Ok(())
+            }
+            Err(e) => {
+                warn!("Failed to submit metrics to backend: {}", e);
+                // Don't propagate the error - just log and continue
+                // The metrics loop will retry on the next interval
+                Ok(())
+            }
         }
-
-        self.submit_metrics(&metrics, api_key).await?;
-        info!(
-            "Metrics submitted: CPU={:.1}%, RAM={:.1}%",
-            metrics.cpu.as_ref().map(|c| c.usage_percent).unwrap_or(0.0),
-            metrics.memory.as_ref().map(|m| m.usage_percent).unwrap_or(0.0)
-        );
-        Ok(())
     }
 
     /// Check if Netdata is available

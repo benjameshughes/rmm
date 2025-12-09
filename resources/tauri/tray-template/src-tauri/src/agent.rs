@@ -130,13 +130,24 @@ impl Agent {
     async fn run_enrollment_then_metrics(&self) -> Result<()> {
         info!("Enrolling device with backend");
 
-        // Submit enrollment request
-        self.enrollment_manager
-            .enroll(&self.system_info)
+        // Submit enrollment request (with built-in retry logic)
+        match self
+            .enrollment_manager
+            .enroll(&self.system_info, self.cancellation_token.clone())
             .await
-            .context("Failed to enroll device")?;
-
-        self.set_state(AgentState::PendingApproval).await;
+        {
+            Ok(_) => {
+                // Enrollment submitted successfully
+                self.set_state(AgentState::PendingApproval).await;
+            }
+            Err(e) => {
+                // Only fails if explicitly rejected or cancelled
+                let msg = format!("Enrollment failed: {}", e);
+                error!("{}", msg);
+                self.set_state(AgentState::Error(msg)).await;
+                return Ok(());
+            }
+        }
 
         // Wait for approval
         info!("Waiting for approval from administrator...");
@@ -159,7 +170,7 @@ impl Agent {
                 }
             }
             Err(e) => {
-                let msg = format!("Enrollment failed: {}", e);
+                let msg = format!("Enrollment approval failed: {}", e);
                 error!("{}", msg);
                 self.set_state(AgentState::Error(msg)).await;
             }

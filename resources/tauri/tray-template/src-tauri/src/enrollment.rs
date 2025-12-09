@@ -8,6 +8,25 @@ use crate::config::Config;
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
 
+/// Determine if an HTTP error response indicates rejection (stop retrying) vs temporary failure (retry)
+fn is_rejection_response(status: reqwest::StatusCode, body: &str) -> bool {
+    // Check for explicit rejection status codes
+    if status == reqwest::StatusCode::FORBIDDEN {
+        let body_lower = body.to_lowercase();
+        // Look for rejection keywords in the response body
+        if body_lower.contains("revoked")
+            || body_lower.contains("rejected")
+            || body_lower.contains("banned")
+            || body_lower.contains("invalid")
+        {
+            return true;
+        }
+    }
+
+    // All other errors are considered temporary (network issues, 500s, etc.)
+    false
+}
+
 /// Enrollment request payload
 #[derive(Debug, Serialize)]
 struct EnrollRequest {
@@ -75,8 +94,12 @@ impl EnrollmentManager {
         self.storage.delete_key().await
     }
 
-    /// Enroll the device with the backend
-    pub async fn enroll(&self, system_info: &SystemInfo) -> Result<()> {
+    /// Enroll the device with the backend (with retry logic)
+    pub async fn enroll(
+        &self,
+        system_info: &SystemInfo,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
         info!("Enrolling device: {}", system_info.hostname);
 
         let url = format!("{}/api/enroll", self.config.base_url);
@@ -89,24 +112,93 @@ impl EnrollmentManager {
             total_ram_bytes: system_info.total_ram_bytes,
         };
 
-        debug!("Sending enrollment request to {}", url);
+        // Retry with exponential backoff: 30s, 60s, 120s, 240s, 300s (cap at 5 minutes)
+        let retry_delays = [30, 60, 120, 240, 300];
+        let mut attempt = 0;
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&payload)
-            .send()
-            .await
-            .context("Failed to send enrollment request")?;
+        loop {
+            debug!("Sending enrollment request to {} (attempt {})", url, attempt + 1);
 
-        if response.status().is_success() {
-            info!("Enrollment request submitted successfully");
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            warn!("Enrollment failed: {} - {}", status, body);
-            anyhow::bail!("Enrollment failed with status {}: {}", status, body)
+            let response = match self.client.post(&url).json(&payload).send().await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    warn!("Failed to send enrollment request (network error): {}", e);
+
+                    // Network errors are temporary - retry
+                    if attempt < retry_delays.len() {
+                        let delay = retry_delays[attempt];
+                        warn!("Retrying enrollment in {} seconds...", delay);
+
+                        tokio::select! {
+                            _ = cancellation_token.cancelled() => {
+                                anyhow::bail!("Enrollment cancelled by shutdown signal");
+                            }
+                            _ = tokio::time::sleep(Duration::from_secs(delay)) => {
+                                attempt += 1;
+                                continue;
+                            }
+                        }
+                    } else {
+                        // Max delay reached - keep retrying at 5 minute intervals
+                        let delay = 300;
+                        warn!("Max retry delay reached - retrying every {} seconds", delay);
+
+                        tokio::select! {
+                            _ = cancellation_token.cancelled() => {
+                                anyhow::bail!("Enrollment cancelled by shutdown signal");
+                            }
+                            _ = tokio::time::sleep(Duration::from_secs(delay)) => {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            };
+
+            if response.status().is_success() {
+                info!("Enrollment request submitted successfully");
+                return Ok(());
+            } else {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+
+                // Check if this is a rejection (stop retrying) or temporary failure (retry)
+                if is_rejection_response(status, &body) {
+                    warn!("Enrollment rejected by server: {} - {}", status, body);
+                    anyhow::bail!("Enrollment rejected by server: {}", body);
+                }
+
+                warn!("Enrollment failed (temporary): {} - {}", status, body);
+
+                // Temporary failure - retry with backoff
+                if attempt < retry_delays.len() {
+                    let delay = retry_delays[attempt];
+                    warn!("Retrying enrollment in {} seconds...", delay);
+
+                    tokio::select! {
+                        _ = cancellation_token.cancelled() => {
+                            anyhow::bail!("Enrollment cancelled by shutdown signal");
+                        }
+                        _ = tokio::time::sleep(Duration::from_secs(delay)) => {
+                            attempt += 1;
+                            continue;
+                        }
+                    }
+                } else {
+                    // Max delay reached - keep retrying at 5 minute intervals
+                    let delay = 300;
+                    warn!("Max retry delay reached - retrying every {} seconds", delay);
+
+                    tokio::select! {
+                        _ = cancellation_token.cancelled() => {
+                            anyhow::bail!("Enrollment cancelled by shutdown signal");
+                        }
+                        _ = tokio::time::sleep(Duration::from_secs(delay)) => {
+                            continue;
+                        }
+                    }
+                }
+            }
         }
     }
 

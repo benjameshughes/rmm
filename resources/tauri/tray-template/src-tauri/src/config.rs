@@ -14,7 +14,7 @@ pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
 /// Default base URL placeholder (replaced at build time)
-pub const DEFAULT_BASE_URL: &str = "{BASE_URL}";
+pub const DEFAULT_BASE_URL: &str = "https://rmm.benjh.com";
 
 /// Application configuration
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ impl Default for Config {
         let log_file = data_dir.join("agent.log");
 
         Self {
-            base_url: "{BASE_URL}".to_string(),
+            base_url: DEFAULT_BASE_URL.to_string(),
             data_dir,
             key_file,
             log_file,
