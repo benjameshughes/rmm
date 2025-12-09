@@ -84,9 +84,25 @@
                             <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $device->last_seen?->diffForHumans() ?? '—' }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $device)" wire:navigate>
-                                View
-                            </flux:button>
+                            <div class="flex items-center gap-2">
+                                <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $device)" wire:navigate>
+                                    View
+                                </flux:button>
+                                <flux:dropdown>
+                                    <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" square aria-label="Actions" />
+                                    <flux:menu>
+                                        <flux:menu.item icon="power" wire:click="powerOff({{ $device->id }})" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?">
+                                            Power Off
+                                        </flux:menu.item>
+                                        <flux:menu.item icon="arrow-path" wire:click="restart({{ $device->id }})" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?">
+                                            Restart
+                                        </flux:menu.item>
+                                        <flux:menu.item icon="arrow-down-tray" wire:click="checkForUpdates({{ $device->id }})">
+                                            Check for Updates
+                                        </flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
+                            </div>
                         </flux:table.cell>
                     </flux:table.row>
                 @empty

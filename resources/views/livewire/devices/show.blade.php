@@ -97,6 +97,72 @@
         </flux:card>
     @endif
 
+    {{-- Command Execution --}}
+    <flux:card>
+        <flux:heading size="sm" class="mb-4">Quick Actions</flux:heading>
+        <div class="flex flex-wrap gap-3">
+            <flux:button wire:click="powerOff" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?" icon="power" variant="danger">
+                Power Off
+            </flux:button>
+            <flux:button wire:click="restart" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?" icon="arrow-path">
+                Restart
+            </flux:button>
+            <flux:button wire:click="logOff" icon="arrow-right-start-on-rectangle">
+                Log Off
+            </flux:button>
+            <flux:button wire:click="checkForUpdates" icon="arrow-down-tray">
+                Check for Updates
+            </flux:button>
+        </div>
+    </flux:card>
+
+    {{-- Recent Commands --}}
+    @if($recentCommands->count() > 0)
+        <flux:card>
+            <flux:heading size="sm" class="mb-4">Recent Commands</flux:heading>
+            <flux:table>
+                <flux:table.columns>
+                    <flux:table.column>Queued</flux:table.column>
+                    <flux:table.column>Type</flux:table.column>
+                    <flux:table.column>Script</flux:table.column>
+                    <flux:table.column>Status</flux:table.column>
+                    <flux:table.column>Queued By</flux:table.column>
+                </flux:table.columns>
+                <flux:table.rows>
+                    @foreach($recentCommands as $command)
+                        <flux:table.row>
+                            <flux:table.cell>{{ $command->queued_at->diffForHumans() }}</flux:table.cell>
+                            <flux:table.cell>
+                                <flux:badge size="sm" color="zinc">{{ $command->script_type }}</flux:badge>
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <flux:text class="font-mono text-sm">{{ Str::limit($command->script_content, 50) }}</flux:text>
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                @if($command->status === \App\Models\DeviceCommand::STATUS_PENDING)
+                                    <flux:badge color="gray">Pending</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_SENT)
+                                    <flux:badge color="blue">Sent</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_RUNNING)
+                                    <flux:badge color="blue">Running</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_COMPLETED)
+                                    <flux:badge color="green">Completed</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_FAILED)
+                                    <flux:badge color="red">Failed</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_TIMED_OUT)
+                                    <flux:badge color="amber">Timed Out</flux:badge>
+                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_CANCELLED)
+                                    <flux:badge color="zinc">Cancelled</flux:badge>
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell>{{ $command->queuedBy?->name ?? '—' }}</flux:table.cell>
+                        </flux:table.row>
+                    @endforeach
+                </flux:table.rows>
+            </flux:table>
+        </flux:card>
+    @endif
+
     {{-- Device Info & System Info --}}
     <div class="grid gap-6 md:grid-cols-2">
         <flux:card>

@@ -3,10 +3,8 @@
 namespace App\Livewire\Devices;
 
 use App\Models\Device;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Models\DeviceCommand;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -21,6 +19,21 @@ class Index extends Component
     public function updatingSearch(): void
     {
         $this->resetPage();
+    }
+
+    public function powerOff(Device $device): void
+    {
+        $this->queueCommand($device, 'Stop-Computer -Force', 'powershell');
+    }
+
+    public function restart(Device $device): void
+    {
+        $this->queueCommand($device, 'Restart-Computer -Force', 'powershell');
+    }
+
+    public function checkForUpdates(Device $device): void
+    {
+        $this->queueCommand($device, 'Get-WindowsUpdate -Install -AcceptAll -AutoReboot', 'powershell');
     }
 
     public function render(): mixed
@@ -43,5 +56,23 @@ class Index extends Component
             })
             ->latest('last_seen');
     }
-}
 
+    protected function queueCommand(Device $device, string $scriptContent, string $scriptType): void
+    {
+        if (! auth()->check()) {
+            abort(401);
+        }
+
+        DeviceCommand::create([
+            'device_id' => $device->id,
+            'script_content' => $scriptContent,
+            'script_type' => $scriptType,
+            'status' => DeviceCommand::STATUS_PENDING,
+            'queued_at' => now(),
+            'queued_by' => auth()->id(),
+            'timeout_seconds' => 300,
+        ]);
+
+        $this->dispatch('command-queued');
+    }
+}
