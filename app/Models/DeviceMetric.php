@@ -23,6 +23,8 @@ class DeviceMetric extends Model
         'cpu_softirq',
         'cpu_steal',
         'cpu_idle',
+        'cpu_cores',
+        'cpu_frequency_mhz',
         'ram',
         'load1',
         'load5',

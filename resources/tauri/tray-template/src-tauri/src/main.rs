@@ -8,6 +8,7 @@ mod metrics;
 mod runtime_config;
 mod storage;
 mod sysinfo;
+mod updater;
 
 use agent::Agent;
 use anyhow::{Context, Result};
@@ -117,6 +118,12 @@ enum Commands {
         /// Skip confirmation prompt
         #[arg(short, long)]
         force: bool,
+    },
+    /// Check for and apply updates
+    Update {
+        /// Only check for updates, don't download
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -663,7 +670,77 @@ fn reenroll_device(force: bool) -> Result<()> {
     Ok(())
 }
 
+fn check_for_updates(check_only: bool) -> Result<()> {
+    use crate::config::AGENT_VERSION;
+
+    init_console_logging();
+
+    let runtime_config = RuntimeConfig::load().unwrap_or_default();
+    let config = Config::with_runtime_config(&runtime_config);
+
+    println!("RMM Agent Update");
+    println!("================");
+    println!("Current version: {}", AGENT_VERSION);
+    println!();
+
+    let updater = updater::Updater::new(config)?;
+    let rt = tokio::runtime::Runtime::new()?;
+
+    rt.block_on(async {
+        match updater.check_only().await {
+            Ok(Some(info)) => {
+                println!("Update available: v{}", info.version);
+                println!("Download URL: {}", info.download_url);
+                if let Some(size) = info.size {
+                    println!("Size: {:.2} MB", size as f64 / 1024.0 / 1024.0);
+                }
+
+                if !check_only {
+                    println!();
+                    println!("Downloading update...");
+                    match updater.download_update(&info).await {
+                        Ok(path) => {
+                            println!("Downloaded to: {}", path.display());
+                            println!();
+                            println!("Update downloaded. Restart the service to apply:");
+                            println!("  rmm stop && rmm start");
+                        }
+                        Err(e) => {
+                            eprintln!("Download failed: {}", e);
+                        }
+                    }
+                }
+            }
+            Ok(None) => {
+                println!("You are running the latest version.");
+            }
+            Err(e) => {
+                eprintln!("Update check failed: {}", e);
+            }
+        }
+    });
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
+    // Apply any pending updates FIRST, before anything else
+    let default_config = Config::default();
+    match updater::Updater::apply_pending_update(&default_config) {
+        Ok(true) => {
+            // Update was applied - continue with normal startup
+            // The new binary is now running
+            println!("Update applied successfully!");
+        }
+        Ok(false) => {
+            // No update pending, normal startup
+        }
+        Err(e) => {
+            eprintln!("Warning: Failed to apply pending update: {}", e);
+            // Continue anyway with current binary
+        }
+    }
+
     let cli = Cli::parse();
 
     // Load runtime config
@@ -730,6 +807,9 @@ fn main() -> Result<()> {
         Some(Commands::Reenroll { force }) => {
             reenroll_device(force)?;
         }
+        Some(Commands::Update { check }) => {
+            check_for_updates(check)?;
+        }
         None => {
             // No command - check if we're being run as a service
             #[cfg(windows)]
@@ -751,6 +831,8 @@ fn main() -> Result<()> {
                         eprintln!("  rmm status           Show configuration");
                         eprintln!("  rmm logs             View agent logs");
                         eprintln!("  rmm reenroll         Force re-enrollment");
+                        eprintln!("  rmm update           Check for and apply updates");
+                        eprintln!("  rmm update --check   Only check for updates");
                         eprintln!("  rmm --url <URL>      Set server URL");
                         eprintln!("  rmm --reset          Clear API key");
                     }

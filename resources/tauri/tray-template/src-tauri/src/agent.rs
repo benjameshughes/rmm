@@ -9,6 +9,7 @@ use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
 use crate::metrics::MetricsCollector;
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
+use crate::updater::Updater;
 
 /// Agent state
 #[derive(Debug, Clone, PartialEq)]
@@ -179,9 +180,9 @@ impl Agent {
         Ok(())
     }
 
-    /// Run the metrics collection loop (blocks until cancelled)
+    /// Run the metrics and heartbeat collection loops (blocks until cancelled)
     async fn run_metrics_loop(&self, api_key: String) {
-        info!("Starting metrics collection");
+        info!("Starting metrics, heartbeat, and update check loops");
 
         let collector = match MetricsCollector::new(
             self.config.clone(),
@@ -200,10 +201,49 @@ impl Agent {
             warn!("Please ensure Netdata is installed and running");
         }
 
-        // Start the metrics loop with cancellation support
+        // Create a separate collector for heartbeat loop
+        let heartbeat_collector = match MetricsCollector::new(
+            self.config.clone(),
+            self.system_info.hostname.clone(),
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to create heartbeat collector: {}", e);
+                return;
+            }
+        };
+
+        // Spawn heartbeat loop as a separate task
+        let heartbeat_api_key = api_key.clone();
+        let heartbeat_token = self.cancellation_token.clone();
+        let heartbeat_handle = tokio::spawn(async move {
+            heartbeat_collector
+                .start_heartbeat_loop(heartbeat_api_key, heartbeat_token)
+                .await;
+        });
+
+        // Spawn update check loop as a separate task
+        let update_config = self.config.clone();
+        let update_token = self.cancellation_token.clone();
+        let update_handle = tokio::spawn(async move {
+            match Updater::new(update_config) {
+                Ok(updater) => {
+                    updater.start_update_loop(update_token).await;
+                }
+                Err(e) => {
+                    error!("Failed to create updater: {}", e);
+                }
+            }
+        });
+
+        // Start the metrics loop (blocks until cancelled)
         collector
             .start_metrics_loop(api_key, self.cancellation_token.clone())
             .await;
+
+        // Wait for other loops to finish
+        let _ = heartbeat_handle.await;
+        let _ = update_handle.await;
     }
 
     /// Trigger graceful shutdown

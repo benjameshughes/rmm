@@ -19,6 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Extract version from Cargo.toml
+        id: version
+        shell: pwsh
+        run: |
+          $content = Get-Content "resources/tauri/tray-template/src-tauri/Cargo.toml" -Raw
+          if ($content -match 'version\s*=\s*"([^"]+)"') {
+            $version = $matches[1]
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "Extracted version: $version"
+          } else {
+            echo "Failed to extract version"
+            exit 1
+          }
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -50,34 +64,48 @@ jobs:
         working-directory: resources/tauri/tray-template/src-tauri
         run: cargo wix --no-build --nocapture
 
-      - name: Upload Artifact
+      - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: rmm-agent-msi
           path: resources/tauri/tray-template/src-tauri/target/wix/*.msi
           retention-days: 90
 
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmm-agent-exe
+          path: resources/tauri/tray-template/src-tauri/target/release/rmm.exe
+          retention-days: 90
+
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: agent-${{ github.run_number }}
-          name: RMM Agent Build ${{ github.run_number }}
-          files: resources/tauri/tray-template/src-tauri/target/wix/*.msi
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: RMM Agent v${{ steps.version.outputs.VERSION }}
+          files: |
+            resources/tauri/tray-template/src-tauri/target/wix/*.msi
+            resources/tauri/tray-template/src-tauri/target/release/rmm.exe
           generate_release_notes: false
           body: |
-            Automated build of the RMM Agent (MSI Installer).
+            ## RMM Agent v${{ steps.version.outputs.VERSION }}
 
-            ## Installation
+            ### Downloads
+            - **MSI Installer** - For fresh installations
+            - **rmm.exe** - For auto-updates (agents download this automatically)
+
+            ### Installation
             Run the MSI installer or use PowerShell:
             ```powershell
             irm https://your-server/agent/install.ps1 | iex
             ```
 
-            ## After Installation
+            ### After Installation
             The `rmm` command will be available in PATH:
             ```powershell
             rmm status           # Show agent status
+            rmm update --check   # Check for updates
             rmm --url <URL>      # Set server URL
             rmm --reset          # Clear API key
             ```

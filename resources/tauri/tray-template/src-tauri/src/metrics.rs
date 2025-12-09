@@ -1,7 +1,13 @@
+//! Simplified metrics collector - forwards raw Netdata JSON to Laravel
+//!
+//! The agent's job is simple:
+//! 1. Fetch raw JSON from Netdata v3 API
+//! 2. Forward it to Laravel
+//! 3. Let Laravel handle all parsing
+
 use anyhow::{Context, Result};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -9,268 +15,40 @@ use tracing::{debug, error, info, warn};
 use crate::config::Config;
 
 // ============================================================================
-// Netdata v3 API Response Structures
+// Simple Payload Structure (sent to Laravel)
 // ============================================================================
 
-/// Netdata v3 /api/v3/info response
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct NetdataInfo {
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub uid: Option<String>,
-    #[serde(default)]
-    pub os_name: Option<String>,
-    #[serde(default)]
-    pub os_id: Option<String>,
-    #[serde(default)]
-    pub os_version: Option<String>,
-    #[serde(default)]
-    pub kernel_name: Option<String>,
-    #[serde(default)]
-    pub kernel_version: Option<String>,
-    #[serde(default)]
-    pub architecture: Option<String>,
-    #[serde(default)]
-    pub virtualization: Option<String>,
-    #[serde(default)]
-    pub container: Option<String>,
-    #[serde(default)]
-    pub is_k8s_node: Option<bool>,
-    #[serde(default)]
-    pub alarms: Option<NetdataAlarms>,
-    #[serde(default)]
-    pub labels: Option<HashMap<String, String>>,
-}
-
-/// Netdata alarms summary
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct NetdataAlarms {
-    #[serde(default)]
-    pub normal: i32,
-    #[serde(default)]
-    pub warning: i32,
-    #[serde(default)]
-    pub critical: i32,
-}
-
-/// Netdata v3 /api/v3/data response wrapper (jsonwrap2 format)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetdataDataResponse {
-    #[serde(default)]
-    pub api: Option<i32>,
-    #[serde(default)]
-    pub view: Option<NetdataView>,
-    #[serde(default)]
-    pub result: Option<NetdataResult>,
-    #[serde(default)]
-    pub db: Option<NetdataDb>,
-}
-
-/// View metadata from v3 response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetdataView {
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub units: Option<serde_json::Value>, // Can be string or array
-    #[serde(default)]
-    pub after: Option<i64>,
-    #[serde(default)]
-    pub before: Option<i64>,
-    #[serde(default)]
-    pub min: Option<f64>,
-    #[serde(default)]
-    pub max: Option<f64>,
-    #[serde(default)]
-    pub dimensions: Option<NetdataDimensions>,
-}
-
-/// Dimensions info from v3 response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetdataDimensions {
-    #[serde(default)]
-    pub ids: Vec<String>,
-    #[serde(default)]
-    pub names: Vec<String>,
-    #[serde(default)]
-    pub units: Option<Vec<String>>,
-}
-
-/// Database info from v3 response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetdataDb {
-    #[serde(default)]
-    pub units: Option<serde_json::Value>,
-    #[serde(default)]
-    pub update_every: Option<i32>,
-}
-
-/// Result data structure - handles multiple formats
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum NetdataResult {
-    /// Array format: [[timestamp, val1, val2, ...], ...]
-    Array(Vec<Vec<f64>>),
-    /// Object format with labels and data
-    Object {
-        labels: Vec<String>,
-        data: Vec<Vec<f64>>,
-    },
-}
-
-// ============================================================================
-// Metrics Payload Structure (sent to Laravel)
-// ============================================================================
-
-/// Complete metrics payload sent to the backend
+/// Raw metrics payload - forwards Netdata JSON directly to Laravel
 #[derive(Debug, Serialize)]
-pub struct MetricsPayload {
+pub struct RawMetricsPayload {
+    /// Device hostname
     pub hostname: String,
+    /// Timestamp of collection
     pub timestamp: String,
+    /// Agent version
     pub agent_version: String,
-
-    // System info from Netdata
+    /// Raw Netdata /api/v3/info response (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_info: Option<SystemInfo>,
-
-    // Core metrics
+    pub netdata_info: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for CPU metrics
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cpu: Option<CpuMetrics>,
+    pub netdata_cpu: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for RAM metrics
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub memory: Option<MemoryMetrics>,
+    pub netdata_ram: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for load metrics
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub load: Option<LoadMetrics>,
+    pub netdata_load: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for uptime metrics
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub uptime: Option<UptimeMetrics>,
-
-    // Extended metrics
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disks: Option<Vec<DiskMetrics>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub network: Option<Vec<NetworkMetrics>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub processes: Option<ProcessMetrics>,
-
-    // Alerts summary
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub alerts: Option<AlertsSummary>,
-
-    // Raw netdata response for backward compatibility
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_cpu: Option<NetdataDataResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_ram: Option<NetdataDataResponse>,
-}
-
-/// System information collected from Netdata
-#[derive(Debug, Clone, Serialize)]
-pub struct SystemInfo {
-    pub netdata_version: Option<String>,
-    pub os_name: Option<String>,
-    pub os_version: Option<String>,
-    pub kernel_name: Option<String>,
-    pub kernel_version: Option<String>,
-    pub architecture: Option<String>,
-    pub virtualization: Option<String>,
-    pub container: Option<String>,
-    pub is_k8s_node: bool,
-}
-
-/// CPU metrics - parsed and calculated
-#[derive(Debug, Clone, Serialize)]
-pub struct CpuMetrics {
-    /// Total CPU usage percentage (0-100)
-    pub usage_percent: f64,
-    /// Individual CPU states
-    pub user: Option<f64>,
-    pub system: Option<f64>,
-    pub nice: Option<f64>,
-    pub iowait: Option<f64>,
-    pub irq: Option<f64>,
-    pub softirq: Option<f64>,
-    pub steal: Option<f64>,
-    pub idle: Option<f64>,
-}
-
-/// Memory metrics - parsed and calculated
-#[derive(Debug, Clone, Serialize)]
-pub struct MemoryMetrics {
-    /// RAM usage percentage (0-100)
-    pub usage_percent: f64,
-    /// Memory in MiB
-    pub used_mib: Option<f64>,
-    pub free_mib: Option<f64>,
-    pub cached_mib: Option<f64>,
-    pub buffers_mib: Option<f64>,
-    pub available_mib: Option<f64>,
-    pub total_mib: Option<f64>,
-}
-
-/// Load average metrics
-#[derive(Debug, Clone, Serialize)]
-pub struct LoadMetrics {
-    pub load1: f64,
-    pub load5: f64,
-    pub load15: f64,
-}
-
-/// System uptime
-#[derive(Debug, Clone, Serialize)]
-pub struct UptimeMetrics {
-    /// Uptime in seconds
-    pub seconds: f64,
-}
-
-/// Per-disk metrics
-#[derive(Debug, Clone, Serialize)]
-pub struct DiskMetrics {
-    pub name: String,
-    pub read_kbps: Option<f64>,
-    pub write_kbps: Option<f64>,
-    pub utilization_percent: Option<f64>,
-}
-
-/// Per-interface network metrics
-#[derive(Debug, Clone, Serialize)]
-pub struct NetworkMetrics {
-    pub interface: String,
-    pub received_kbps: Option<f64>,
-    pub sent_kbps: Option<f64>,
-}
-
-/// Process metrics
-#[derive(Debug, Clone, Serialize)]
-pub struct ProcessMetrics {
-    pub running: Option<i32>,
-    pub blocked: Option<i32>,
-    pub total: Option<i32>,
-}
-
-/// Alerts summary
-#[derive(Debug, Clone, Serialize)]
-pub struct AlertsSummary {
-    pub normal: i32,
-    pub warning: i32,
-    pub critical: i32,
-}
-
-// ============================================================================
-// Legacy support - for backward compatibility
-// ============================================================================
-
-/// Legacy Netdata API response structure (v1 format)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetdataResponse {
-    pub labels: Vec<String>,
-    pub data: Vec<Vec<f64>>,
+    pub netdata_uptime: Option<serde_json::Value>,
 }
 
 // ============================================================================
 // Metrics Collector
 // ============================================================================
 
-/// Metrics collector and submitter using Netdata v3 API
+/// Simple metrics collector - fetches from Netdata and forwards to Laravel
 pub struct MetricsCollector {
     config: Config,
     client: reqwest::Client,
@@ -292,282 +70,76 @@ impl MetricsCollector {
         })
     }
 
-    /// Fetch system info from Netdata v3 API
-    async fn fetch_system_info(&self) -> Result<NetdataInfo> {
+    /// Fetch raw JSON from Netdata v3 API (no parsing)
+    async fn fetch_netdata_info(&self) -> Option<serde_json::Value> {
         let url = format!("{}/api/v3/info", self.config.netdata_url);
-        debug!("Fetching system info from: {}", url);
+        debug!("Fetching Netdata info from: {}", url);
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to fetch system info")?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("System info request failed: {}", response.status());
+        match self.client.get(&url).send().await {
+            Ok(response) if response.status().is_success() => {
+                response.json().await.ok()
+            }
+            Ok(response) => {
+                debug!("Netdata info request failed: {}", response.status());
+                None
+            }
+            Err(e) => {
+                debug!("Netdata info request error: {}", e);
+                None
+            }
         }
-
-        response
-            .json()
-            .await
-            .context("Failed to parse system info")
     }
 
-    /// Fetch data for a specific context using v3 API
-    async fn fetch_context_data(&self, context: &str) -> Result<NetdataDataResponse> {
+    /// Fetch raw data from a Netdata v3 API context (no parsing)
+    async fn fetch_netdata_context(&self, context: &str) -> Option<serde_json::Value> {
         let url = format!(
-            "{}/api/v3/data?contexts={}&format=json&options=jsonwrap&points=1&time_group=average",
+            "{}/api/v3/data?contexts={}&format=json&points=1&time_group=average",
             self.config.netdata_url, context
         );
-        debug!("Fetching context data from: {}", url);
+        debug!("Fetching Netdata {} from: {}", context, url);
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .with_context(|| format!("Failed to fetch {} data", context))?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("{} request failed: {}", context, response.status());
-        }
-
-        response
-            .json()
-            .await
-            .with_context(|| format!("Failed to parse {} response", context))
-    }
-
-    /// Parse CPU metrics from v3 response
-    fn parse_cpu_metrics(&self, data: &NetdataDataResponse) -> Option<CpuMetrics> {
-        let view = data.view.as_ref()?;
-        let dims = view.dimensions.as_ref()?;
-        let result = data.result.as_ref()?;
-
-        let values = match result {
-            NetdataResult::Array(arr) => arr.last()?,
-            NetdataResult::Object { data, .. } => data.last()?,
-        };
-
-        // Skip first value (timestamp) if present
-        let offset = if dims.ids.len() < values.len() { 1 } else { 0 };
-
-        let mut cpu = CpuMetrics {
-            usage_percent: 0.0,
-            user: None,
-            system: None,
-            nice: None,
-            iowait: None,
-            irq: None,
-            softirq: None,
-            steal: None,
-            idle: None,
-        };
-
-        for (i, name) in dims.ids.iter().enumerate() {
-            let val = values.get(i + offset).copied();
-            match name.as_str() {
-                "user" => cpu.user = val,
-                "system" => cpu.system = val,
-                "nice" => cpu.nice = val,
-                "iowait" => cpu.iowait = val,
-                "irq" => cpu.irq = val,
-                "softirq" => cpu.softirq = val,
-                "steal" => cpu.steal = val,
-                "idle" => cpu.idle = val,
-                _ => {}
+        match self.client.get(&url).send().await {
+            Ok(response) if response.status().is_success() => {
+                response.json().await.ok()
+            }
+            Ok(response) => {
+                debug!("Netdata {} request failed: {}", context, response.status());
+                None
+            }
+            Err(e) => {
+                debug!("Netdata {} request error: {}", context, e);
+                None
             }
         }
-
-        // Calculate usage: 100 - idle
-        if let Some(idle) = cpu.idle {
-            cpu.usage_percent = (100.0 - idle).max(0.0).min(100.0);
-        }
-
-        Some(cpu)
     }
 
-    /// Parse memory metrics from v3 response
-    fn parse_memory_metrics(&self, data: &NetdataDataResponse) -> Option<MemoryMetrics> {
-        let view = data.view.as_ref()?;
-        let dims = view.dimensions.as_ref()?;
-        let result = data.result.as_ref()?;
+    /// Collect raw metrics from Netdata
+    pub async fn collect_metrics(&self) -> RawMetricsPayload {
+        debug!("Collecting raw metrics from Netdata");
 
-        let values = match result {
-            NetdataResult::Array(arr) => arr.last()?,
-            NetdataResult::Object { data, .. } => data.last()?,
-        };
+        // Fetch all contexts in parallel
+        let (netdata_info, netdata_cpu, netdata_ram, netdata_load, netdata_uptime) = tokio::join!(
+            self.fetch_netdata_info(),
+            self.fetch_netdata_context("system.cpu"),
+            self.fetch_netdata_context("system.ram"),
+            self.fetch_netdata_context("system.load"),
+            self.fetch_netdata_context("system.uptime"),
+        );
 
-        let offset = if dims.ids.len() < values.len() { 1 } else { 0 };
-
-        let mut mem = MemoryMetrics {
-            usage_percent: 0.0,
-            used_mib: None,
-            free_mib: None,
-            cached_mib: None,
-            buffers_mib: None,
-            available_mib: None,
-            total_mib: None,
-        };
-
-        for (i, name) in dims.ids.iter().enumerate() {
-            let val = values.get(i + offset).copied();
-            match name.as_str() {
-                "used" => mem.used_mib = val,
-                "free" => mem.free_mib = val,
-                "cached" => mem.cached_mib = val,
-                "buffers" => mem.buffers_mib = val,
-                "available" => mem.available_mib = val,
-                _ => {}
-            }
-        }
-
-        // Calculate total and usage
-        let used = mem.used_mib.unwrap_or(0.0);
-        let free = mem.free_mib.unwrap_or(0.0);
-        let cached = mem.cached_mib.unwrap_or(0.0);
-        let buffers = mem.buffers_mib.unwrap_or(0.0);
-        let total = used + free + cached + buffers;
-
-        if total > 0.0 {
-            mem.total_mib = Some(total);
-            mem.usage_percent = ((used / total) * 100.0).max(0.0).min(100.0);
-        }
-
-        Some(mem)
-    }
-
-    /// Parse load metrics from v3 response
-    fn parse_load_metrics(&self, data: &NetdataDataResponse) -> Option<LoadMetrics> {
-        let view = data.view.as_ref()?;
-        let dims = view.dimensions.as_ref()?;
-        let result = data.result.as_ref()?;
-
-        let values = match result {
-            NetdataResult::Array(arr) => arr.last()?,
-            NetdataResult::Object { data, .. } => data.last()?,
-        };
-
-        let offset = if dims.ids.len() < values.len() { 1 } else { 0 };
-
-        let mut load1 = 0.0;
-        let mut load5 = 0.0;
-        let mut load15 = 0.0;
-
-        for (i, name) in dims.ids.iter().enumerate() {
-            if let Some(&val) = values.get(i + offset) {
-                match name.as_str() {
-                    "load1" => load1 = val,
-                    "load5" => load5 = val,
-                    "load15" => load15 = val,
-                    _ => {}
-                }
-            }
-        }
-
-        Some(LoadMetrics { load1, load5, load15 })
-    }
-
-    /// Parse uptime from v3 response
-    fn parse_uptime(&self, data: &NetdataDataResponse) -> Option<UptimeMetrics> {
-        let result = data.result.as_ref()?;
-
-        let values = match result {
-            NetdataResult::Array(arr) => arr.last()?,
-            NetdataResult::Object { data, .. } => data.last()?,
-        };
-
-        // Uptime is usually the second value (after timestamp)
-        let seconds = values.get(1).copied().unwrap_or(0.0);
-
-        Some(UptimeMetrics { seconds })
-    }
-
-    /// Collect all metrics from Netdata v3 API
-    pub async fn collect_metrics(&self) -> MetricsPayload {
-        debug!("Collecting metrics from Netdata v3 API");
-
-        let mut payload = MetricsPayload {
+        RawMetricsPayload {
             hostname: self.hostname.clone(),
             timestamp: Utc::now().to_rfc3339(),
             agent_version: env!("CARGO_PKG_VERSION").to_string(),
-            system_info: None,
-            cpu: None,
-            memory: None,
-            load: None,
-            uptime: None,
-            disks: None,
-            network: None,
-            processes: None,
-            alerts: None,
-            raw_cpu: None,
-            raw_ram: None,
-        };
-
-        // Fetch system info
-        match self.fetch_system_info().await {
-            Ok(info) => {
-                payload.alerts = info.alarms.as_ref().map(|a| AlertsSummary {
-                    normal: a.normal,
-                    warning: a.warning,
-                    critical: a.critical,
-                });
-
-                payload.system_info = Some(SystemInfo {
-                    netdata_version: info.version,
-                    os_name: info.os_name,
-                    os_version: info.os_version,
-                    kernel_name: info.kernel_name,
-                    kernel_version: info.kernel_version,
-                    architecture: info.architecture,
-                    virtualization: info.virtualization,
-                    container: info.container,
-                    is_k8s_node: info.is_k8s_node.unwrap_or(false),
-                });
-            }
-            Err(e) => warn!("Failed to fetch system info: {}", e),
+            netdata_info,
+            netdata_cpu,
+            netdata_ram,
+            netdata_load,
+            netdata_uptime,
         }
-
-        // Fetch CPU metrics
-        match self.fetch_context_data("system.cpu").await {
-            Ok(data) => {
-                payload.cpu = self.parse_cpu_metrics(&data);
-                payload.raw_cpu = Some(data);
-            }
-            Err(e) => warn!("Failed to collect CPU metrics: {}", e),
-        }
-
-        // Fetch memory metrics
-        match self.fetch_context_data("system.ram").await {
-            Ok(data) => {
-                payload.memory = self.parse_memory_metrics(&data);
-                payload.raw_ram = Some(data);
-            }
-            Err(e) => warn!("Failed to collect memory metrics: {}", e),
-        }
-
-        // Fetch load average
-        match self.fetch_context_data("system.load").await {
-            Ok(data) => {
-                payload.load = self.parse_load_metrics(&data);
-            }
-            Err(e) => debug!("Failed to collect load metrics: {}", e),
-        }
-
-        // Fetch uptime
-        match self.fetch_context_data("system.uptime").await {
-            Ok(data) => {
-                payload.uptime = self.parse_uptime(&data);
-            }
-            Err(e) => debug!("Failed to collect uptime: {}", e),
-        }
-
-        payload
     }
 
-    /// Submit metrics to the backend
-    pub async fn submit_metrics(&self, metrics: &MetricsPayload, api_key: &str) -> Result<()> {
+    /// Submit raw metrics to Laravel backend
+    pub async fn submit_metrics(&self, metrics: &RawMetricsPayload, api_key: &str) -> Result<()> {
         let url = format!("{}/api/metrics", self.config.base_url);
 
         debug!("Submitting metrics to backend: {}", url);
@@ -594,29 +166,20 @@ impl MetricsCollector {
 
     /// Collect and submit metrics in one operation
     pub async fn collect_and_submit(&self, api_key: &str) -> Result<()> {
-        // Always collect metrics - even if Netdata is down, we send what we can
         let metrics = self.collect_metrics().await;
 
-        // Submit whatever metrics we have (even if Netdata is unavailable)
-        // The payload will have hostname and timestamp at minimum
         match self.submit_metrics(&metrics, api_key).await {
             Ok(_) => {
-                if metrics.cpu.is_some() || metrics.memory.is_some() {
-                    info!(
-                        "Metrics submitted: CPU={:.1}%, RAM={:.1}%",
-                        metrics.cpu.as_ref().map(|c| c.usage_percent).unwrap_or(0.0),
-                        metrics.memory.as_ref().map(|m| m.usage_percent).unwrap_or(0.0)
-                    );
+                if metrics.netdata_cpu.is_some() || metrics.netdata_ram.is_some() {
+                    info!("Metrics submitted (raw Netdata data)");
                 } else {
                     warn!("Metrics submitted with no Netdata data (Netdata may be unavailable)");
                 }
                 Ok(())
             }
             Err(e) => {
-                warn!("Failed to submit metrics to backend: {}", e);
-                // Don't propagate the error - just log and continue
-                // The metrics loop will retry on the next interval
-                Ok(())
+                warn!("Failed to submit metrics: {}", e);
+                Ok(()) // Don't propagate - retry next interval
             }
         }
     }
@@ -627,7 +190,7 @@ impl MetricsCollector {
 
         match self.client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
-                debug!("Netdata is available (v3 API)");
+                debug!("Netdata is available");
                 true
             }
             Ok(response) => {
@@ -641,10 +204,10 @@ impl MetricsCollector {
         }
     }
 
-    /// Start metrics collection loop with graceful shutdown support
+    /// Start metrics collection loop
     pub async fn start_metrics_loop(&self, api_key: String, cancellation_token: CancellationToken) {
         info!(
-            "Starting metrics collection loop (interval: {}s, using v3 API)",
+            "Starting metrics collection loop (interval: {}s)",
             self.config.metrics_interval
         );
 
@@ -655,21 +218,82 @@ impl MetricsCollector {
         loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
-                    info!("Metrics collection loop cancelled - shutting down gracefully");
+                    info!("Metrics collection loop cancelled");
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(self.config.metrics_interval)) => {
-                    match self.collect_and_submit(&api_key).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            error!("Error in metrics collection: {}", e);
-                        }
+                    if let Err(e) = self.collect_and_submit(&api_key).await {
+                        error!("Error in metrics collection: {}", e);
                     }
                 }
             }
         }
 
         info!("Metrics collection loop stopped");
+    }
+
+    /// Send a lightweight heartbeat to the backend
+    pub async fn send_heartbeat(&self, api_key: &str) -> Result<()> {
+        let url = format!("{}/api/heartbeat", self.config.base_url);
+
+        debug!("Sending heartbeat to: {}", url);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("X-Agent-Key", api_key)
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) => {
+                let status = resp.status();
+
+                if status.is_success() {
+                    debug!("Heartbeat OK");
+                    Ok(())
+                } else if status == reqwest::StatusCode::UNAUTHORIZED {
+                    let body = resp.text().await.unwrap_or_default();
+                    warn!("Heartbeat auth failed (401): {}", body);
+                    anyhow::bail!("Authentication failed: {}", body)
+                } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    warn!("Heartbeat rate limited (429)");
+                    Ok(())
+                } else {
+                    let body = resp.text().await.unwrap_or_default();
+                    warn!("Heartbeat failed ({}): {}", status.as_u16(), body);
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                warn!("Heartbeat network error: {}", e);
+                Ok(())
+            }
+        }
+    }
+
+    /// Start heartbeat loop
+    pub async fn start_heartbeat_loop(&self, api_key: String, cancellation_token: CancellationToken) {
+        info!(
+            "Starting heartbeat loop (interval: {}s)",
+            self.config.heartbeat_interval
+        );
+
+        loop {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {
+                    info!("Heartbeat loop cancelled");
+                    break;
+                }
+                _ = tokio::time::sleep(Duration::from_secs(self.config.heartbeat_interval)) => {
+                    if let Err(e) = self.send_heartbeat(&api_key).await {
+                        error!("Heartbeat error: {}", e);
+                    }
+                }
+            }
+        }
+
+        info!("Heartbeat loop stopped");
     }
 }
 
@@ -678,79 +302,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_metrics_payload_serialization() {
-        let payload = MetricsPayload {
+    fn test_raw_payload_serialization() {
+        let payload = RawMetricsPayload {
             hostname: "test-host".to_string(),
-            timestamp: "2025-12-08T10:00:00Z".to_string(),
-            agent_version: "0.2.0".to_string(),
-            system_info: Some(SystemInfo {
-                netdata_version: Some("1.44.0".to_string()),
-                os_name: Some("Windows".to_string()),
-                os_version: Some("10".to_string()),
-                kernel_name: None,
-                kernel_version: None,
-                architecture: Some("x86_64".to_string()),
-                virtualization: None,
-                container: None,
-                is_k8s_node: false,
-            }),
-            cpu: Some(CpuMetrics {
-                usage_percent: 25.5,
-                user: Some(15.0),
-                system: Some(10.0),
-                nice: Some(0.0),
-                iowait: Some(0.5),
-                irq: None,
-                softirq: None,
-                steal: None,
-                idle: Some(74.5),
-            }),
-            memory: Some(MemoryMetrics {
-                usage_percent: 65.0,
-                used_mib: Some(8192.0),
-                free_mib: Some(2048.0),
-                cached_mib: Some(1024.0),
-                buffers_mib: Some(512.0),
-                available_mib: Some(4096.0),
-                total_mib: Some(16384.0),
-            }),
-            load: Some(LoadMetrics {
-                load1: 1.5,
-                load5: 1.2,
-                load15: 0.8,
-            }),
-            uptime: Some(UptimeMetrics { seconds: 86400.0 }),
-            disks: None,
-            network: None,
-            processes: None,
-            alerts: Some(AlertsSummary {
-                normal: 10,
-                warning: 2,
-                critical: 0,
-            }),
-            raw_cpu: None,
-            raw_ram: None,
+            timestamp: "2025-12-09T10:00:00Z".to_string(),
+            agent_version: "0.3.0".to_string(),
+            netdata_info: None,
+            netdata_cpu: Some(serde_json::json!({
+                "view": {
+                    "dimensions": {
+                        "ids": ["user", "system"],
+                        "sts": {
+                            "avg": [10.5, 5.2]
+                        }
+                    }
+                }
+            })),
+            netdata_ram: None,
+            netdata_load: None,
+            netdata_uptime: None,
         };
 
-        let json = serde_json::to_string_pretty(&payload).unwrap();
+        let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("test-host"));
-        assert!(json.contains("usage_percent"));
-        assert!(json.contains("25.5"));
-    }
-
-    #[test]
-    fn test_cpu_metrics_defaults() {
-        let cpu = CpuMetrics {
-            usage_percent: 0.0,
-            user: None,
-            system: None,
-            nice: None,
-            iowait: None,
-            irq: None,
-            softirq: None,
-            steal: None,
-            idle: None,
-        };
-        assert_eq!(cpu.usage_percent, 0.0);
+        assert!(json.contains("netdata_cpu"));
+        assert!(json.contains("10.5"));
     }
 }

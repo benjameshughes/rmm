@@ -55,5 +55,15 @@ class AppServiceProvider extends ServiceProvider
                     'message' => 'Too many metric submissions. Please try again later.',
                 ], 429, $headers));
         });
+
+        RateLimiter::for('api.heartbeat', function (Request $request): Limit {
+            $apiKey = $request->header('X-Device-Key') ?? $request->header('X-Agent-Key') ?? $request->ip();
+
+            return Limit::perMinute(10)
+                ->by($apiKey)
+                ->response(fn (Request $request, array $headers) => response()->json([
+                    'message' => 'Too many heartbeat requests. Please try again later.',
+                ], 429, $headers));
+        });
     }
 }

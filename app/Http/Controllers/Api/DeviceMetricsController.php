@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\DTOs\NetdataCpuMetric;
 use App\DTOs\NetdataRamMetric;
+use App\DTOs\NetdataV3Metrics;
 use App\Http\Requests\MetricsRequest;
 use App\Models\Device;
 use App\Models\DeviceMetric;
@@ -46,6 +47,12 @@ class DeviceMetricsController extends Controller
 
         $input = $request->all();
 
+        // Check for raw Netdata v3 format (sent directly from simplified agent)
+        // New format uses separate fields: netdata_cpu, netdata_ram, netdata_load, netdata_uptime
+        if (isset($input['netdata_cpu']) || isset($input['netdata_ram']) || isset($input['netdata_metrics'])) {
+            return $this->handleRawNetdataMetrics($device, $input, $request);
+        }
+
         // Parse CPU - handle both v3 format (object with usage_percent) and legacy (netdata response)
         $cpu = $this->parseCpuMetric($input['cpu'] ?? null);
 
@@ -82,6 +89,8 @@ class DeviceMetricsController extends Controller
             $metricData['cpu_softirq'] = $cpuData['softirq'] ?? null;
             $metricData['cpu_steal'] = $cpuData['steal'] ?? null;
             $metricData['cpu_idle'] = $cpuData['idle'] ?? null;
+            $metricData['cpu_cores'] = isset($cpuData['cores']) ? (int) $cpuData['cores'] : null;
+            $metricData['cpu_frequency_mhz'] = $cpuData['frequency_mhz'] ?? null;
         }
 
         // Add load averages if present
@@ -249,5 +258,133 @@ class DeviceMetricsController extends Controller
 
         // Legacy format: netdata response with labels/data arrays
         return (new NetdataRamMetric($input))->getUsagePercent();
+    }
+
+    /**
+     * Handle raw Netdata v3 metrics from simplified agent.
+     *
+     * The agent sends separate fields for each metric context:
+     * - hostname, timestamp, agent_version
+     * - netdata_info: raw /api/v3/info response
+     * - netdata_cpu: raw /api/v3/data?contexts=system.cpu response
+     * - netdata_ram: raw /api/v3/data?contexts=system.ram response
+     * - netdata_load: raw /api/v3/data?contexts=system.load response
+     * - netdata_uptime: raw /api/v3/data?contexts=system.uptime response
+     *
+     * Also supports legacy single netdata_metrics field for backwards compatibility.
+     */
+    private function handleRawNetdataMetrics(Device $device, array $input, MetricsRequest $request): JsonResponse
+    {
+        $recordedAt = isset($input['timestamp']) ? Carbon::parse($input['timestamp']) : now();
+
+        // Parse CPU metrics - prefer new separate field, fall back to legacy combined field
+        $cpuData = $input['netdata_cpu'] ?? $input['netdata_metrics'] ?? [];
+        $cpuParser = new NetdataV3Metrics($cpuData);
+        $cpu = $cpuParser->parseCpuUsage();
+        $cpuDetails = $cpuParser->getCpuDetails();
+
+        // Parse RAM metrics - prefer new separate field, fall back to legacy combined field
+        $ramData = $input['netdata_ram'] ?? $input['netdata_metrics'] ?? [];
+        $ramParser = new NetdataV3Metrics($ramData);
+        $ram = $ramParser->parseRamUsage();
+        $memoryDetails = $ramParser->getMemoryDetails();
+
+        // Parse load averages - prefer new separate field
+        $loadData = $input['netdata_load'] ?? [];
+        $loadParser = new NetdataV3Metrics($loadData);
+        $loadAverages = $loadParser->parseLoadAverages();
+
+        // Parse uptime - prefer new separate field
+        $uptimeData = $input['netdata_uptime'] ?? [];
+        $uptimeParser = new NetdataV3Metrics($uptimeData);
+        $uptime = $uptimeParser->parseUptime();
+
+        // Build metric record
+        $metricData = [
+            'device_id' => $device->id,
+            'cpu' => $cpu,
+            'ram' => $ram,
+            'recorded_at' => $recordedAt,
+            'agent_version' => $input['agent_version'] ?? null,
+
+            // CPU details
+            'cpu_user' => $cpuDetails['user'],
+            'cpu_system' => $cpuDetails['system'],
+            'cpu_nice' => $cpuDetails['nice'],
+            'cpu_iowait' => $cpuDetails['iowait'],
+            'cpu_irq' => $cpuDetails['irq'],
+            'cpu_softirq' => $cpuDetails['softirq'],
+            'cpu_steal' => $cpuDetails['steal'],
+            'cpu_idle' => $cpuDetails['idle'],
+
+            // Load averages
+            'load1' => $loadAverages['load1'],
+            'load5' => $loadAverages['load5'],
+            'load15' => $loadAverages['load15'],
+
+            // Uptime
+            'uptime_seconds' => $uptime !== null ? (int) $uptime : null,
+
+            // Memory details
+            'memory_used_mib' => $memoryDetails['used_mib'],
+            'memory_free_mib' => $memoryDetails['free_mib'],
+            'memory_total_mib' => $memoryDetails['total_mib'],
+            'memory_cached_mib' => $memoryDetails['cached_mib'],
+            'memory_buffers_mib' => $memoryDetails['buffers_mib'],
+            'memory_available_mib' => $memoryDetails['available_mib'],
+
+            // Store full payload for debugging
+            'payload' => $input,
+        ];
+
+        $metric = DeviceMetric::create($metricData);
+
+        // Parse system info from netdata_info if present
+        $netdataInfo = $input['netdata_info'] ?? null;
+        $deviceUpdates = [
+            'last_seen' => now(),
+            'last_ip' => $request->ip(),
+        ];
+
+        if (is_array($netdataInfo)) {
+            // Netdata v3 /api/v3/info has agents array with system info
+            $agent = $netdataInfo['agents'][0] ?? null;
+            if (is_array($agent)) {
+                if (isset($agent['os_name'])) {
+                    $deviceUpdates['os_name'] = $agent['os_name'];
+                }
+                if (isset($agent['os_version'])) {
+                    $deviceUpdates['os_version'] = $agent['os_version'];
+                }
+                if (isset($agent['kernel_name'])) {
+                    $deviceUpdates['kernel_name'] = $agent['kernel_name'];
+                }
+                if (isset($agent['kernel_version'])) {
+                    $deviceUpdates['kernel_version'] = $agent['kernel_version'];
+                }
+                if (isset($agent['architecture'])) {
+                    $deviceUpdates['architecture'] = $agent['architecture'];
+                }
+            }
+
+            // Version info is at root level
+            if (isset($netdataInfo['version'])) {
+                $deviceUpdates['netdata_version'] = $netdataInfo['version'];
+            }
+        }
+
+        $device->forceFill($deviceUpdates)->save();
+
+        Log::info('api.metrics', [
+            'device_id' => $device->id,
+            'cpu' => $cpu,
+            'ram' => $ram,
+            'load1' => $loadAverages['load1'],
+            'format' => 'netdata_v3_raw',
+            'agent_version' => $input['agent_version'] ?? null,
+            'ip' => $request->ip(),
+        ]);
+
+        return response()->json(['message' => 'Metrics accepted.']);
     }
 }

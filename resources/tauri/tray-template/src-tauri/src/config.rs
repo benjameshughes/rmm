@@ -4,17 +4,29 @@ use std::path::PathBuf;
 /// Default interval for collecting and submitting metrics
 pub const DEFAULT_METRICS_INTERVAL_SECS: u64 = 60;
 
+/// Default interval for heartbeat (lightweight check-in)
+pub const DEFAULT_HEARTBEAT_INTERVAL_SECS: u64 = 30;
+
 /// Default interval for checking agent status with backend
 pub const DEFAULT_STATUS_CHECK_INTERVAL_SECS: u64 = 60;
 
 /// Default interval for polling enrollment status during device approval
 pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
 
+/// Default interval for checking for updates (24 hours)
+pub const DEFAULT_UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
 /// Default base URL placeholder (replaced at build time)
 pub const DEFAULT_BASE_URL: &str = "https://rmm.benjh.com";
+
+/// GitHub releases API URL for auto-updates
+pub const GITHUB_RELEASES_URL: &str = "https://api.github.com/repos/benjameshughes/rmm/releases/latest";
+
+/// Current agent version (from Cargo.toml)
+pub const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Application configuration
 #[derive(Debug, Clone)]
@@ -29,10 +41,16 @@ pub struct Config {
     pub log_file: PathBuf,
     /// Metrics collection interval in seconds
     pub metrics_interval: u64,
+    /// Heartbeat interval in seconds
+    pub heartbeat_interval: u64,
     /// Status check interval in seconds
     pub status_check_interval: u64,
     /// Enrollment poll interval in seconds
     pub enrollment_poll_interval: u64,
+    /// Update check interval in seconds
+    pub update_check_interval: u64,
+    /// Skip automatic updates
+    pub skip_updates: bool,
     /// Netdata API base URL
     pub netdata_url: String,
 }
@@ -62,8 +80,11 @@ impl Default for Config {
             key_file,
             log_file,
             metrics_interval: DEFAULT_METRICS_INTERVAL_SECS,
+            heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_SECS,
             status_check_interval: DEFAULT_STATUS_CHECK_INTERVAL_SECS,
             enrollment_poll_interval: DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS,
+            update_check_interval: DEFAULT_UPDATE_CHECK_INTERVAL_SECS,
+            skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }
     }
