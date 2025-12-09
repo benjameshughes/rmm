@@ -8,7 +8,7 @@
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
     <Product
         Id='*'
-        Name='RMM Agent'
+        Name='BenJH RMM'
         UpgradeCode='A1B2C3D4-E5F6-7890-ABCD-EF1234567890'
         Manufacturer='Ben Hughes'
         Language='1033'
@@ -17,7 +17,7 @@
 
         <Package Id='*'
             Keywords='Installer'
-            Description='RMM Agent - Remote Monitoring and Management'
+            Description='BenJH RMM - Remote Monitoring and Management'
             Manufacturer='Ben Hughes'
             InstallerVersion='450'
             Languages='1033'
@@ -31,11 +31,11 @@
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
-        <Property Id='DiskPrompt' Value='RMM Agent Installation'/>
+        <Property Id='DiskPrompt' Value='BenJH RMM Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='ProgramFiles64Folder' Name='PFiles'>
-                <Directory Id='APPLICATIONFOLDER' Name='RMM Agent'>
+                <Directory Id='APPLICATIONFOLDER' Name='BenJH RMM'>
                     <Component Id='RmmExeComponent' Guid='C3D4E5F6-A7B8-9012-CDEF-123456789012' Win64='yes'>
                         <File
                             Id='RmmExe'
@@ -61,10 +61,10 @@
 
             <!-- Data directory -->
             <Directory Id='CommonAppDataFolder'>
-                <Directory Id='RMMDataFolder' Name='RMM'>
+                <Directory Id='RMMDataFolder' Name='BenJH RMM'>
                     <Component Id='DataFolderComponent' Guid='E5F6A7B8-C9D0-1234-EF01-345678901234' Win64='yes'>
                         <CreateFolder/>
-                        <RegistryValue Root='HKLM' Key='Software\RMM Agent' Name='DataFolder' Type='string' Value='[RMMDataFolder]' KeyPath='yes'/>
+                        <RegistryValue Root='HKLM' Key='Software\BenJH RMM' Name='DataFolder' Type='string' Value='[RMMDataFolder]' KeyPath='yes'/>
                     </Component>
                 </Directory>
             </Directory>
@@ -72,8 +72,8 @@
 
         <Feature
             Id='MainFeature'
-            Title='RMM Agent'
-            Description='Installs the RMM monitoring agent and adds it to PATH.'
+            Title='BenJH RMM'
+            Description='Installs the BenJH RMM monitoring agent and adds it to PATH.'
             Level='1'
             ConfigurableDirectory='APPLICATIONFOLDER'
             AllowAdvertise='no'

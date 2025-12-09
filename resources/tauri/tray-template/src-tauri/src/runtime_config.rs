@@ -28,7 +28,7 @@ impl RuntimeConfig {
     /// Get the config file path based on platform
     fn config_path() -> PathBuf {
         #[cfg(target_os = "windows")]
-        let config_dir = PathBuf::from(r"C:\ProgramData\RMM");
+        let config_dir = PathBuf::from(r"C:\ProgramData\BenJH RMM");
 
         #[cfg(target_os = "macos")]
         let config_dir = dirs::data_dir()

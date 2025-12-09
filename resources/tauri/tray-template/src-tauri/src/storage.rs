@@ -18,6 +18,8 @@ use base64::{Engine as _, engine::general_purpose};
 /// Encrypt data using Windows DPAPI
 #[cfg(windows)]
 fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
+    const CRYPTPROTECT_LOCAL_MACHINE: u32 = 0x04;
+
     unsafe {
         let mut input_blob = CRYPTOAPI_BLOB {
             cbData: data.len() as u32,
@@ -35,7 +37,7 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
             ptr::null_mut(),  // Optional entropy
             ptr::null_mut(),  // Reserved
             ptr::null_mut(),  // Prompt struct
-            0,                // Flags
+            CRYPTPROTECT_LOCAL_MACHINE,  // Flags - use machine-wide encryption
             &mut output_blob,
         );
 
@@ -55,6 +57,8 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
 /// Decrypt data using Windows DPAPI
 #[cfg(windows)]
 fn decrypt_dpapi(encrypted_data: &[u8]) -> Result<Vec<u8>> {
+    const CRYPTPROTECT_LOCAL_MACHINE: u32 = 0x04;
+
     unsafe {
         let mut input_blob = CRYPTOAPI_BLOB {
             cbData: encrypted_data.len() as u32,
@@ -72,7 +76,7 @@ fn decrypt_dpapi(encrypted_data: &[u8]) -> Result<Vec<u8>> {
             ptr::null_mut(),  // Optional entropy
             ptr::null_mut(),  // Reserved
             ptr::null_mut(),  // Prompt struct
-            0,                // Flags
+            CRYPTPROTECT_LOCAL_MACHINE,  // Flags - use machine-wide decryption
             &mut output_blob,
         );
 

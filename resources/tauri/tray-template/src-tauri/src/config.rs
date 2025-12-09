@@ -40,7 +40,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         #[cfg(target_os = "windows")]
-        let data_dir = PathBuf::from(r"C:\ProgramData\RMM");
+        let data_dir = PathBuf::from(r"C:\ProgramData\BenJH RMM");
 
         #[cfg(target_os = "macos")]
         let data_dir = {

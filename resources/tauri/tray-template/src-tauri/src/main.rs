@@ -37,11 +37,11 @@ use windows_service::{
 };
 
 #[cfg(windows)]
-const SERVICE_NAME: &str = "RMMAgent";
+const SERVICE_NAME: &str = "BenJHRMM";
 #[cfg(windows)]
-const SERVICE_DISPLAY_NAME: &str = "RMM Monitoring Agent";
+const SERVICE_DISPLAY_NAME: &str = "BenJH RMM";
 #[cfg(windows)]
-const SERVICE_DESCRIPTION: &str = "Remote Monitoring and Management Agent - collects system metrics and enables remote management";
+const SERVICE_DESCRIPTION: &str = "BenJH Remote Monitoring and Management Agent - collects system metrics and enables remote management";
 
 /// Service exit codes
 #[cfg(windows)]
