@@ -161,6 +161,62 @@ Log "Cleanup complete."
 
 
 # ===================================================================
+# STEP 1.5 — CLEANUP EXISTING NETDATA
+# ===================================================================
+
+Log "Checking for existing Netdata installation..."
+
+# Stop Netdata service
+try {
+    $netdataSvc = Get-Service -Name "netdata" -ErrorAction SilentlyContinue
+    if ($netdataSvc) {
+        Log "Stopping Netdata service..."
+        Stop-Service -Name "netdata" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+} catch { }
+
+# Uninstall Netdata MSI
+try {
+    $netdataProduct = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Netdata*" } | Select-Object -First 1
+    if ($netdataProduct) {
+        Log "Uninstalling Netdata: $($netdataProduct.Name)..."
+        $netdataProduct.Uninstall() | Out-Null
+        Start-Sleep -Seconds 3
+        Log "Netdata MSI uninstalled"
+    }
+} catch {
+    Log "No Netdata MSI found or uninstall failed: $_"
+}
+
+# Remove Netdata directories
+$netdataDirs = @(
+    "$env:ProgramFiles\Netdata",
+    "$env:ProgramData\Netdata",
+    "C:\Program Files\Netdata",
+    "C:\ProgramData\Netdata"
+)
+
+foreach ($dir in $netdataDirs) {
+    if (Test-Path $dir) {
+        Log "Removing Netdata directory: $dir"
+        Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Remove Netdata service registration (if MSI uninstall didn't)
+try {
+    $svc = Get-Service -Name "netdata" -ErrorAction SilentlyContinue
+    if ($svc) {
+        Log "Removing orphaned Netdata service..."
+        sc.exe delete netdata | Out-Null
+    }
+} catch { }
+
+Log "Netdata cleanup complete."
+
+
+# ===================================================================
 # STEP 2 — INSTALL NETDATA
 # ===================================================================
 
