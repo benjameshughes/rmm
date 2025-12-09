@@ -508,6 +508,11 @@ fn main() -> Result<()> {
     // Handle URL change detection
     if cli.url.is_some() {
         check_url_change(&mut runtime_config, cli.url.as_deref())?;
+        // If no subcommand given, just print success and exit
+        if cli.command.is_none() {
+            println!("Server URL set to: {}", cli.url.as_ref().unwrap());
+            return Ok(());
+        }
     }
 
     // Handle reset flag
