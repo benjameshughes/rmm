@@ -42,6 +42,12 @@ pub struct RawMetricsPayload {
     /// Raw Netdata /api/v3/data response for uptime metrics
     #[serde(skip_serializing_if = "Option::is_none")]
     pub netdata_uptime: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for disk space metrics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_disk: Option<serde_json::Value>,
+    /// Raw Netdata /api/v3/data response for network metrics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_net: Option<serde_json::Value>,
 }
 
 // ============================================================================
@@ -118,12 +124,14 @@ impl MetricsCollector {
         debug!("Collecting raw metrics from Netdata");
 
         // Fetch all contexts in parallel
-        let (netdata_info, netdata_cpu, netdata_ram, netdata_load, netdata_uptime) = tokio::join!(
+        let (netdata_info, netdata_cpu, netdata_ram, netdata_load, netdata_uptime, netdata_disk, netdata_net) = tokio::join!(
             self.fetch_netdata_info(),
             self.fetch_netdata_context("system.cpu"),
             self.fetch_netdata_context("system.ram"),
             self.fetch_netdata_context("system.load"),
             self.fetch_netdata_context("system.uptime"),
+            self.fetch_netdata_context("disk.space"),
+            self.fetch_netdata_context("system.net"),
         );
 
         RawMetricsPayload {
@@ -135,6 +143,8 @@ impl MetricsCollector {
             netdata_ram,
             netdata_load,
             netdata_uptime,
+            netdata_disk,
+            netdata_net,
         }
     }
 
@@ -321,6 +331,8 @@ mod tests {
             netdata_ram: None,
             netdata_load: None,
             netdata_uptime: None,
+            netdata_disk: None,
+            netdata_net: None,
         };
 
         let json = serde_json::to_string(&payload).unwrap();
