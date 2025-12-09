@@ -53,10 +53,12 @@ class DeviceMetricsController extends Controller
         $ram = $this->parseRamMetric($input['memory'] ?? $input['ram'] ?? null);
 
         // Parse extended metrics from v3 format
+        $cpuData = $input['cpu'] ?? null;
         $load = $input['load'] ?? null;
         $uptime = $input['uptime'] ?? null;
         $alerts = $input['alerts'] ?? null;
         $memory = $input['memory'] ?? null;
+        $processes = $input['processes'] ?? null;
 
         $recordedAt = $input['recorded_at'] ?? ($input['timestamp'] ?? null);
         $recordedAt = $recordedAt ? Carbon::parse($recordedAt) : now();
@@ -69,6 +71,18 @@ class DeviceMetricsController extends Controller
             'recorded_at' => $recordedAt,
             'agent_version' => $input['agent_version'] ?? null,
         ];
+
+        // Add CPU state details if present
+        if (is_array($cpuData)) {
+            $metricData['cpu_user'] = $cpuData['user'] ?? null;
+            $metricData['cpu_system'] = $cpuData['system'] ?? null;
+            $metricData['cpu_nice'] = $cpuData['nice'] ?? null;
+            $metricData['cpu_iowait'] = $cpuData['iowait'] ?? null;
+            $metricData['cpu_irq'] = $cpuData['irq'] ?? null;
+            $metricData['cpu_softirq'] = $cpuData['softirq'] ?? null;
+            $metricData['cpu_steal'] = $cpuData['steal'] ?? null;
+            $metricData['cpu_idle'] = $cpuData['idle'] ?? null;
+        }
 
         // Add load averages if present
         if (is_array($load)) {
@@ -87,6 +101,9 @@ class DeviceMetricsController extends Controller
             $metricData['memory_used_mib'] = $memory['used_mib'] ?? null;
             $metricData['memory_free_mib'] = $memory['free_mib'] ?? null;
             $metricData['memory_total_mib'] = $memory['total_mib'] ?? null;
+            $metricData['memory_cached_mib'] = $memory['cached_mib'] ?? null;
+            $metricData['memory_buffers_mib'] = $memory['buffers_mib'] ?? null;
+            $metricData['memory_available_mib'] = $memory['available_mib'] ?? null;
         }
 
         // Add alerts if present
@@ -96,10 +113,51 @@ class DeviceMetricsController extends Controller
             $metricData['alerts_critical'] = $alerts['critical'] ?? null;
         }
 
+        // Add process metrics if present
+        if (is_array($processes)) {
+            $metricData['processes_running'] = $processes['running'] ?? null;
+            $metricData['processes_blocked'] = $processes['blocked'] ?? null;
+            $metricData['processes_total'] = $processes['total'] ?? null;
+        }
+
         // Store full payload for debugging/future use
         $metricData['payload'] = $input;
 
-        DeviceMetric::create($metricData);
+        $metric = DeviceMetric::create($metricData);
+
+        // Store disk metrics if present
+        if (isset($input['disks']) && is_array($input['disks'])) {
+            foreach ($input['disks'] as $diskData) {
+                if (isset($diskData['mount_point'])) {
+                    $metric->diskMetrics()->create([
+                        'mount_point' => $diskData['mount_point'],
+                        'filesystem' => $diskData['filesystem'] ?? null,
+                        'used_gb' => $diskData['used_gb'] ?? null,
+                        'available_gb' => $diskData['available_gb'] ?? null,
+                        'total_gb' => $diskData['total_gb'] ?? null,
+                        'usage_percent' => $diskData['usage_percent'] ?? null,
+                        'read_kbps' => $diskData['read_kbps'] ?? null,
+                        'write_kbps' => $diskData['write_kbps'] ?? null,
+                        'utilization_percent' => $diskData['utilization_percent'] ?? null,
+                    ]);
+                }
+            }
+        }
+
+        // Store network metrics if present
+        if (isset($input['network']) && is_array($input['network'])) {
+            foreach ($input['network'] as $networkData) {
+                if (isset($networkData['interface'])) {
+                    $metric->networkMetrics()->create([
+                        'interface' => $networkData['interface'],
+                        'received_kbps' => $networkData['received_kbps'] ?? null,
+                        'sent_kbps' => $networkData['sent_kbps'] ?? null,
+                        'received_bytes' => $networkData['received_bytes'] ?? null,
+                        'sent_bytes' => $networkData['sent_bytes'] ?? null,
+                    ]);
+                }
+            }
+        }
 
         // Update device info from system_info if present
         $systemInfo = $input['system_info'] ?? null;
@@ -114,6 +172,27 @@ class DeviceMetricsController extends Controller
             }
             if (isset($systemInfo['os_version'])) {
                 $deviceUpdates['os_version'] = $systemInfo['os_version'];
+            }
+            if (isset($systemInfo['netdata_version'])) {
+                $deviceUpdates['netdata_version'] = $systemInfo['netdata_version'];
+            }
+            if (isset($systemInfo['kernel_name'])) {
+                $deviceUpdates['kernel_name'] = $systemInfo['kernel_name'];
+            }
+            if (isset($systemInfo['kernel_version'])) {
+                $deviceUpdates['kernel_version'] = $systemInfo['kernel_version'];
+            }
+            if (isset($systemInfo['architecture'])) {
+                $deviceUpdates['architecture'] = $systemInfo['architecture'];
+            }
+            if (isset($systemInfo['virtualization'])) {
+                $deviceUpdates['virtualization'] = $systemInfo['virtualization'];
+            }
+            if (isset($systemInfo['container'])) {
+                $deviceUpdates['container'] = $systemInfo['container'];
+            }
+            if (isset($systemInfo['is_k8s_node'])) {
+                $deviceUpdates['is_k8s_node'] = (bool) $systemInfo['is_k8s_node'];
             }
         }
 

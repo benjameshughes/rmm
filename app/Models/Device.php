@@ -27,6 +27,13 @@ class Device extends Model
         'disks',
         'last_ip',
         'last_seen',
+        'netdata_version',
+        'kernel_name',
+        'kernel_version',
+        'architecture',
+        'virtualization',
+        'container',
+        'is_k8s_node',
     ];
 
     public const STATUS_PENDING = 'pending';
