@@ -20,7 +20,7 @@ pub const DEFAULT_UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
 /// Default base URL placeholder (replaced at build time)
-pub const DEFAULT_BASE_URL: &str = "https://rmm.benjh.com";
+pub const DEFAULT_BASE_URL: &str = "https://rmm.fnstr.uk";
 
 /// GitHub releases API URL for auto-updates
 pub const GITHUB_RELEASES_URL: &str = "https://api.github.com/repos/benjameshughes/rmm/releases/latest";
