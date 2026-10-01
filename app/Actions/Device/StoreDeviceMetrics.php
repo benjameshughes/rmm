@@ -11,6 +11,7 @@ use App\Events\MetricsReceived;
 use App\Models\Device;
 use App\Models\DeviceMetric;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 final class StoreDeviceMetrics
 {
@@ -25,7 +26,7 @@ final class StoreDeviceMetrics
 
     private function isRawNetdataFormat(array $input): bool
     {
-        return isset($input['netdata_cpu']) || isset($input['netdata_ram']) || isset($input['netdata_metrics']);
+        return collect($input)->keys()->contains(fn (int|string $key): bool => Str::startsWith((string) $key, 'netdata_'));
     }
 
     private function handleStandardMetrics(Device $device, array $input, ?string $ip): DeviceMetric
@@ -71,8 +72,8 @@ final class StoreDeviceMetrics
 
         $metric = DeviceMetric::create($metricData);
 
-        $this->storeDiskMetrics($metric, $input['disks'] ?? null);
-        $this->storeNetworkMetrics($metric, $input['network'] ?? null);
+        $metric->recordDisks($input['disks'] ?? null);
+        $metric->recordNetworkInterfaces($input['network'] ?? null);
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip);
 
         MetricsReceived::dispatch($device, $metric);
@@ -121,6 +122,8 @@ final class StoreDeviceMetrics
             'payload' => $input,
         ]);
 
+        $metric->recordDisks((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
+        $metric->recordNetworkInterfaces($this->networkTotals(new NetdataV3Metrics($input['netdata_net'] ?? [])));
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip);
 
         MetricsReceived::dispatch($device, $metric);
@@ -204,42 +207,12 @@ final class StoreDeviceMetrics
         return $metricData;
     }
 
-    private function storeDiskMetrics(DeviceMetric $metric, mixed $disks): void
+    /** @return array<int, array{interface: string, received_kbps: float, sent_kbps: float}> */
+    private function networkTotals(NetdataV3Metrics $parser): array
     {
-        if (! is_array($disks)) {
-            return;
-        }
+        $totals = $parser->parseNetworkTotals();
 
-        collect($disks)
-            ->filter(fn (array $disk): bool => isset($disk['mount_point']))
-            ->each(fn (array $disk) => $metric->diskMetrics()->create([
-                'mount_point' => $disk['mount_point'],
-                'filesystem' => $disk['filesystem'] ?? null,
-                'used_gb' => $disk['used_gb'] ?? null,
-                'available_gb' => $disk['available_gb'] ?? null,
-                'total_gb' => $disk['total_gb'] ?? null,
-                'usage_percent' => $disk['usage_percent'] ?? null,
-                'read_kbps' => $disk['read_kbps'] ?? null,
-                'write_kbps' => $disk['write_kbps'] ?? null,
-                'utilization_percent' => $disk['utilization_percent'] ?? null,
-            ]));
-    }
-
-    private function storeNetworkMetrics(DeviceMetric $metric, mixed $network): void
-    {
-        if (! is_array($network)) {
-            return;
-        }
-
-        collect($network)
-            ->filter(fn (array $iface): bool => isset($iface['interface']))
-            ->each(fn (array $iface) => $metric->networkMetrics()->create([
-                'interface' => $iface['interface'],
-                'received_kbps' => $iface['received_kbps'] ?? null,
-                'sent_kbps' => $iface['sent_kbps'] ?? null,
-                'received_bytes' => $iface['received_bytes'] ?? null,
-                'sent_bytes' => $iface['sent_bytes'] ?? null,
-            ]));
+        return $totals === null ? [] : [['interface' => 'total', ...$totals]];
     }
 
     private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip): void

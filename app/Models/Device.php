@@ -235,14 +235,17 @@ final class Device extends Model
      */
     public function diskUsage(): Collection
     {
-        return collect($this->disks ?? [])->map(function (array $disk): array {
+        $reportedVolumes = $this->latestMetric?->diskMetrics
+            ->map(fn (DeviceDiskMetric $volume): array => $volume->only(['mount_point', 'total_gb', 'available_gb']));
+
+        return collect($reportedVolumes?->isNotEmpty() ? $reportedVolumes : ($this->disks ?? []))->map(function (array $disk): array {
             $totalGb = isset($disk['total_gb']) ? (float) $disk['total_gb'] : null;
             $availableGb = isset($disk['available_gb']) ? (float) $disk['available_gb'] : null;
             $usedPercent = $totalGb > 0 ? (($totalGb - (float) $availableGb) / $totalGb) * 100 : null;
 
             return [
-                'name' => $disk['name'] ?? '—',
-                'mountPoint' => $disk['mount_point'] ?? null,
+                'name' => $disk['name'] ?? $disk['mount_point'] ?? '—',
+                'mountPoint' => isset($disk['name']) ? ($disk['mount_point'] ?? null) : null,
                 'availableGb' => $availableGb,
                 'totalGb' => $totalGb,
                 'usedPercent' => $usedPercent,

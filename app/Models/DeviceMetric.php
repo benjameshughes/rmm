@@ -75,6 +75,46 @@ final class DeviceMetric extends Model
         return $this->hasMany(DeviceNetworkMetric::class);
     }
 
+    /** @param array<int, array<string, mixed>>|mixed $disks */
+    public function recordDisks(mixed $disks): void
+    {
+        if (! is_array($disks)) {
+            return;
+        }
+
+        collect($disks)
+            ->filter(fn (mixed $disk): bool => is_array($disk) && isset($disk['mount_point']))
+            ->each(fn (array $disk) => $this->diskMetrics()->create([
+                'mount_point' => $disk['mount_point'],
+                'filesystem' => $disk['filesystem'] ?? null,
+                'used_gb' => $disk['used_gb'] ?? null,
+                'available_gb' => $disk['available_gb'] ?? null,
+                'total_gb' => $disk['total_gb'] ?? null,
+                'usage_percent' => $disk['usage_percent'] ?? null,
+                'read_kbps' => $disk['read_kbps'] ?? null,
+                'write_kbps' => $disk['write_kbps'] ?? null,
+                'utilization_percent' => $disk['utilization_percent'] ?? null,
+            ]));
+    }
+
+    /** @param array<int, array<string, mixed>>|mixed $interfaces */
+    public function recordNetworkInterfaces(mixed $interfaces): void
+    {
+        if (! is_array($interfaces)) {
+            return;
+        }
+
+        collect($interfaces)
+            ->filter(fn (mixed $interface): bool => is_array($interface) && isset($interface['interface']))
+            ->each(fn (array $interface) => $this->networkMetrics()->create([
+                'interface' => $interface['interface'],
+                'received_kbps' => $interface['received_kbps'] ?? null,
+                'sent_kbps' => $interface['sent_kbps'] ?? null,
+                'received_bytes' => $interface['received_bytes'] ?? null,
+                'sent_bytes' => $interface['sent_bytes'] ?? null,
+            ]));
+    }
+
     public function uptimeForHumans(): ?string
     {
         if ($this->uptime_seconds === null) {

@@ -37,14 +37,14 @@ final class Show extends Component
     {
         $this->authorize('view', $device);
 
-        $this->device = $device->load(['latestMetric', 'group', 'tags']);
+        $this->device = $device->load(['latestMetric.diskMetrics', 'group', 'tags']);
         $this->syncSelectionsFromDevice();
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
     public function refreshDevice(): void
     {
-        $this->device->refresh();
+        $this->device->refresh()->load('latestMetric.diskMetrics');
         $this->syncSelectionsFromDevice();
     }
 

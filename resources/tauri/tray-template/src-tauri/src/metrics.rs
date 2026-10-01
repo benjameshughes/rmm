@@ -235,9 +235,22 @@ impl MetricsCollector {
 
     /// Fetch raw data from a Netdata v3 API context (no parsing)
     async fn fetch_netdata_context(&self, context: &str) -> Option<serde_json::Value> {
+        self.fetch_netdata_query(context, None).await
+    }
+
+    /// `group_by` keeps instances apart: without it Netdata averages every
+    /// instance of a context together (e.g. all disk volumes into one number).
+    async fn fetch_netdata_query(
+        &self,
+        context: &str,
+        group_by: Option<&str>,
+    ) -> Option<serde_json::Value> {
+        let group_by = group_by
+            .map(|group| format!("&group_by={}", group))
+            .unwrap_or_default();
         let url = format!(
-            "{}/api/v3/data?contexts={}&format=json&points=1&time_group=average",
-            self.config.netdata_url, context
+            "{}/api/v3/data?contexts={}&format=json&points=1&time_group=average{}",
+            self.config.netdata_url, context, group_by
         );
         debug!("Fetching Netdata {} from: {}", context, url);
 
@@ -267,7 +280,7 @@ impl MetricsCollector {
             self.fetch_netdata_context("system.ram"),
             self.fetch_netdata_context("system.load"),
             self.fetch_netdata_context("system.uptime"),
-            self.fetch_netdata_context("disk.space"),
+            self.fetch_netdata_query("disk.space", Some("instance,dimension")),
             self.fetch_netdata_context("system.net"),
         );
 

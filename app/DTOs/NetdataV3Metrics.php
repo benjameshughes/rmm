@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+
 final class NetdataV3Metrics
 {
     /** @var array<string, mixed> */
@@ -156,18 +159,77 @@ final class NetdataV3Metrics
         return $this->getAverageValues()[0] ?? null;
     }
 
+    /**
+     * Per-volume disk rows from a `disk.space` query grouped by instance and
+     * dimension (ids look like `used,disk_space.C:@<node>`). Responses grouped by
+     * dimension only average every volume together, so they yield nothing.
+     *
+     * @param  array<int, string>  $ignoredVolumePatterns
+     * @return array<int, array{mount_point: string, used_gb: float, available_gb: float, total_gb: float, usage_percent: float|null}>
+     */
+    public function parseDiskVolumes(array $ignoredVolumePatterns = []): array
+    {
+        return collect($this->getDimensionAverages())
+            ->map(fn (float $value, string $id): ?array => preg_match('/^(?<dimension>avail|used),disk_space\.(?<volume>.+)@[^@]+$/', $id, $match)
+                ? ['volume' => $match['volume'], 'dimension' => $match['dimension'], 'value' => $value]
+                : null)
+            ->filter()
+            ->reject(fn (array $dimension): bool => Str::is($ignoredVolumePatterns, $dimension['volume']))
+            ->groupBy('volume')
+            ->map(fn (Collection $dimensions, string $volume): array => $this->diskVolumeRow(
+                $volume,
+                (float) ($dimensions->firstWhere('dimension', 'used')['value'] ?? 0),
+                (float) ($dimensions->firstWhere('dimension', 'avail')['value'] ?? 0),
+            ))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Machine-wide throughput from a `system.net` query. Netdata reports sent
+     * traffic as a negative number.
+     *
+     * @return array{received_kbps: float, sent_kbps: float}|null
+     */
+    public function parseNetworkTotals(): ?array
+    {
+        $averages = $this->getDimensionAverages();
+
+        if (! isset($averages['received'], $averages['sent'])) {
+            return null;
+        }
+
+        return [
+            'received_kbps' => round(abs($averages['received']), 2),
+            'sent_kbps' => round(abs($averages['sent']), 2),
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function getRawData(): array
     {
         return $this->data;
     }
 
+    /** @return array{mount_point: string, used_gb: float, available_gb: float, total_gb: float, usage_percent: float|null} */
+    private function diskVolumeRow(string $volume, float $usedGb, float $availableGb): array
+    {
+        $totalGb = $usedGb + $availableGb;
+
+        return [
+            'mount_point' => $volume,
+            'used_gb' => round($usedGb, 2),
+            'available_gb' => round($availableGb, 2),
+            'total_gb' => round($totalGb, 2),
+            'usage_percent' => $totalGb > 0 ? round($usedGb / $totalGb * 100, 2) : null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
     private function decodeJson(string $input): array
     {
-        try {
-            return json_decode($input, true, 512, JSON_THROW_ON_ERROR) ?? [];
-        } catch (\Throwable) {
-            return [];
-        }
+        $decoded = json_decode($input, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }
