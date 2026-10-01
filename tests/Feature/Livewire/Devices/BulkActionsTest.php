@@ -123,7 +123,7 @@ it('requires authentication for bulk actions', function (): void {
     $device = Device::factory()->active()->create();
 
     Livewire::test(Index::class)
-        ->set('selectedDevices', [(string) $device->id])
-        ->call('bulkRestart')
-        ->assertUnauthorized();
+        ->assertForbidden();
+
+    expect($device->commands()->count())->toBe(0);
 });

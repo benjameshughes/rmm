@@ -79,17 +79,7 @@
                             </div>
                         </flux:table.cell>
                         <flux:table.cell>
-                            @if($device->status === \App\Enums\DeviceStatus::Active)
-                                @if($device->isOnline)
-                                    <flux:badge color="green">Online</flux:badge>
-                                @else
-                                    <flux:badge color="red">Offline</flux:badge>
-                                @endif
-                            @elseif($device->status === \App\Enums\DeviceStatus::Pending)
-                                <flux:badge color="amber">Pending</flux:badge>
-                            @else
-                                <flux:badge color="gray">Revoked</flux:badge>
-                            @endif
+                            <flux:badge :color="$device->statusColor()">{{ $device->statusLabel() }}</flux:badge>
                         </flux:table.cell>
                         <flux:table.cell>
                             @if($device->os_name)

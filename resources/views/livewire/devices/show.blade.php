@@ -2,17 +2,7 @@
     <div class="flex items-center justify-between">
         <flux:heading size="xl">{{ $device->hostname }}</flux:heading>
         <div class="flex items-center gap-2">
-            @if($device->status === \App\Enums\DeviceStatus::Active)
-                @if($device->isOnline)
-                    <flux:badge color="green" size="lg">Online</flux:badge>
-                @else
-                    <flux:badge color="red" size="lg">Offline</flux:badge>
-                @endif
-            @elseif($device->status === \App\Enums\DeviceStatus::Pending)
-                <flux:badge color="amber" size="lg">Pending</flux:badge>
-            @else
-                <flux:badge color="gray" size="lg">Revoked</flux:badge>
-            @endif
+            <flux:badge :color="$device->statusColor()" size="lg">{{ $device->statusLabel() }}</flux:badge>
         </div>
     </div>
     <flux:separator variant="subtle" />
@@ -52,25 +42,7 @@
 
         <flux:card class="space-y-1">
             <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">Uptime</flux:text>
-            @if(optional($device->latestMetric)->uptime_seconds !== null)
-                @php
-                    $uptime = $device->latestMetric->uptime_seconds;
-                    $days = floor($uptime / 86400);
-                    $hours = floor(($uptime % 86400) / 3600);
-                    $minutes = floor(($uptime % 3600) / 60);
-                @endphp
-                <flux:heading size="xl">
-                    @if($days > 0)
-                        {{ $days }}d {{ $hours }}h
-                    @elseif($hours > 0)
-                        {{ $hours }}h {{ $minutes }}m
-                    @else
-                        {{ $minutes }}m
-                    @endif
-                </flux:heading>
-            @else
-                <flux:heading size="xl">—</flux:heading>
-            @endif
+            <flux:heading size="xl">{{ $device->latestMetric?->uptimeForHumans() ?? '—' }}</flux:heading>
         </flux:card>
     </div>
 
@@ -211,19 +183,16 @@
                     <dd class="font-medium font-mono">{{ $device->last_ip ?? '—' }}</dd>
                 </div>
                 <flux:separator variant="subtle" />
-                @php $apiKeyState = $device->apiKeyState(); @endphp
                 <div class="flex items-center justify-between gap-4">
                     <dt class="text-zinc-500 dark:text-zinc-400">API Key</dt>
                     <dd class="flex items-center gap-2 font-medium">
                         <flux:badge size="sm" :color="$apiKeyState->color()">{{ $apiKeyState->label() }}</flux:badge>
-                        @if($apiKeyState === \App\Enums\ApiKeyState::Claimed)
-                            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">{{ $device->api_key_claimed_at->diffForHumans() }}</flux:text>
-                        @elseif($apiKeyState === \App\Enums\ApiKeyState::AwaitingAgent && $device->api_key_issued_at)
-                            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">issued {{ $device->api_key_issued_at->diffForHumans() }}</flux:text>
+                        @if($apiKeyStateDetail)
+                            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">{{ $apiKeyStateDetail }}</flux:text>
                         @endif
                     </dd>
                 </div>
-                @if($device->status !== \App\Enums\DeviceStatus::Pending)
+                @if($device->status->canResetEnrolment())
                     <flux:separator variant="subtle" />
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-zinc-500 dark:text-zinc-400">Enrolment</dt>
@@ -290,37 +259,31 @@
     </div>
 
     {{-- Disk Storage --}}
-    @if($device->disks && count($device->disks) > 0)
+    @if($diskUsage->isNotEmpty())
         <flux:card>
             <flux:heading size="sm" class="mb-4">Disk Storage</flux:heading>
             <div class="space-y-4">
-                @foreach($device->disks as $disk)
-                    @php
-                        $usedPercent = isset($disk['total_gb']) && $disk['total_gb'] > 0
-                            ? (($disk['total_gb'] - $disk['available_gb']) / $disk['total_gb']) * 100
-                            : 0;
-                        $barColor = $usedPercent > 90 ? 'bg-red-500' : ($usedPercent > 75 ? 'bg-amber-500' : 'bg-blue-500');
-                    @endphp
+                @foreach($diskUsage as $disk)
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <div>
-                                <flux:text class="font-medium">{{ $disk['name'] ?? '—' }}</flux:text>
-                                @if(isset($disk['mount_point']))
-                                    <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $disk['mount_point'] }}</flux:text>
+                                <flux:text class="font-medium">{{ $disk['name'] }}</flux:text>
+                                @if($disk['mountPoint'])
+                                    <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $disk['mountPoint'] }}</flux:text>
                                 @endif
                             </div>
-                            @if(isset($disk['total_gb']) && isset($disk['available_gb']))
+                            @if($disk['totalGb'] !== null && $disk['availableGb'] !== null)
                                 <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">
-                                    {{ number_format($disk['available_gb'], 1) }} GB free of {{ number_format($disk['total_gb'], 1) }} GB
+                                    {{ number_format($disk['availableGb'], 1) }} GB free of {{ number_format($disk['totalGb'], 1) }} GB
                                 </flux:text>
                             @endif
                         </div>
-                        @if(isset($disk['total_gb']) && $disk['total_gb'] > 0)
+                        @if($disk['usedPercent'] !== null)
                             <div class="h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                                <div class="h-full {{ $barColor }} rounded-full transition-all" style="width: {{ number_format($usedPercent, 1) }}%"></div>
+                                <div class="h-full {{ $disk['barColor'] }} rounded-full transition-all" style="width: {{ number_format($disk['usedPercent'], 1) }}%"></div>
                             </div>
                             <flux:text size="xs" class="mt-1 text-zinc-500 dark:text-zinc-400">
-                                {{ number_format($usedPercent, 1) }}% used
+                                {{ number_format($disk['usedPercent'], 1) }}% used
                             </flux:text>
                         @endif
                     </div>

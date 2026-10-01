@@ -12,7 +12,9 @@ use App\Models\Script;
 use App\Models\Tag;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -34,6 +36,15 @@ final class Index extends Component
     public bool $showBulkScriptModal = false;
 
     public ?int $bulkScriptId = null;
+
+    public function mount(): void
+    {
+        $this->authorize('viewAny', Device::class);
+    }
+
+    #[On('echo-private:devices,DeviceEnrolled')]
+    #[On('echo-private:devices,DeviceUpdated')]
+    public function refreshDevices(): void {}
 
     public function updatingSearch(): void
     {
@@ -93,12 +104,10 @@ final class Index extends Component
 
     public function bulkRunScript(BulkExecuteScript $action): void
     {
-        abort_unless(auth()->check(), 401);
         abort_unless($this->bulkScriptId !== null, 422);
 
         $script = Script::findOrFail($this->bulkScriptId);
-        $devices = Device::whereIn('id', $this->selectedDevices)->get();
-        $action($script, $devices, auth()->user());
+        $action($script, $this->authorizedSelectedDevices(), auth()->user());
 
         $this->showBulkScriptModal = false;
         $this->reset('bulkScriptId');
@@ -135,18 +144,25 @@ final class Index extends Component
 
     private function runSystemScript(ExecuteScriptOnDevice $action, Device $device, string $slug): void
     {
-        abort_unless(auth()->check(), 401);
+        $this->authorize('runCommands', $device);
         $action(Script::findSystem($slug), $device, auth()->user());
         $this->dispatch('command-queued');
     }
 
     private function bulkRunSystemScript(BulkExecuteScript $action, string $slug): void
     {
-        abort_unless(auth()->check(), 401);
-        $devices = Device::whereIn('id', $this->selectedDevices)->get();
-        $action(Script::findSystem($slug), $devices, auth()->user());
+        $action(Script::findSystem($slug), $this->authorizedSelectedDevices(), auth()->user());
         $this->clearSelection();
         $this->dispatch('command-queued');
+    }
+
+    /** @return Collection<int, Device> */
+    private function authorizedSelectedDevices(): Collection
+    {
+        return Device::query()
+            ->whereIn('id', $this->selectedDevices)
+            ->get()
+            ->each(fn (Device $device) => $this->authorize('runCommands', $device));
     }
 
     protected function query(): Builder

@@ -11,11 +11,21 @@ use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
 final class Pending extends Component
 {
+    public function mount(): void
+    {
+        $this->authorize('viewAny', Device::class);
+    }
+
+    #[On('echo-private:devices,DeviceEnrolled')]
+    #[On('echo-private:devices,DeviceUpdated')]
+    public function refreshDevices(): void {}
+
     public function render(): View
     {
         $devices = Device::query()
@@ -31,9 +41,8 @@ final class Pending extends Component
 
     public function approve(int $deviceId): void
     {
-        abort_unless(auth()->check(), 401);
-
         $device = Device::findOrFail($deviceId);
+        $this->authorize('approve', $device);
 
         if ($device->status !== DeviceStatus::Pending) {
             $this->dispatch('notify', message: 'Only pending devices can be approved');
@@ -47,9 +56,9 @@ final class Pending extends Component
 
     public function reject(int $deviceId): void
     {
-        abort_unless(auth()->check(), 401);
-
         $device = Device::findOrFail($deviceId);
+        $this->authorize('reject', $device);
+
         $device->status = DeviceStatus::Revoked;
         $device->save();
         $this->dispatch('notify', message: 'Device rejected');

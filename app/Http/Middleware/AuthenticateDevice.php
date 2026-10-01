@@ -13,8 +13,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class AuthenticateDevice
 {
-    public const int MAX_FAILED_ATTEMPTS_PER_MINUTE = 20;
-
     public function handle(Request $request, Closure $next): Response
     {
         $apiKey = $request->header('X-Agent-Key') ?? $request->header('X-Device-Key');
@@ -38,7 +36,7 @@ final class AuthenticateDevice
     private function rejectFailedAttempt(Request $request, bool $hasKey): Response
     {
         $throttleKey = self::throttleKey($request);
-        $isLockedOut = RateLimiter::tooManyAttempts($throttleKey, self::MAX_FAILED_ATTEMPTS_PER_MINUTE);
+        $isLockedOut = RateLimiter::tooManyAttempts($throttleKey, config('devices.auth.max_failed_attempts_per_minute'));
 
         Log::warning('api.device_auth.failed', [
             'reason' => match (true) {

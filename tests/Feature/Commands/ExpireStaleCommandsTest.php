@@ -54,3 +54,17 @@ it('leaves commands that are still within their window alone', function (): void
     expect($pending->refresh()->status)->toBe(CommandStatus::Pending);
     expect($completed->refresh()->status)->toBe(CommandStatus::Completed);
 });
+
+it('takes the grace period from config', function (): void {
+    config(['commands.stale_grace_seconds' => 0]);
+
+    $command = DeviceCommand::factory()->create([
+        'status' => CommandStatus::Running,
+        'timeout_seconds' => 60,
+        'started_at' => now()->subMinutes(2),
+    ]);
+
+    $this->artisan('commands:expire-stale')->assertSuccessful();
+
+    expect($command->refresh()->status)->toBe(CommandStatus::TimedOut);
+});

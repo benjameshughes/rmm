@@ -72,8 +72,7 @@ describe('Device Index Commands', function (): void {
         $device = Device::factory()->active()->create();
 
         Livewire::test(Index::class)
-            ->call('powerOff', $device->id)
-            ->assertUnauthorized();
+            ->assertForbidden();
 
         expect(DeviceCommand::count())->toBe(0);
     });
@@ -198,8 +197,7 @@ describe('Device Show Commands', function (): void {
         $device = Device::factory()->active()->create();
 
         Livewire::test(Show::class, ['device' => $device])
-            ->call('powerOff')
-            ->assertUnauthorized();
+            ->assertForbidden();
 
         expect(DeviceCommand::count())->toBe(0);
     });

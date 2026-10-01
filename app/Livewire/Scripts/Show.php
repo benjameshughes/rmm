@@ -10,6 +10,7 @@ use App\Models\Device;
 use App\Models\Script;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
@@ -28,12 +29,15 @@ final class Show extends Component
         $this->script = $script;
     }
 
+    #[On('echo-private:devices,CommandUpdated')]
+    public function refreshExecutions(): void {}
+
     public function executeOnDevice(ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
         abort_unless($this->selectedDeviceId !== null, 422);
 
         $device = Device::findOrFail($this->selectedDeviceId);
+        $this->authorize('runCommands', $device);
 
         $action($this->script, $device, auth()->user());
 

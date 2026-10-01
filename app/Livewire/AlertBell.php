@@ -8,11 +8,20 @@ use App\Enums\AlertStatus;
 use App\Models\Alert;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Lazy;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Lazy]
 final class AlertBell extends Component
 {
+    public function mount(): void
+    {
+        $this->authorize('viewAny', Alert::class);
+    }
+
+    #[On('echo-private:devices,AlertChanged')]
+    public function refreshCount(): void {}
+
     public function render(): View
     {
         $count = Alert::query()

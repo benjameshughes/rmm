@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CommandStatus;
+use App\Events\CommandUpdated;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,12 @@ final class DeviceCommand extends Model
         'completed_at',
         'timeout_seconds',
         'queued_by',
+    ];
+
+    /** @var array<string, class-string> */
+    protected $dispatchesEvents = [
+        'created' => CommandUpdated::class,
+        'updated' => CommandUpdated::class,
     ];
 
     protected function casts(): array

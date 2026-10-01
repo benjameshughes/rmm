@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\AlertMetric;
 use App\Enums\AlertSeverity;
 use App\Enums\AlertStatus;
+use App\Events\AlertChanged;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,6 +29,12 @@ final class Alert extends Model
         'acknowledged_at',
         'acknowledged_by',
         'resolved_at',
+    ];
+
+    /** @var array<string, class-string> */
+    protected $dispatchesEvents = [
+        'created' => AlertChanged::class,
+        'updated' => AlertChanged::class,
     ];
 
     protected function casts(): array

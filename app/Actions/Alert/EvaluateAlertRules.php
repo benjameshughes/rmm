@@ -121,18 +121,16 @@ final class EvaluateAlertRules
             ->latest('recorded_at')
             ->get();
 
-        $violationStart = null;
+        return $windowMetrics
+            ->takeWhile(fn (DeviceMetric $metric): bool => $this->isViolating($rule, $device, $metric))
+            ->last()
+            ?->recorded_at;
+    }
 
-        foreach ($windowMetrics as $metric) {
-            $value = $this->getCurrentValue($rule->metric, $device, $metric);
+    private function isViolating(AlertRule $rule, Device $device, DeviceMetric $metric): bool
+    {
+        $value = $this->getCurrentValue($rule->metric, $device, $metric);
 
-            if ($value === null || ! $rule->operator->evaluate($value, $rule->threshold)) {
-                break;
-            }
-
-            $violationStart = $metric->recorded_at;
-        }
-
-        return $violationStart;
+        return $value !== null && $rule->operator->evaluate($value, $rule->threshold);
     }
 }

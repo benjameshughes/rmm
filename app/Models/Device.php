@@ -7,6 +7,8 @@ namespace App\Models;
 use App\Enums\ApiKeyState;
 use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
+use App\Events\DeviceEnrolled;
+use App\Events\DeviceUpdated;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 final class Device extends Model
@@ -47,6 +50,12 @@ final class Device extends Model
     protected $hidden = [
         'api_key_hash',
         'pending_api_key',
+    ];
+
+    /** @var array<string, class-string> */
+    protected $dispatchesEvents = [
+        'created' => DeviceEnrolled::class,
+        'updated' => DeviceUpdated::class,
     ];
 
     protected function casts(): array
@@ -166,6 +175,8 @@ final class Device extends Model
             'pending_api_key' => null,
         ])->syncOriginal();
 
+        DeviceUpdated::dispatch($this);
+
         return $apiKey;
     }
 
@@ -190,6 +201,58 @@ final class Device extends Model
             $this->api_key_claimed_at === null => ApiKeyState::AwaitingAgent,
             default => ApiKeyState::Claimed,
         };
+    }
+
+    public function apiKeyStateDetail(): ?string
+    {
+        return match ($this->apiKeyState()) {
+            ApiKeyState::Claimed => $this->api_key_claimed_at->diffForHumans(),
+            ApiKeyState::AwaitingAgent => $this->api_key_issued_at ? 'issued '.$this->api_key_issued_at->diffForHumans() : null,
+            ApiKeyState::None => null,
+        };
+    }
+
+    public function statusLabel(): string
+    {
+        return match (true) {
+            ! $this->status->isApproved() => $this->status->label(),
+            $this->isOnline => 'Online',
+            default => 'Offline',
+        };
+    }
+
+    public function statusColor(): string
+    {
+        return match (true) {
+            ! $this->status->isApproved() => $this->status->color(),
+            $this->isOnline => 'green',
+            default => 'red',
+        };
+    }
+
+    /**
+     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, barColor: string}>
+     */
+    public function diskUsage(): Collection
+    {
+        return collect($this->disks ?? [])->map(function (array $disk): array {
+            $totalGb = isset($disk['total_gb']) ? (float) $disk['total_gb'] : null;
+            $availableGb = isset($disk['available_gb']) ? (float) $disk['available_gb'] : null;
+            $usedPercent = $totalGb > 0 ? (($totalGb - (float) $availableGb) / $totalGb) * 100 : null;
+
+            return [
+                'name' => $disk['name'] ?? '—',
+                'mountPoint' => $disk['mount_point'] ?? null,
+                'availableGb' => $availableGb,
+                'totalGb' => $totalGb,
+                'usedPercent' => $usedPercent,
+                'barColor' => match (true) {
+                    $usedPercent > config('devices.disk.critical_percent') => 'bg-red-500',
+                    $usedPercent > config('devices.disk.warning_percent') => 'bg-amber-500',
+                    default => 'bg-blue-500',
+                },
+            ];
+        });
     }
 
     protected function isOnline(): Attribute

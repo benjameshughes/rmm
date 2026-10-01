@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\DeviceStatus;
 use App\Livewire\Devices\Index;
 use App\Models\Device;
 use App\Models\DeviceGroup;
@@ -75,3 +76,19 @@ it('keeps the group filter applied while searching', function (): void {
         ->assertSee('SHOP-IN-GROUP')
         ->assertDontSee('SHOP-NO-GROUP');
 });
+
+it('labels and colours a device from its status and presence', function (array $attributes, string $label, string $color): void {
+    $device = Device::factory()->create($attributes);
+
+    expect($device->statusLabel())->toBe($label)
+        ->and($device->statusColor())->toBe($color);
+})->with([
+    'online' => [['status' => DeviceStatus::Active, 'last_seen' => now()], 'Online', 'green'],
+    'offline' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subHour()], 'Offline', 'red'],
+    'pending' => [['status' => DeviceStatus::Pending, 'last_seen' => now()], 'Pending', 'amber'],
+    'revoked' => [['status' => DeviceStatus::Revoked, 'last_seen' => now()], 'Revoked', 'zinc'],
+]);
+
+it('gives every device status a badge colour', function (DeviceStatus $status): void {
+    expect($status->color())->toBeString()->not->toBeEmpty();
+})->with(DeviceStatus::cases());

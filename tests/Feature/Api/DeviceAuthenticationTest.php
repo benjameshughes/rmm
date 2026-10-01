@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\DeviceStatus;
-use App\Http\Middleware\AuthenticateDevice;
 use App\Models\Device;
 
 it('authenticates a valid key', function (): void {
@@ -45,7 +44,7 @@ it('authenticates a key issued but not yet claimed', function (): void {
 });
 
 it('locks out failed attempts from an IP after too many bad keys', function (): void {
-    for ($i = 0; $i < AuthenticateDevice::MAX_FAILED_ATTEMPTS_PER_MINUTE; $i++) {
+    for ($i = 0; $i < config('devices.auth.max_failed_attempts_per_minute'); $i++) {
         $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => "KEY-GUESS-{$i}"])
             ->assertUnauthorized();
     }
@@ -61,7 +60,7 @@ it('locks out failed attempts from an IP after too many bad keys', function (): 
 it('never locks out a valid key sharing an IP with a flood of bad keys', function (): void {
     Device::factory()->withApiKey('KEY-VALID')->create();
 
-    for ($i = 0; $i <= AuthenticateDevice::MAX_FAILED_ATTEMPTS_PER_MINUTE; $i++) {
+    for ($i = 0; $i <= config('devices.auth.max_failed_attempts_per_minute'); $i++) {
         $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => "KEY-GUESS-{$i}"]);
     }
 
@@ -75,7 +74,7 @@ it('never locks out a valid key sharing an IP with a flood of bad keys', functio
 it('does not lock out other IPs when one IP is brute forcing', function (): void {
     Device::factory()->withApiKey('KEY-VALID')->create();
 
-    for ($i = 0; $i <= AuthenticateDevice::MAX_FAILED_ATTEMPTS_PER_MINUTE; $i++) {
+    for ($i = 0; $i <= config('devices.auth.max_failed_attempts_per_minute'); $i++) {
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
             ->postJson('/api/heartbeat', [], ['X-Agent-Key' => "KEY-GUESS-{$i}"]);
     }
@@ -92,7 +91,7 @@ it('does not lock out other IPs when one IP is brute forcing', function (): void
 it('does not count successful authentications towards the lockout', function (): void {
     Device::factory()->withApiKey('KEY-VALID')->create();
 
-    for ($i = 0; $i < AuthenticateDevice::MAX_FAILED_ATTEMPTS_PER_MINUTE + 5; $i++) {
+    for ($i = 0; $i < config('devices.auth.max_failed_attempts_per_minute') + 5; $i++) {
         $this->getJson('/api/commands/pending', ['X-Agent-Key' => 'KEY-VALID']);
         $this->postJson('/api/metrics', ['cpu' => 1, 'ram' => 1], ['X-Agent-Key' => 'KEY-VALID'])
             ->assertSuccessful();
@@ -122,4 +121,12 @@ it('rejects bad keys before the route throttle runs', function (): void {
         $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'KEY-BOGUS'])
             ->assertUnauthorized();
     }
+});
+
+it('takes the failed attempt limit from config', function (): void {
+    config(['devices.auth.max_failed_attempts_per_minute' => 2]);
+
+    $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'KEY-GUESS-1'])->assertUnauthorized();
+    $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'KEY-GUESS-2'])->assertUnauthorized();
+    $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'KEY-GUESS-3'])->assertTooManyRequests();
 });

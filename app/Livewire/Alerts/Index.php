@@ -10,6 +10,7 @@ use App\Models\Alert;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -21,6 +22,14 @@ final class Index extends Component
     public string $statusFilter = '';
 
     public string $severityFilter = '';
+
+    public function mount(): void
+    {
+        $this->authorize('viewAny', Alert::class);
+    }
+
+    #[On('echo-private:devices,AlertChanged')]
+    public function refreshAlerts(): void {}
 
     public function updatingStatusFilter(): void
     {
@@ -34,12 +43,13 @@ final class Index extends Component
 
     public function acknowledge(Alert $alert): void
     {
-        abort_unless(auth()->check(), 401);
+        $this->authorize('update', $alert);
         $alert->acknowledge(auth()->user());
     }
 
     public function resolve(Alert $alert): void
     {
+        $this->authorize('update', $alert);
         $alert->resolve();
     }
 

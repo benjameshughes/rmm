@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
-use App\Actions\Alert\EvaluateAlertRules;
 use App\DTOs\NetdataCpuMetric;
 use App\DTOs\NetdataRamMetric;
 use App\DTOs\NetdataV3Metrics;
+use App\Events\MetricsReceived;
 use App\Models\Device;
 use App\Models\DeviceMetric;
 use Illuminate\Support\Carbon;
@@ -75,7 +75,7 @@ final class StoreDeviceMetrics
         $this->storeNetworkMetrics($metric, $input['network'] ?? null);
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip);
 
-        (new EvaluateAlertRules)($device, $metric);
+        MetricsReceived::dispatch($device, $metric);
 
         return $metric;
     }
@@ -123,7 +123,7 @@ final class StoreDeviceMetrics
 
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip);
 
-        (new EvaluateAlertRules)($device, $metric);
+        MetricsReceived::dispatch($device, $metric);
 
         return $metric;
     }

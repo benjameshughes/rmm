@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,5 +73,16 @@ final class DeviceMetric extends Model
     public function networkMetrics(): HasMany
     {
         return $this->hasMany(DeviceNetworkMetric::class);
+    }
+
+    public function uptimeForHumans(): ?string
+    {
+        if ($this->uptime_seconds === null) {
+            return null;
+        }
+
+        return CarbonInterval::seconds((int) $this->uptime_seconds)
+            ->cascade()
+            ->forHumans(['short' => true, 'parts' => 2, 'minimumUnit' => 'minute']);
     }
 }

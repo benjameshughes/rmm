@@ -24,6 +24,20 @@ enum DeviceStatus: string
         };
     }
 
+    public function color(): string
+    {
+        return match ($this) {
+            self::Pending => 'amber',
+            self::Active => 'green',
+            self::Revoked => 'zinc',
+        };
+    }
+
+    public function canResetEnrolment(): bool
+    {
+        return $this !== self::Pending;
+    }
+
     public function agentStatus(): string
     {
         return match ($this) {

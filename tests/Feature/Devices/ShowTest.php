@@ -108,3 +108,42 @@ it('lets a reset device re-enrol and collect a fresh key after re-approval', fun
     expect($newKey)->toBeString()->not->toBe('KEY-BEFORE-RESET');
     $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => $newKey])->assertSuccessful();
 });
+
+it('shows uptime and disk usage computed by the models', function (): void {
+    $device = Device::factory()->active()->create([
+        'disks' => [
+            ['name' => 'C:', 'mount_point' => 'C:\\', 'total_gb' => 100.0, 'available_gb' => 5.0],
+            ['name' => 'D:', 'mount_point' => 'D:\\', 'total_gb' => 100.0, 'available_gb' => 80.0],
+        ],
+    ]);
+    DeviceMetric::factory()->create(['device_id' => $device->id, 'uptime_seconds' => (2 * 86400) + (5 * 3600) + 600]);
+
+    Livewire::actingAs(User::factory()->create())
+        ->test(Show::class, ['device' => $device])
+        ->assertSee('2d 5h')
+        ->assertSee('5.0 GB free of 100.0 GB')
+        ->assertSee('95.0% used')
+        ->assertSee('20.0% used')
+        ->assertSeeHtml('bg-red-500')
+        ->assertSeeHtml('bg-blue-500');
+});
+
+it('formats uptime like the device page always has', function (?int $seconds, ?string $expected): void {
+    expect(DeviceMetric::factory()->make(['uptime_seconds' => $seconds])->uptimeForHumans())->toBe($expected);
+})->with([
+    'unknown' => [null, null],
+    'seconds' => [45, '0m'],
+    'minutes' => [300, '5m'],
+    'hours' => [(3 * 3600) + 125, '3h 2m'],
+    'days' => [(2 * 86400) + (5 * 3600) + 600, '2d 5h'],
+]);
+
+it('colours disk usage from the configured thresholds', function (float $availableGb, string $barColor): void {
+    $device = Device::factory()->make(['disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => $availableGb]]]);
+
+    expect($device->diskUsage()->first()['barColor'])->toBe($barColor);
+})->with([
+    'healthy' => [50.0, 'bg-blue-500'],
+    'filling up' => [20.0, 'bg-amber-500'],
+    'full' => [5.0, 'bg-red-500'],
+]);

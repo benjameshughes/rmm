@@ -14,6 +14,7 @@ use App\Models\Tag;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -34,13 +35,26 @@ final class Show extends Component
 
     public function mount(Device $device): void
     {
+        $this->authorize('view', $device);
+
         $this->device = $device->load(['latestMetric', 'group', 'tags']);
-        $this->selectedGroupId = $device->device_group_id ? (string) $device->device_group_id : '';
-        $this->selectedTagIds = $device->tags->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+        $this->syncSelectionsFromDevice();
     }
+
+    #[On('echo-private:devices.{device.id},DeviceUpdated')]
+    public function refreshDevice(): void
+    {
+        $this->device->refresh();
+        $this->syncSelectionsFromDevice();
+    }
+
+    #[On('echo-private:devices.{device.id},CommandUpdated')]
+    public function refreshCommands(): void {}
 
     public function updatedSelectedGroupId(AssignDeviceGroup $action): void
     {
+        $this->authorize('manageGroupsAndTags', $this->device);
+
         $group = $this->selectedGroupId ? DeviceGroup::find($this->selectedGroupId) : null;
         $action($this->device, $group);
         $this->device->refresh();
@@ -48,6 +62,8 @@ final class Show extends Component
 
     public function updatedSelectedTagIds(SyncDeviceTags $action): void
     {
+        $this->authorize('manageGroupsAndTags', $this->device);
+
         $action($this->device, collect($this->selectedTagIds)->map(fn ($id) => (int) $id)->toArray());
         $this->device->load('tags');
     }
@@ -74,7 +90,7 @@ final class Show extends Component
 
     public function resetEnrolment(): void
     {
-        abort_unless(auth()->check(), 401);
+        $this->authorize('resetEnrolment', $this->device);
 
         $this->device->resetEnrolment();
         $this->device->refresh();
@@ -90,7 +106,7 @@ final class Show extends Component
 
     public function runScript(ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
+        $this->authorize('runCommands', $this->device);
         abort_unless($this->selectedScriptId !== null, 422);
 
         $script = Script::findOrFail($this->selectedScriptId);
@@ -103,9 +119,15 @@ final class Show extends Component
 
     private function runSystemScript(ExecuteScriptOnDevice $action, string $slug): void
     {
-        abort_unless(auth()->check(), 401);
+        $this->authorize('runCommands', $this->device);
         $action(Script::findSystem($slug), $this->device, auth()->user());
         $this->dispatch('command-queued');
+    }
+
+    private function syncSelectionsFromDevice(): void
+    {
+        $this->selectedGroupId = $this->device->device_group_id ? (string) $this->device->device_group_id : '';
+        $this->selectedTagIds = $this->device->tags->pluck('id')->map(fn ($id) => (string) $id)->toArray();
     }
 
     public function render(): View
@@ -115,6 +137,9 @@ final class Show extends Component
 
         return view('livewire.devices.show', [
             'device' => $this->device,
+            'apiKeyState' => $this->device->apiKeyState(),
+            'apiKeyStateDetail' => $this->device->apiKeyStateDetail(),
+            'diskUsage' => $this->device->diskUsage(),
             'metrics' => $metrics,
             'recentCommands' => $recentCommands,
             'scripts' => Script::query()->orderBy('name')->get(),

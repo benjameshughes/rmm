@@ -17,4 +17,16 @@ return [
 
     'stderr_separator' => "\n\n--- stderr ---\n",
 
+    /*
+    |--------------------------------------------------------------------------
+    | Stale Command Grace Period
+    |--------------------------------------------------------------------------
+    |
+    | Extra seconds allowed on top of a command's own timeout before a sent or
+    | running command is considered abandoned and marked as timed out.
+    |
+    */
+
+    'stale_grace_seconds' => 300,
+
 ];

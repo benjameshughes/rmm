@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Commands;
 
+use App\Models\Device;
 use App\Models\DeviceCommand;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
@@ -19,9 +20,22 @@ final class Detail extends Component
     #[On('show-command')]
     public function show(int $commandId): void
     {
+        $this->authorize('viewAny', Device::class);
+
         $this->commandId = $commandId;
         $this->showModal = true;
         unset($this->command);
+    }
+
+    /** @param array{commandId?: int} $event */
+    #[On('echo-private:devices,CommandUpdated')]
+    public function refreshCommand(array $event): void
+    {
+        if (($event['commandId'] ?? null) === $this->commandId) {
+            return;
+        }
+
+        $this->skipRender();
     }
 
     #[Computed]

@@ -66,5 +66,5 @@ it('requires authentication to execute', function (): void {
     Livewire::test(Show::class, ['script' => $script])
         ->set('selectedDeviceId', $device->id)
         ->call('executeOnDevice')
-        ->assertUnauthorized();
+        ->assertForbidden();
 });
