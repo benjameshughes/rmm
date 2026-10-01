@@ -391,3 +391,34 @@ it('accepts new simplified agent format with separate netdata fields', function 
 
     expect($metric->agent_version)->toBe('0.4.0');
 });
+
+it('discards the raw request by default', function (array $input): void {
+    $device = Device::factory()->withApiKey('VALID-KEY-123')->create();
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])->postJson('/api/metrics', $input)->assertSuccessful();
+
+    expect(DeviceMetric::query()->where('device_id', $device->id)->sole()->payload)->toBeNull();
+})->with([
+    'standard' => [['cpu' => ['usage_percent' => 12], 'agent_version' => '0.5.1']],
+    'raw netdata' => [['netdata_cpu' => [], 'agent_version' => '0.5.1']],
+]);
+
+it('keeps the raw request while debugging the agent', function (array $input): void {
+    config(['devices.metrics.store_raw_payload' => true]);
+    $device = Device::factory()->withApiKey('VALID-KEY-123')->create();
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])->postJson('/api/metrics', $input)->assertSuccessful();
+
+    expect(DeviceMetric::query()->where('device_id', $device->id)->sole()->payload)->toMatchArray($input);
+})->with([
+    'standard' => [['cpu' => ['usage_percent' => 12], 'agent_version' => '0.5.1']],
+    'raw netdata' => [['netdata_cpu' => [], 'agent_version' => '0.5.1']],
+]);
+
+it('clears raw payloads already stored', function (): void {
+    $metrics = DeviceMetric::factory()->count(3)->create(['payload' => ['cpu' => 12]]);
+
+    (require database_path('migrations/2026_10_01_151747_clear_raw_payloads_from_device_metrics_table.php'))->up();
+
+    expect($metrics->map(fn (DeviceMetric $metric) => $metric->fresh()->payload)->filter())->toBeEmpty();
+});

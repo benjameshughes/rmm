@@ -28,6 +28,7 @@ final class Device extends Model
         'hostname',
         'hardware_fingerprint',
         'status',
+        'agent_version',
         'os',
         'os_name',
         'os_version',
@@ -210,6 +211,13 @@ final class Device extends Model
             ApiKeyState::AwaitingAgent => $this->api_key_issued_at ? 'issued '.$this->api_key_issued_at->diffForHumans() : null,
             ApiKeyState::None => null,
         };
+    }
+
+    public function isAgentOutdated(?string $latestVersion): bool
+    {
+        return $this->agent_version !== null
+            && $latestVersion !== null
+            && version_compare($this->agent_version, $latestVersion, '<');
     }
 
     public function statusLabel(): string

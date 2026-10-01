@@ -50,6 +50,8 @@ final class Index extends Component
 
     public function edit(AlertRule $rule): void
     {
+        abort_unless($rule->metric->isThresholdBased(), 403);
+
         $this->editingId = $rule->id;
         $this->name = $rule->name;
         $this->metric = $rule->metric->value;
@@ -67,6 +69,8 @@ final class Index extends Component
         $this->validate($this->validationRules());
 
         $rule = AlertRule::findOrFail($this->editingId);
+        abort_unless($rule->metric->isThresholdBased(), 403);
+
         $rule->update([
             'name' => $this->name,
             'metric' => $this->metric,
@@ -86,6 +90,8 @@ final class Index extends Component
 
     public function delete(AlertRule $rule): void
     {
+        abort_unless($rule->metric->isThresholdBased(), 403);
+
         $rule->delete();
     }
 
@@ -108,7 +114,7 @@ final class Index extends Component
 
         return view('livewire.alert-rules.index', [
             'rules' => $rules,
-            'metrics' => AlertMetric::cases(),
+            'metrics' => AlertMetric::thresholdBased(),
             'operators' => AlertOperator::cases(),
             'severities' => AlertSeverity::cases(),
         ]);
@@ -118,7 +124,7 @@ final class Index extends Component
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'metric' => ['required', Rule::enum(AlertMetric::class)],
+            'metric' => ['required', Rule::enum(AlertMetric::class)->only(AlertMetric::thresholdBased())],
             'operator' => ['required', Rule::enum(AlertOperator::class)],
             'threshold' => ['required', 'numeric', 'min:0'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:1440'],

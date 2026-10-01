@@ -91,6 +91,23 @@ final class Alert extends Model
         ]);
     }
 
+    public function conditionLabel(): string
+    {
+        return $this->metric->isThresholdBased()
+            ? "{$this->metric->label()} {$this->alertRule?->operator->label()} {$this->threshold}{$this->metric->unit()}"
+            : $this->metric->label();
+    }
+
+    /**
+     * Alerts that are not threshold based store placeholder numbers, so their message is the meaningful value.
+     */
+    public function valueLabel(): string
+    {
+        return $this->metric->isThresholdBased()
+            ? round($this->current_value, 1).$this->metric->unit()
+            : $this->message;
+    }
+
     public function scopeUnresolved($query)
     {
         return $query->whereIn('status', [AlertStatus::Triggered, AlertStatus::Acknowledged]);

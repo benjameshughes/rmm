@@ -17,7 +17,7 @@ class AlertRuleFactory extends Factory
     {
         return [
             'name' => fake()->words(3, true),
-            'metric' => fake()->randomElement(AlertMetric::cases()),
+            'metric' => fake()->randomElement(AlertMetric::thresholdBased()),
             'operator' => AlertOperator::GreaterThan,
             'threshold' => fake()->randomFloat(1, 50, 95),
             'duration_minutes' => fake()->randomElement([1, 5, 10, 15]),

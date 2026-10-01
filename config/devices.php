@@ -43,4 +43,19 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Metrics Storage
+    |--------------------------------------------------------------------------
+    |
+    | Metrics are extracted into columns and the raw request is discarded.
+    | Turn this on to keep each raw request in device_metrics.payload while
+    | debugging the agent; it grows the table quickly, so switch it off after.
+    |
+    */
+
+    'metrics' => [
+        'store_raw_payload' => (bool) env('DEVICE_METRICS_STORE_RAW_PAYLOAD', false),
+    ],
+
 ];

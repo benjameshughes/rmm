@@ -34,7 +34,7 @@ class DeviceMetricFactory extends Factory
             'alerts_warning' => $this->faker->numberBetween(0, 5),
             'alerts_critical' => $this->faker->numberBetween(0, 2),
             'agent_version' => '0.2.0',
-            'payload' => [],
+            'payload' => null,
             'recorded_at' => now(),
         ];
     }

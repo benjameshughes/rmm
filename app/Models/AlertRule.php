@@ -37,6 +37,22 @@ final class AlertRule extends Model
         ];
     }
 
+    /**
+     * The built-in rule behind outdated-agent alerts, created on first use so it
+     * can be switched off under Alert Rules like any other rule.
+     */
+    public static function agentOutdated(): self
+    {
+        return self::query()->firstOrCreate(['metric' => AlertMetric::AgentOutdated], [
+            'name' => config('agent.outdated_alert.rule_name'),
+            'operator' => AlertOperator::GreaterThan,
+            'threshold' => 0,
+            'duration_minutes' => 0,
+            'severity' => AlertSeverity::from(config('agent.outdated_alert.severity')),
+            'is_active' => true,
+        ]);
+    }
+
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);
@@ -45,5 +61,17 @@ final class AlertRule extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function conditionLabel(): string
+    {
+        return $this->metric->isThresholdBased()
+            ? "{$this->metric->label()} {$this->operator->label()} {$this->threshold}{$this->metric->unit()}"
+            : $this->metric->label();
+    }
+
+    public function durationLabel(): string
+    {
+        return $this->metric->isThresholdBased() ? "{$this->duration_minutes} min" : '—';
     }
 }

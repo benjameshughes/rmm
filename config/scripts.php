@@ -69,6 +69,15 @@ return [
             'timeout_seconds' => 7200,
             'requires_admin' => true,
         ],
+        'update-agent' => [
+            'name' => 'Update Agent',
+            'description' => 'Install the latest RMM agent release. The agent restarts itself, so this often ends as Timed Out: the update badge disappearing is the real confirmation',
+            'category' => 'updates',
+            'platform' => 'windows',
+            'file' => 'windows/update-agent.ps1',
+            'timeout_seconds' => 300,
+            'requires_admin' => true,
+        ],
         'ip-configuration' => [
             'name' => 'IP Configuration',
             'description' => 'Display full network adapter configuration',

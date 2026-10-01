@@ -41,7 +41,7 @@ final class StoreDeviceMetrics
             'ram' => $ram,
             'recorded_at' => $recordedAt,
             'agent_version' => $input['agent_version'] ?? null,
-            'payload' => $input,
+            'payload' => $this->rawPayload($input),
         ];
 
         $metricData = $this->mergeCpuDetails($metricData, $input['cpu'] ?? null);
@@ -74,7 +74,7 @@ final class StoreDeviceMetrics
 
         $metric->recordDisks($input['disks'] ?? null);
         $metric->recordNetworkInterfaces($input['network'] ?? null);
-        $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip);
+        $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input['agent_version'] ?? null);
 
         MetricsReceived::dispatch($device, $metric);
 
@@ -119,16 +119,24 @@ final class StoreDeviceMetrics
             'memory_cached_mib' => $memoryDetails['cached_mib'],
             'memory_buffers_mib' => $memoryDetails['buffers_mib'],
             'memory_available_mib' => $memoryDetails['available_mib'],
-            'payload' => $input,
+            'payload' => $this->rawPayload($input),
         ]);
 
         $metric->recordDisks((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
         $metric->recordNetworkInterfaces($this->networkTotals(new NetdataV3Metrics($input['netdata_net'] ?? [])));
-        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip);
+        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input['agent_version'] ?? null);
 
         MetricsReceived::dispatch($device, $metric);
 
         return $metric;
+    }
+
+    /**
+     * Every useful field is extracted into columns, so the raw request is only kept while debugging the agent.
+     */
+    private function rawPayload(array $input): ?array
+    {
+        return config('devices.metrics.store_raw_payload') ? $input : null;
     }
 
     private function parseCpuMetric(mixed $input): ?float
@@ -215,9 +223,9 @@ final class StoreDeviceMetrics
         return $totals === null ? [] : [['interface' => 'total', ...$totals]];
     }
 
-    private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip): void
+    private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, ?string $agentVersion): void
     {
-        $updates = ['last_seen' => now(), 'last_ip' => $ip];
+        $updates = $this->connectionUpdates($ip, $agentVersion);
 
         if (is_array($systemInfo)) {
             $allowedFields = [
@@ -240,9 +248,9 @@ final class StoreDeviceMetrics
         $device->forceFill($updates)->save();
     }
 
-    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip): void
+    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, ?string $agentVersion): void
     {
-        $updates = ['last_seen' => now(), 'last_ip' => $ip];
+        $updates = $this->connectionUpdates($ip, $agentVersion);
 
         if (is_array($netdataInfo)) {
             $agent = $netdataInfo['agents'][0] ?? null;
@@ -261,5 +269,17 @@ final class StoreDeviceMetrics
         }
 
         $device->forceFill($updates)->save();
+    }
+
+    /**
+     * An agent that omits its version keeps the last one it reported.
+     *
+     * @return array{last_seen: Carbon, last_ip: ?string, agent_version?: string}
+     */
+    private function connectionUpdates(?string $ip, ?string $agentVersion): array
+    {
+        $updates = ['last_seen' => now(), 'last_ip' => $ip];
+
+        return $agentVersion === null ? $updates : [...$updates, 'agent_version' => $agentVersion];
     }
 }

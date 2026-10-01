@@ -42,10 +42,10 @@
                             </flux:button>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:text>{{ $alert->metric->label() }} {{ $alert->alertRule?->operator->label() }} {{ $alert->threshold }}{{ in_array($alert->metric->value, ['cpu', 'ram', 'disk']) ? '%' : ' min' }}</flux:text>
+                            <flux:text>{{ $alert->conditionLabel() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:text class="font-medium font-mono">{{ round($alert->current_value, 1) }}{{ in_array($alert->metric->value, ['cpu', 'ram', 'disk']) ? '%' : ' min' }}</flux:text>
+                            <flux:text class="font-medium font-mono">{{ $alert->valueLabel() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:badge size="sm" :color="$alert->severity->color()">{{ $alert->severity->label() }}</flux:badge>

@@ -2,6 +2,7 @@
     <div class="flex items-center justify-between">
         <flux:heading size="xl">{{ $device->hostname }}</flux:heading>
         <div class="flex items-center gap-2">
+            <x-device.agent-update-badge :device="$device" :latest-version="$latestAgentVersion" />
             <flux:badge :color="$device->statusColor()" size="lg">{{ $device->statusLabel() }}</flux:badge>
         </div>
     </div>
@@ -84,6 +85,9 @@
             </flux:button>
             <flux:button wire:click="checkForUpdates" icon="arrow-down-tray">
                 Check for Updates
+            </flux:button>
+            <flux:button wire:click="updateAgent" icon="arrow-up-circle">
+                Update Agent
             </flux:button>
             <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">
                 Run Script
@@ -203,11 +207,11 @@
                         </dd>
                     </div>
                 @endif
-                @if(optional($device->latestMetric)->agent_version)
+                @if($device->agent_version)
                     <flux:separator variant="subtle" />
                     <div class="flex justify-between">
                         <dt class="text-zinc-500 dark:text-zinc-400">Agent Version</dt>
-                        <dd class="font-medium">{{ $device->latestMetric->agent_version }}</dd>
+                        <dd class="font-medium">{{ $device->agent_version }}</dd>
                     </div>
                 @endif
             </dl>

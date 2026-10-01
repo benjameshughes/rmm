@@ -22,7 +22,7 @@ class AlertFactory extends Factory
             'device_id' => Device::factory(),
             'status' => AlertStatus::Triggered,
             'severity' => fake()->randomElement(AlertSeverity::cases()),
-            'metric' => fake()->randomElement(AlertMetric::cases()),
+            'metric' => fake()->randomElement(AlertMetric::thresholdBased()),
             'threshold' => 90.0,
             'current_value' => fake()->randomFloat(1, 90, 100),
             'message' => fake()->sentence(),

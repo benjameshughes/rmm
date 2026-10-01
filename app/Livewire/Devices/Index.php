@@ -10,6 +10,7 @@ use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\Tag;
+use App\Queries\AgentVersionQueries;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -44,6 +45,7 @@ final class Index extends Component
 
     #[On('echo-private:devices,DeviceEnrolled')]
     #[On('echo-private:devices,DeviceUpdated')]
+    #[On('echo-private:devices,LatestAgentVersionChanged')]
     public function refreshDevices(): void {}
 
     public function updatingSearch(): void
@@ -115,6 +117,15 @@ final class Index extends Component
         $this->dispatch('command-queued');
     }
 
+    public function updateOutdatedAgents(BulkExecuteScript $action, AgentVersionQueries $agentVersions): void
+    {
+        $devices = $agentVersions->outdatedDevices()
+            ->each(fn (Device $device) => $this->authorize('runCommands', $device));
+
+        $action(Script::findSystem('update-agent'), $devices, auth()->user());
+        $this->dispatch('command-queued');
+    }
+
     public function powerOff(Device $device, ExecuteScriptOnDevice $action): void
     {
         $this->runSystemScript($action, $device, 'shutdown');
@@ -130,12 +141,14 @@ final class Index extends Component
         $this->runSystemScript($action, $device, 'windows-update');
     }
 
-    public function render(): View
+    public function render(AgentVersionQueries $agentVersions): View
     {
         $devices = $this->query()->paginate(12);
 
         return view('livewire.devices.index', [
             'devices' => $devices,
+            'latestAgentVersion' => $agentVersions->latest(),
+            'outdatedAgentCount' => $agentVersions->outdatedDevices()->count(),
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->orderBy('name')->get(),

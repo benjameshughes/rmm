@@ -11,3 +11,4 @@ Artisan::command('inspire', function () {
 Schedule::command('devices:check-offline')->everyMinute();
 Schedule::command('schedule:run-tasks')->everyMinute();
 Schedule::command('commands:expire-stale')->everyFiveMinutes();
+Schedule::command('agent:check-version')->hourly();

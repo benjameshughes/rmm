@@ -7,6 +7,18 @@
     </div>
     <flux:separator variant="subtle" />
 
+    @if($outdatedAgentCount > 0)
+        <flux:callout icon="arrow-up-circle" color="amber" inline>
+            <flux:callout.heading>{{ $outdatedAgentCount }} {{ Str::plural('device', $outdatedAgentCount) }} running an old agent (latest {{ $latestAgentVersion }})</flux:callout.heading>
+
+            <x-slot name="actions">
+                <flux:button size="sm" wire:click="updateOutdatedAgents" wire:confirm="Update the agent on {{ $outdatedAgentCount }} {{ Str::plural('device', $outdatedAgentCount) }}?" icon="arrow-path">
+                    Update all
+                </flux:button>
+            </x-slot>
+        </flux:callout>
+    @endif
+
     <div class="flex flex-wrap items-center gap-4">
         <flux:input wire:model.live.debounce.300ms="search" placeholder="Search hostname, IP, OS..." class="max-w-sm" icon="magnifying-glass" />
         <flux:select wire:model.live="groupFilter" placeholder="All Groups" class="max-w-48">
@@ -75,6 +87,7 @@
                                     @foreach($device->tags as $tag)
                                         <flux:badge size="sm" :color="$tag->color ?? 'zinc'" variant="outline">{{ $tag->name }}</flux:badge>
                                     @endforeach
+                                    <x-device.agent-update-badge :device="$device" :latest-version="$latestAgentVersion" />
                                 </div>
                             </div>
                         </flux:table.cell>
@@ -87,6 +100,9 @@
                                     <flux:text>{{ $device->os_name }}</flux:text>
                                     @if($device->cpu_cores)
                                         <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $device->cpu_cores }} cores &bull; {{ $device->total_ram_gb ? number_format($device->total_ram_gb).'GB' : '—' }}</flux:text>
+                                    @endif
+                                    @if($device->agent_version)
+                                        <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">Agent {{ $device->agent_version }}</flux:text>
                                     @endif
                                 </div>
                             @else

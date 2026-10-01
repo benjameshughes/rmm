@@ -46,6 +46,7 @@ final class EvaluateAlertRules
             AlertMetric::Ram => $deviceMetric->ram,
             AlertMetric::Disk => $this->getMaxDiskUsage($deviceMetric),
             AlertMetric::Offline => $this->getOfflineMinutes($device),
+            AlertMetric::AgentOutdated => null,
         };
     }
 

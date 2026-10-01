@@ -30,10 +30,10 @@
                             <flux:text class="font-medium">{{ $rule->name }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:text>{{ $rule->metric->label() }} {{ $rule->operator->label() }} {{ $rule->threshold }}{{ in_array($rule->metric->value, ['cpu', 'ram', 'disk']) ? '%' : ' min' }}</flux:text>
+                            <flux:text>{{ $rule->conditionLabel() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $rule->duration_minutes }} min</flux:text>
+                            <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $rule->durationLabel() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:badge size="sm" :color="$rule->severity->color()">{{ $rule->severity->label() }}</flux:badge>
@@ -45,14 +45,18 @@
                             <flux:switch wire:click="toggleActive({{ $rule->id }})" :checked="$rule->is_active" />
                         </flux:table.cell>
                         <flux:table.cell>
-                            <div class="flex items-center gap-2">
-                                <flux:button size="sm" variant="ghost" wire:click="edit({{ $rule->id }})" icon="pencil-square">
-                                    Edit
-                                </flux:button>
-                                <flux:button size="sm" variant="ghost" wire:click="delete({{ $rule->id }})" wire:confirm="Delete rule '{{ $rule->name }}'?" icon="trash">
-                                    Delete
-                                </flux:button>
-                            </div>
+                            @if($rule->metric->isThresholdBased())
+                                <div class="flex items-center gap-2">
+                                    <flux:button size="sm" variant="ghost" wire:click="edit({{ $rule->id }})" icon="pencil-square">
+                                        Edit
+                                    </flux:button>
+                                    <flux:button size="sm" variant="ghost" wire:click="delete({{ $rule->id }})" wire:confirm="Delete rule '{{ $rule->name }}'?" icon="trash">
+                                        Delete
+                                    </flux:button>
+                                </div>
+                            @else
+                                <flux:badge size="sm" color="zinc">Built-in</flux:badge>
+                            @endif
                         </flux:table.cell>
                     </flux:table.row>
                 @empty

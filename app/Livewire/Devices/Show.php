@@ -11,6 +11,7 @@ use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\Tag;
+use App\Queries\AgentVersionQueries;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
@@ -51,6 +52,9 @@ final class Show extends Component
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     public function refreshCommands(): void {}
 
+    #[On('echo-private:devices,LatestAgentVersionChanged')]
+    public function refreshLatestAgentVersion(): void {}
+
     public function updatedSelectedGroupId(AssignDeviceGroup $action): void
     {
         $this->authorize('manageGroupsAndTags', $this->device);
@@ -86,6 +90,11 @@ final class Show extends Component
     public function checkForUpdates(ExecuteScriptOnDevice $action): void
     {
         $this->runSystemScript($action, 'windows-update');
+    }
+
+    public function updateAgent(ExecuteScriptOnDevice $action): void
+    {
+        $this->runSystemScript($action, 'update-agent');
     }
 
     public function resetEnrolment(): void
@@ -130,13 +139,14 @@ final class Show extends Component
         $this->selectedTagIds = $this->device->tags->pluck('id')->map(fn ($id) => (string) $id)->toArray();
     }
 
-    public function render(): View
+    public function render(AgentVersionQueries $agentVersions): View
     {
         $metrics = $this->device->metrics()->latest('recorded_at')->paginate(10);
         $recentCommands = $this->device->commands()->with(['script', 'queuedBy'])->latest('queued_at')->limit(10)->get();
 
         return view('livewire.devices.show', [
             'device' => $this->device,
+            'latestAgentVersion' => $agentVersions->latest(),
             'apiKeyState' => $this->device->apiKeyState(),
             'apiKeyStateDetail' => $this->device->apiKeyStateDetail(),
             'diskUsage' => $this->device->diskUsage(),
