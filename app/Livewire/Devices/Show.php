@@ -70,8 +70,23 @@ final class Show extends Component
     public function logOff(QueueDeviceCommand $action): void
     {
         abort_unless(auth()->check(), 401);
-        $action($this->device, 'logoff', 'cmd', auth()->user());
+        $action($this->device, $this->logOffAllUsersScript(), 'powershell', auth()->user());
         $this->dispatch('command-queued');
+    }
+
+    /**
+     * The agent runs as SYSTEM in session 0, so a bare `logoff` targets the
+     * service session. Each interactive session has to be logged off by ID.
+     */
+    private function logOffAllUsersScript(): string
+    {
+        return <<<'POWERSHELL'
+            $sessionIds = quser 2>$null | Select-Object -Skip 1 | ForEach-Object {
+                if ($_ -match '\s(\d+)\s+(Active|Disc)') { $Matches[1] }
+            }
+            if (-not $sessionIds) { Write-Output 'No users are logged in.'; exit 0 }
+            $sessionIds | ForEach-Object { logoff $_; Write-Output "Logged off session $_" }
+            POWERSHELL;
     }
 
     public function checkForUpdates(QueueDeviceCommand $action): void

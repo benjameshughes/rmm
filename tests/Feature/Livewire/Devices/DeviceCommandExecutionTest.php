@@ -125,8 +125,8 @@ describe('Device Show Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('logoff');
-        expect($command->script_type)->toBe('cmd');
+        expect($command->script_content)->toContain('quser')->toContain('logoff $_');
+        expect($command->script_type)->toBe('powershell');
         expect($command->status)->toBe(CommandStatus::Pending);
     });
 
