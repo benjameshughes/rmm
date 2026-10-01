@@ -64,6 +64,13 @@ pub fn icacls_lock_args() -> Vec<String> {
     ]
 }
 
+/// Arguments (after the directory path) that drop every explicit ACE on the
+/// directory itself (not recursive), leaving only inherited ones for
+/// [`icacls_lock_args`] to strip.
+pub fn icacls_reset_args() -> Vec<String> {
+    vec!["/reset".to_string(), "/C".to_string(), "/Q".to_string()]
+}
+
 /// Arguments (after the directory path) that make SYSTEM the owner of the
 /// directory itself (not recursive).
 pub fn icacls_setowner_args() -> Vec<String> {
@@ -327,6 +334,10 @@ fn lock_directory_acl(dir: &Path, report: &mut HardeningReport) -> Result<(), St
         }
     };
 
+    // `/grant:r` only replaces ACEs for the SIDs it names, so explicit ACEs for
+    // anyone else (e.g. a user who pre-created the folder) would survive. Reset
+    // first to drop every explicit ACE, then strip inheritance and grant ours.
+    run(icacls_reset_args(), "reset ACL")?;
     run(icacls_lock_args(), "lock ACL")?;
 
     // Ownership matters only if the directory was created by a non-admin
@@ -369,6 +380,11 @@ pub fn check_data_dir_access(data_dir: &Path) -> io::Result<()> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn reset_args_are_not_recursive() {
+        assert_eq!(icacls_reset_args(), vec!["/reset", "/C", "/Q"]);
+    }
 
     #[test]
     fn lock_args_use_well_known_sids_and_are_not_recursive() {
