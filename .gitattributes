@@ -8,3 +8,6 @@
 
 CHANGELOG.md export-ignore
 README.md export-ignore
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
