@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Actions\Device\AssignDeviceGroup;
-use App\Actions\Device\QueueDeviceCommand;
 use App\Actions\Device\SyncDeviceTags;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Models\Device;
@@ -53,47 +52,24 @@ final class Show extends Component
         $this->device->load('tags');
     }
 
-    public function powerOff(QueueDeviceCommand $action): void
+    public function powerOff(ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($this->device, 'Stop-Computer -Force', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, 'shutdown');
     }
 
-    public function restart(QueueDeviceCommand $action): void
+    public function restart(ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($this->device, 'Restart-Computer -Force', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, 'restart');
     }
 
-    public function logOff(QueueDeviceCommand $action): void
+    public function logOff(ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($this->device, $this->logOffAllUsersScript(), 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, 'log-off');
     }
 
-    /**
-     * The agent runs as SYSTEM in session 0, so a bare `logoff` targets the
-     * service session. Each interactive session has to be logged off by ID.
-     */
-    private function logOffAllUsersScript(): string
+    public function checkForUpdates(ExecuteScriptOnDevice $action): void
     {
-        return <<<'POWERSHELL'
-            $sessionIds = quser 2>$null | Select-Object -Skip 1 | ForEach-Object {
-                if ($_ -match '\s(\d+)\s+(Active|Disc)') { $Matches[1] }
-            }
-            if (-not $sessionIds) { Write-Output 'No users are logged in.'; exit 0 }
-            $sessionIds | ForEach-Object { logoff $_; Write-Output "Logged off session $_" }
-            POWERSHELL;
-    }
-
-    public function checkForUpdates(QueueDeviceCommand $action): void
-    {
-        abort_unless(auth()->check(), 401);
-        $action($this->device, 'Get-WindowsUpdate -Install -AcceptAll -AutoReboot', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, 'windows-update');
     }
 
     public function resetEnrolment(): void
@@ -122,6 +98,13 @@ final class Show extends Component
 
         $this->showScriptModal = false;
         $this->reset('selectedScriptId');
+        $this->dispatch('command-queued');
+    }
+
+    private function runSystemScript(ExecuteScriptOnDevice $action, string $slug): void
+    {
+        abort_unless(auth()->check(), 401);
+        $action(Script::findSystem($slug), $this->device, auth()->user());
         $this->dispatch('command-queued');
     }
 

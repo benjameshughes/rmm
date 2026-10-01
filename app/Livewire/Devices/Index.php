@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Actions\Device\BulkExecuteScript;
-use App\Actions\Device\BulkQueueCommand;
-use App\Actions\Device\QueueDeviceCommand;
+use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
@@ -82,22 +81,14 @@ final class Index extends Component
         $this->selectAll = false;
     }
 
-    public function bulkRestart(BulkQueueCommand $action): void
+    public function bulkRestart(BulkExecuteScript $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $devices = Device::whereIn('id', $this->selectedDevices)->get();
-        $action($devices, 'Restart-Computer -Force', 'powershell', auth()->user());
-        $this->clearSelection();
-        $this->dispatch('command-queued');
+        $this->bulkRunSystemScript($action, 'restart');
     }
 
-    public function bulkPowerOff(BulkQueueCommand $action): void
+    public function bulkPowerOff(BulkExecuteScript $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $devices = Device::whereIn('id', $this->selectedDevices)->get();
-        $action($devices, 'Stop-Computer -Force', 'powershell', auth()->user());
-        $this->clearSelection();
-        $this->dispatch('command-queued');
+        $this->bulkRunSystemScript($action, 'shutdown');
     }
 
     public function bulkRunScript(BulkExecuteScript $action): void
@@ -115,25 +106,19 @@ final class Index extends Component
         $this->dispatch('command-queued');
     }
 
-    public function powerOff(Device $device, QueueDeviceCommand $action): void
+    public function powerOff(Device $device, ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($device, 'Stop-Computer -Force', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, $device, 'shutdown');
     }
 
-    public function restart(Device $device, QueueDeviceCommand $action): void
+    public function restart(Device $device, ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($device, 'Restart-Computer -Force', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, $device, 'restart');
     }
 
-    public function checkForUpdates(Device $device, QueueDeviceCommand $action): void
+    public function checkForUpdates(Device $device, ExecuteScriptOnDevice $action): void
     {
-        abort_unless(auth()->check(), 401);
-        $action($device, 'Get-WindowsUpdate -Install -AcceptAll -AutoReboot', 'powershell', auth()->user());
-        $this->dispatch('command-queued');
+        $this->runSystemScript($action, $device, 'windows-update');
     }
 
     public function render(): View
@@ -146,6 +131,22 @@ final class Index extends Component
             'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->orderBy('name')->get(),
         ]);
+    }
+
+    private function runSystemScript(ExecuteScriptOnDevice $action, Device $device, string $slug): void
+    {
+        abort_unless(auth()->check(), 401);
+        $action(Script::findSystem($slug), $device, auth()->user());
+        $this->dispatch('command-queued');
+    }
+
+    private function bulkRunSystemScript(BulkExecuteScript $action, string $slug): void
+    {
+        abort_unless(auth()->check(), 401);
+        $devices = Device::whereIn('id', $this->selectedDevices)->get();
+        $action(Script::findSystem($slug), $devices, auth()->user());
+        $this->clearSelection();
+        $this->dispatch('command-queued');
     }
 
     protected function query(): Builder

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Script\SyncSystemScripts;
 use App\Livewire\Devices\Index;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -13,6 +14,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
+
+beforeEach(fn () => app(SyncSystemScripts::class)());
 
 it('queues restart for all selected devices', function (): void {
     $user = User::factory()->create();
@@ -26,8 +29,8 @@ it('queues restart for all selected devices', function (): void {
         ->assertDispatched('command-queued');
 
     expect(DeviceCommand::count())->toBe(2);
-    expect(DeviceCommand::where('device_id', $device1->id)->first()->script_content)->toBe('Restart-Computer -Force');
-    expect(DeviceCommand::where('device_id', $device2->id)->first()->script_content)->toBe('Restart-Computer -Force');
+    expect(DeviceCommand::where('device_id', $device1->id)->first()->script_id)->toBe(Script::findSystem('restart')->id);
+    expect(DeviceCommand::where('device_id', $device2->id)->first()->script_id)->toBe(Script::findSystem('restart')->id);
 });
 
 it('queues power off for all selected devices', function (): void {

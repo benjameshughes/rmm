@@ -2,16 +2,20 @@
 
 declare(strict_types=1);
 
+use App\Actions\Script\SyncSystemScripts;
 use App\Enums\CommandStatus;
 use App\Livewire\Devices\Index;
 use App\Livewire\Devices\Show;
 use App\Models\Device;
 use App\Models\DeviceCommand;
+use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
+
+beforeEach(fn () => app(SyncSystemScripts::class)());
 
 describe('Device Index Commands', function (): void {
     it('can queue power off command from index', function (): void {
@@ -26,11 +30,10 @@ describe('Device Index Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Stop-Computer -Force');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('shutdown')->id);
         expect($command->status)->toBe(CommandStatus::Pending);
         expect($command->queued_by)->toBe($user->id);
-        expect($command->timeout_seconds)->toBe(300);
+        expect($command->timeout_seconds)->toBe(config('scripts.system.shutdown.timeout_seconds'));
     });
 
     it('can queue restart command from index', function (): void {
@@ -45,8 +48,7 @@ describe('Device Index Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Restart-Computer -Force');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('restart')->id);
         expect($command->status)->toBe(CommandStatus::Pending);
     });
 
@@ -62,8 +64,7 @@ describe('Device Index Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Get-WindowsUpdate -Install -AcceptAll -AutoReboot');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('windows-update')->id);
         expect($command->status)->toBe(CommandStatus::Pending);
     });
 
@@ -91,8 +92,7 @@ describe('Device Show Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Stop-Computer -Force');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('shutdown')->id);
         expect($command->status)->toBe(CommandStatus::Pending);
         expect($command->queued_by)->toBe($user->id);
     });
@@ -109,8 +109,7 @@ describe('Device Show Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Restart-Computer -Force');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('restart')->id);
     });
 
     it('can queue log off command from show page', function (): void {
@@ -125,8 +124,7 @@ describe('Device Show Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toContain('quser')->toContain('logoff $_');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('log-off')->id);
         expect($command->status)->toBe(CommandStatus::Pending);
     });
 
@@ -142,8 +140,7 @@ describe('Device Show Commands', function (): void {
         $command = DeviceCommand::where('device_id', $device->id)->first();
 
         expect($command)->not->toBeNull();
-        expect($command->script_content)->toBe('Get-WindowsUpdate -Install -AcceptAll -AutoReboot');
-        expect($command->script_type)->toBe('powershell');
+        expect($command->script_id)->toBe(Script::findSystem('windows-update')->id);
     });
 
     it('displays recent commands on show page', function (): void {

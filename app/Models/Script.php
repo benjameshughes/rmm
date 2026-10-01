@@ -16,6 +16,7 @@ final class Script extends Model
     use HasFactory;
 
     protected $fillable = [
+        'slug',
         'name',
         'description',
         'category',
@@ -42,6 +43,11 @@ final class Script extends Model
     public function commands(): HasMany
     {
         return $this->hasMany(DeviceCommand::class);
+    }
+
+    public static function findSystem(string $slug): self
+    {
+        return self::query()->system()->where('slug', $slug)->firstOrFail();
     }
 
     public function scopeSystem($query)

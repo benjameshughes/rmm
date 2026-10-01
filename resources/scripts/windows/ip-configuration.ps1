@@ -1,0 +1,1 @@
+Get-NetIPConfiguration | Format-List
