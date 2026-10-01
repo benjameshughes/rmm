@@ -12,13 +12,23 @@ it('serves the agent installer script with correct base url', function (): void 
 
     $response->assertSuccessful()
         ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
-        ->assertSee(url('/'))
-        ->assertSee('INSTALL NETDATA')
-        ->assertSee('INSTALL RMM AGENT AS WINDOWS SERVICE')
+        ->assertSee('$ServerUrl    = "'.url('/').'"', false)
+        ->assertDontSee('{BASE_URL}')
         ->assertSee('benjameshughes/rmm')
-        ->assertSee('rmm --url')
-        ->assertSee('RMMAgent')
-        ->assertSee('rmm status');
+        ->assertSee('$ServiceName  = "BenJHRMM"', false)
+        ->assertSee('& $agentExe --url $ServerUrl', false)
+        ->assertSee('netdata-x64.msi');
+});
+
+it('never queries Win32_Product, adds antivirus exclusions or matches other RMM products', function (): void {
+    $script = $this->get('/agent/install.ps1')->assertSuccessful()->getContent();
+
+    expect($script)
+        ->not->toContain('Get-WmiObject')
+        ->not->toContain('Win32_Product |')
+        ->not->toContain('Add-MpPreference')
+        ->not->toContain('*RMM*')
+        ->not->toContain('try {');
 });
 
 it('shows agent page with download link for authenticated users', function (): void {
