@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -7,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class DeviceMetric extends Model
+final class DeviceMetric extends Model
 {
     /** @use HasFactory<\Database\Factories\DeviceMetricFactory> */
     use HasFactory;
@@ -47,14 +49,11 @@ class DeviceMetric extends Model
         'recorded_at',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
+            'cpu' => 'float',
+            'ram' => 'float',
             'payload' => 'array',
             'recorded_at' => 'datetime',
         ];

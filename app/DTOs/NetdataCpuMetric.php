@@ -4,21 +4,12 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
-class NetdataCpuMetric
+final class NetdataCpuMetric
 {
-    /**
-     * Create a new CPU metric DTO from raw input.
-     *
-     * @param  mixed  $input  Raw input - can be float, string (JSON), or array
-     */
     public function __construct(
         private readonly mixed $input
     ) {}
 
-    /**
-     * Parse the input and return the CPU usage percentage.
-     * Returns null if the input cannot be parsed.
-     */
     public function getUsagePercent(): ?float
     {
         // If already numeric, return it directly
@@ -46,11 +37,6 @@ class NetdataCpuMetric
         return $this->parseNetdataResponse($data);
     }
 
-    /**
-     * Parse a Netdata API response array.
-     *
-     * @param  array<string, mixed>  $data
-     */
     private function parseNetdataResponse(array $data): ?float
     {
         // Handle both flat format and jsonwrap format (result key)

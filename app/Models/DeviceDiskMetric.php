@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class DeviceDiskMetric extends Model
+final class DeviceDiskMetric extends Model
 {
     protected $fillable = [
         'device_metric_id',

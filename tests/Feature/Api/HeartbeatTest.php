@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\DeviceStatus;
 use App\Models\Device;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -27,9 +28,8 @@ describe('heartbeat endpoint', function (): void {
     });
 
     it('returns 401 for revoked device', function (): void {
-        Device::factory()->create([
-            'api_key' => 'revoked-device-key',
-            'status' => Device::STATUS_REVOKED,
+        Device::factory()->withApiKey('revoked-device-key')->create([
+            'status' => DeviceStatus::Revoked,
         ]);
 
         $response = $this->postJson('/api/heartbeat', [], [
@@ -40,8 +40,7 @@ describe('heartbeat endpoint', function (): void {
     });
 
     it('updates last_seen for valid device', function (): void {
-        $device = Device::factory()->active()->create([
-            'api_key' => 'valid-heartbeat-key',
+        $device = Device::factory()->active()->withApiKey('valid-heartbeat-key')->create([
             'last_seen' => now()->subHour(),
         ]);
 
@@ -58,8 +57,7 @@ describe('heartbeat endpoint', function (): void {
     });
 
     it('updates last_ip for valid device', function (): void {
-        $device = Device::factory()->active()->create([
-            'api_key' => 'ip-test-key',
+        $device = Device::factory()->active()->withApiKey('ip-test-key')->create([
             'last_ip' => '192.168.1.1',
         ]);
 
@@ -74,9 +72,7 @@ describe('heartbeat endpoint', function (): void {
     });
 
     it('accepts X-Device-Key header as alternative', function (): void {
-        Device::factory()->active()->create([
-            'api_key' => 'device-key-header-test',
-        ]);
+        Device::factory()->active()->withApiKey('device-key-header-test')->create();
 
         $response = $this->postJson('/api/heartbeat', [], [
             'X-Device-Key' => 'device-key-header-test',
@@ -86,9 +82,7 @@ describe('heartbeat endpoint', function (): void {
     });
 
     it('is rate limited to 10 requests per minute', function (): void {
-        Device::factory()->active()->create([
-            'api_key' => 'rate-limit-test-key',
-        ]);
+        Device::factory()->active()->withApiKey('rate-limit-test-key')->create();
 
         // First 10 should succeed
         for ($i = 0; $i < 10; $i++) {

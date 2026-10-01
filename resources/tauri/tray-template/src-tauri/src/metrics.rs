@@ -8,11 +8,148 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::Serialize;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
+
+// ============================================================================
+// API key health (dead-key detection)
+// ============================================================================
+
+/// Minimum consecutive 401 responses before the key is considered dead.
+pub const DEAD_KEY_MIN_FAILURES: u32 = 6;
+/// Minimum time the 401 streak must span before the key is considered dead.
+pub const DEAD_KEY_MIN_DURATION: Duration = Duration::from_secs(180);
+
+/// Outcome of an authenticated request, as far as key health is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequestOutcome {
+    /// 2xx - the key was accepted.
+    Success,
+    /// 401 - the key was rejected.
+    Unauthorized,
+    /// Anything else (429, 5xx, other 4xx, timeouts, network errors).
+    /// Says nothing about the key.
+    Inconclusive,
+}
+
+impl RequestOutcome {
+    /// Classify an HTTP status code.
+    pub fn from_status(status: reqwest::StatusCode) -> Self {
+        if status.is_success() {
+            RequestOutcome::Success
+        } else if status == reqwest::StatusCode::UNAUTHORIZED {
+            RequestOutcome::Unauthorized
+        } else {
+            RequestOutcome::Inconclusive
+        }
+    }
+}
+
+/// Counts consecutive 401s across heartbeat and metrics submissions. The key
+/// is declared dead only after at least `min_failures` consecutive 401s that
+/// span at least `min_duration`, with no successful request in between.
+#[derive(Debug)]
+pub struct AuthFailureTracker {
+    min_failures: u32,
+    min_duration: Duration,
+    consecutive: u32,
+    streak_started: Option<Instant>,
+}
+
+impl AuthFailureTracker {
+    pub fn new(min_failures: u32, min_duration: Duration) -> Self {
+        Self {
+            min_failures,
+            min_duration,
+            consecutive: 0,
+            streak_started: None,
+        }
+    }
+
+    /// Record an outcome observed at `now`. Returns true when the key should
+    /// be considered dead.
+    pub fn record(&mut self, outcome: RequestOutcome, now: Instant) -> bool {
+        match outcome {
+            RequestOutcome::Success => {
+                self.consecutive = 0;
+                self.streak_started = None;
+                false
+            }
+            RequestOutcome::Unauthorized => {
+                self.consecutive = self.consecutive.saturating_add(1);
+                let started = *self.streak_started.get_or_insert(now);
+                self.consecutive >= self.min_failures
+                    && now.saturating_duration_since(started) >= self.min_duration
+            }
+            RequestOutcome::Inconclusive => false,
+        }
+    }
+
+    pub fn consecutive_failures(&self) -> u32 {
+        self.consecutive
+    }
+}
+
+/// Shared between the heartbeat and metrics loops of one session. When the key
+/// is declared dead the session token is cancelled so both loops stop and the
+/// agent can return to enrollment.
+pub struct KeyHealth {
+    tracker: Mutex<AuthFailureTracker>,
+    rejected: AtomicBool,
+    session: CancellationToken,
+}
+
+impl KeyHealth {
+    pub fn new(session: CancellationToken) -> Self {
+        Self {
+            tracker: Mutex::new(AuthFailureTracker::new(
+                DEAD_KEY_MIN_FAILURES,
+                DEAD_KEY_MIN_DURATION,
+            )),
+            rejected: AtomicBool::new(false),
+            session,
+        }
+    }
+
+    /// Record an outcome; cancels the session if the key is now dead.
+    pub fn record(&self, outcome: RequestOutcome) {
+        self.record_at(outcome, Instant::now());
+    }
+
+    fn record_at(&self, outcome: RequestOutcome, now: Instant) {
+        let (dead, count) = {
+            let mut tracker = self
+                .tracker
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let dead = tracker.record(outcome, now);
+            (dead, tracker.consecutive_failures())
+        };
+
+        if outcome == RequestOutcome::Unauthorized && !dead {
+            warn!("API key rejected (401), {} consecutive", count);
+        }
+
+        if dead && !self.rejected.swap(true, Ordering::SeqCst) {
+            error!(
+                "API key rejected {} times in a row for over {}s - discarding key and re-enrolling",
+                count,
+                DEAD_KEY_MIN_DURATION.as_secs()
+            );
+            self.session.cancel();
+        }
+    }
+
+    /// True once the key has been declared dead.
+    pub fn key_rejected(&self) -> bool {
+        self.rejected.load(Ordering::SeqCst)
+    }
+}
 
 // ============================================================================
 // Simple Payload Structure (sent to Laravel)
@@ -149,49 +286,57 @@ impl MetricsCollector {
     }
 
     /// Submit raw metrics to Laravel backend
-    pub async fn submit_metrics(&self, metrics: &RawMetricsPayload, api_key: &str) -> Result<()> {
+    pub async fn submit_metrics(
+        &self,
+        metrics: &RawMetricsPayload,
+        api_key: &str,
+    ) -> RequestOutcome {
         let url = format!("{}/api/metrics", self.config.base_url);
 
         debug!("Submitting metrics to backend: {}", url);
 
-        let response = self
+        let response = match self
             .client
             .post(&url)
             .header("X-Agent-Key", api_key)
             .json(metrics)
             .send()
             .await
-            .context("Failed to submit metrics to backend")?;
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                warn!("Failed to submit metrics (network error): {}", e);
+                return RequestOutcome::Inconclusive;
+            }
+        };
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+        let outcome = RequestOutcome::from_status(status);
+
+        if outcome == RequestOutcome::Success {
+            debug!("Metrics submitted successfully");
+        } else {
             let body = response.text().await.unwrap_or_default();
             warn!("Metrics submission failed: {} - {}", status, body);
-            anyhow::bail!("Metrics submission failed with status {}: {}", status, body)
         }
 
-        debug!("Metrics submitted successfully");
-        Ok(())
+        outcome
     }
 
     /// Collect and submit metrics in one operation
-    pub async fn collect_and_submit(&self, api_key: &str) -> Result<()> {
+    pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
         let metrics = self.collect_metrics().await;
+        let outcome = self.submit_metrics(&metrics, api_key).await;
 
-        match self.submit_metrics(&metrics, api_key).await {
-            Ok(_) => {
-                if metrics.netdata_cpu.is_some() || metrics.netdata_ram.is_some() {
-                    info!("Metrics submitted (raw Netdata data)");
-                } else {
-                    warn!("Metrics submitted with no Netdata data (Netdata may be unavailable)");
-                }
-                Ok(())
-            }
-            Err(e) => {
-                warn!("Failed to submit metrics: {}", e);
-                Ok(()) // Don't propagate - retry next interval
+        if outcome == RequestOutcome::Success {
+            if metrics.netdata_cpu.is_some() || metrics.netdata_ram.is_some() {
+                info!("Metrics submitted (raw Netdata data)");
+            } else {
+                warn!("Metrics submitted with no Netdata data (Netdata may be unavailable)");
             }
         }
+
+        outcome
     }
 
     /// Check if Netdata is available
@@ -214,8 +359,13 @@ impl MetricsCollector {
         }
     }
 
-    /// Start metrics collection loop
-    pub async fn start_metrics_loop(&self, api_key: String, cancellation_token: CancellationToken) {
+    /// Start metrics collection loop (runs until the session token is cancelled)
+    pub async fn start_metrics_loop(
+        &self,
+        api_key: String,
+        cancellation_token: CancellationToken,
+        key_health: Arc<KeyHealth>,
+    ) {
         info!(
             "Starting metrics collection loop (interval: {}s)",
             self.config.metrics_interval
@@ -232,9 +382,8 @@ impl MetricsCollector {
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(self.config.metrics_interval)) => {
-                    if let Err(e) = self.collect_and_submit(&api_key).await {
-                        error!("Error in metrics collection: {}", e);
-                    }
+                    let outcome = self.collect_and_submit(&api_key).await;
+                    key_health.record(outcome);
                 }
             }
         }
@@ -243,7 +392,7 @@ impl MetricsCollector {
     }
 
     /// Send a lightweight heartbeat to the backend
-    pub async fn send_heartbeat(&self, api_key: &str) -> Result<()> {
+    pub async fn send_heartbeat(&self, api_key: &str) -> RequestOutcome {
         let url = format!("{}/api/heartbeat", self.config.base_url);
 
         debug!("Sending heartbeat to: {}", url);
@@ -258,32 +407,41 @@ impl MetricsCollector {
         match response {
             Ok(resp) => {
                 let status = resp.status();
+                let outcome = RequestOutcome::from_status(status);
 
-                if status.is_success() {
-                    debug!("Heartbeat OK");
-                    Ok(())
-                } else if status == reqwest::StatusCode::UNAUTHORIZED {
-                    let body = resp.text().await.unwrap_or_default();
-                    warn!("Heartbeat auth failed (401): {}", body);
-                    anyhow::bail!("Authentication failed: {}", body)
-                } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    warn!("Heartbeat rate limited (429)");
-                    Ok(())
-                } else {
-                    let body = resp.text().await.unwrap_or_default();
-                    warn!("Heartbeat failed ({}): {}", status.as_u16(), body);
-                    Ok(())
+                match outcome {
+                    RequestOutcome::Success => debug!("Heartbeat OK"),
+                    RequestOutcome::Unauthorized => {
+                        let body = resp.text().await.unwrap_or_default();
+                        warn!("Heartbeat auth failed (401): {}", body);
+                    }
+                    RequestOutcome::Inconclusive
+                        if status == reqwest::StatusCode::TOO_MANY_REQUESTS =>
+                    {
+                        warn!("Heartbeat rate limited (429)");
+                    }
+                    RequestOutcome::Inconclusive => {
+                        let body = resp.text().await.unwrap_or_default();
+                        warn!("Heartbeat failed ({}): {}", status.as_u16(), body);
+                    }
                 }
+
+                outcome
             }
             Err(e) => {
                 warn!("Heartbeat network error: {}", e);
-                Ok(())
+                RequestOutcome::Inconclusive
             }
         }
     }
 
-    /// Start heartbeat loop
-    pub async fn start_heartbeat_loop(&self, api_key: String, cancellation_token: CancellationToken) {
+    /// Start heartbeat loop (runs until the session token is cancelled)
+    pub async fn start_heartbeat_loop(
+        &self,
+        api_key: String,
+        cancellation_token: CancellationToken,
+        key_health: Arc<KeyHealth>,
+    ) {
         info!(
             "Starting heartbeat loop (interval: {}s)",
             self.config.heartbeat_interval
@@ -296,9 +454,8 @@ impl MetricsCollector {
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(self.config.heartbeat_interval)) => {
-                    if let Err(e) = self.send_heartbeat(&api_key).await {
-                        error!("Heartbeat error: {}", e);
-                    }
+                    let outcome = self.send_heartbeat(&api_key).await;
+                    key_health.record(outcome);
                 }
             }
         }
@@ -339,5 +496,142 @@ mod tests {
         assert!(json.contains("test-host"));
         assert!(json.contains("netdata_cpu"));
         assert!(json.contains("10.5"));
+    }
+
+    use reqwest::StatusCode;
+
+    fn tracker() -> AuthFailureTracker {
+        AuthFailureTracker::new(DEAD_KEY_MIN_FAILURES, DEAD_KEY_MIN_DURATION)
+    }
+
+    #[test]
+    fn classifies_status_codes() {
+        assert_eq!(RequestOutcome::from_status(StatusCode::OK), RequestOutcome::Success);
+        assert_eq!(RequestOutcome::from_status(StatusCode::NO_CONTENT), RequestOutcome::Success);
+        assert_eq!(
+            RequestOutcome::from_status(StatusCode::UNAUTHORIZED),
+            RequestOutcome::Unauthorized
+        );
+        for status in [
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::BAD_GATEWAY,
+            StatusCode::SERVICE_UNAVAILABLE,
+            StatusCode::GATEWAY_TIMEOUT,
+            StatusCode::FORBIDDEN,
+            StatusCode::NOT_FOUND,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ] {
+            assert_eq!(
+                RequestOutcome::from_status(status),
+                RequestOutcome::Inconclusive,
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn trips_after_sustained_401s() {
+        let mut t = tracker();
+        let start = Instant::now();
+        let mut tripped_at = None;
+        // A 401 every 30s (heartbeat cadence).
+        for i in 0..20u64 {
+            if t.record(RequestOutcome::Unauthorized, start + Duration::from_secs(i * 30)) {
+                tripped_at = Some(i);
+                break;
+            }
+        }
+        // 7th failure (index 6) is the first one at >= 180s after the first.
+        assert_eq!(tripped_at, Some(6));
+    }
+
+    #[test]
+    fn short_burst_of_401s_does_not_trip() {
+        let mut t = tracker();
+        let start = Instant::now();
+        // Many 401s inside two minutes: count reached, duration not.
+        for i in 0..50u64 {
+            assert!(!t.record(RequestOutcome::Unauthorized, start + Duration::from_secs(i * 2)));
+        }
+    }
+
+    #[test]
+    fn few_401s_over_long_time_do_not_trip() {
+        let mut t = tracker();
+        let start = Instant::now();
+        // Duration reached, count not.
+        for i in 0..(DEAD_KEY_MIN_FAILURES as u64 - 1) {
+            assert!(!t.record(RequestOutcome::Unauthorized, start + Duration::from_secs(i * 600)));
+        }
+    }
+
+    #[test]
+    fn success_resets_the_streak() {
+        let mut t = tracker();
+        let start = Instant::now();
+        for i in 0..5u64 {
+            assert!(!t.record(RequestOutcome::Unauthorized, start + Duration::from_secs(i * 30)));
+        }
+        assert!(!t.record(RequestOutcome::Success, start + Duration::from_secs(160)));
+        assert_eq!(t.consecutive_failures(), 0);
+        // The streak starts over: 6 more failures at 30s spacing span only 150s.
+        for i in 0..6u64 {
+            assert!(!t.record(
+                RequestOutcome::Unauthorized,
+                start + Duration::from_secs(170 + i * 30)
+            ));
+        }
+        assert!(t.record(RequestOutcome::Unauthorized, start + Duration::from_secs(170 + 6 * 30)));
+    }
+
+    #[test]
+    fn inconclusive_outcomes_never_trip_or_reset() {
+        let mut t = tracker();
+        let start = Instant::now();
+        for i in 0..100u64 {
+            assert!(!t.record(RequestOutcome::Inconclusive, start + Duration::from_secs(i * 30)));
+        }
+        assert_eq!(t.consecutive_failures(), 0);
+
+        // 429/5xx/network errors interleaved with 401s neither count nor reset.
+        let mut t = tracker();
+        let mut tripped = false;
+        for i in 0..14u64 {
+            let outcome = if i % 2 == 0 {
+                RequestOutcome::Unauthorized
+            } else {
+                RequestOutcome::Inconclusive
+            };
+            tripped = t.record(outcome, start + Duration::from_secs(i * 30));
+            if tripped {
+                break;
+            }
+        }
+        assert!(tripped);
+        assert_eq!(t.consecutive_failures(), DEAD_KEY_MIN_FAILURES);
+    }
+
+    #[test]
+    fn key_health_cancels_session_once() {
+        let token = CancellationToken::new();
+        let health = KeyHealth::new(token.clone());
+        health.record(RequestOutcome::Unauthorized);
+        health.record(RequestOutcome::Success);
+        assert!(!health.key_rejected());
+        assert!(!token.is_cancelled());
+
+        let start = Instant::now();
+        for i in 0..DEAD_KEY_MIN_FAILURES as u64 {
+            health.record_at(RequestOutcome::Unauthorized, start + Duration::from_secs(i * 30));
+            assert!(!token.is_cancelled());
+        }
+        health.record_at(RequestOutcome::Unauthorized, start + DEAD_KEY_MIN_DURATION);
+        assert!(health.key_rejected());
+        assert!(token.is_cancelled());
+
+        // Further failures do not re-trigger anything.
+        health.record_at(RequestOutcome::Unauthorized, start + DEAD_KEY_MIN_DURATION * 2);
+        assert!(health.key_rejected());
     }
 }

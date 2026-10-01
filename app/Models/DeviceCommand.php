@@ -4,27 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CommandStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class DeviceCommand extends Model
+final class DeviceCommand extends Model
 {
     use HasFactory;
-
-    public const STATUS_PENDING = 'pending';
-
-    public const STATUS_SENT = 'sent';
-
-    public const STATUS_RUNNING = 'running';
-
-    public const STATUS_COMPLETED = 'completed';
-
-    public const STATUS_FAILED = 'failed';
-
-    public const STATUS_TIMED_OUT = 'timed_out';
-
-    public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
         'device_id',
@@ -52,6 +39,7 @@ class DeviceCommand extends Model
             'completed_at' => 'datetime',
             'timeout_seconds' => 'integer',
             'exit_code' => 'integer',
+            'status' => CommandStatus::class,
         ];
     }
 
@@ -72,28 +60,23 @@ class DeviceCommand extends Model
 
     public function isPending(): bool
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->status === CommandStatus::Pending;
     }
 
     public function isCompleted(): bool
     {
-        return in_array($this->status, [
-            self::STATUS_COMPLETED,
-            self::STATUS_FAILED,
-            self::STATUS_TIMED_OUT,
-            self::STATUS_CANCELLED,
-        ]);
+        return $this->status->isTerminal();
     }
 
     public function isSuccessful(): bool
     {
-        return $this->status === self::STATUS_COMPLETED && $this->exit_code === 0;
+        return $this->status === CommandStatus::Completed && $this->exit_code === 0;
     }
 
     public function markAsSent(): void
     {
         $this->update([
-            'status' => self::STATUS_SENT,
+            'status' => CommandStatus::Sent,
             'sent_at' => now(),
         ]);
     }
@@ -101,7 +84,7 @@ class DeviceCommand extends Model
     public function markAsRunning(): void
     {
         $this->update([
-            'status' => self::STATUS_RUNNING,
+            'status' => CommandStatus::Running,
             'started_at' => now(),
         ]);
     }
@@ -109,7 +92,7 @@ class DeviceCommand extends Model
     public function markAsCompleted(string $output, int $exitCode): void
     {
         $this->update([
-            'status' => $exitCode === 0 ? self::STATUS_COMPLETED : self::STATUS_FAILED,
+            'status' => $exitCode === 0 ? CommandStatus::Completed : CommandStatus::Failed,
             'output' => $output,
             'exit_code' => $exitCode,
             'completed_at' => now(),
@@ -119,7 +102,7 @@ class DeviceCommand extends Model
     public function markAsFailed(string $errorMessage, ?string $output = null, ?int $exitCode = null): void
     {
         $this->update([
-            'status' => self::STATUS_FAILED,
+            'status' => CommandStatus::Failed,
             'error_message' => $errorMessage,
             'output' => $output,
             'exit_code' => $exitCode,
@@ -130,7 +113,7 @@ class DeviceCommand extends Model
     public function markAsTimedOut(): void
     {
         $this->update([
-            'status' => self::STATUS_TIMED_OUT,
+            'status' => CommandStatus::TimedOut,
             'error_message' => "Command timed out after {$this->timeout_seconds} seconds",
             'completed_at' => now(),
         ]);
@@ -140,7 +123,7 @@ class DeviceCommand extends Model
     {
         if (! $this->isCompleted()) {
             $this->update([
-                'status' => self::STATUS_CANCELLED,
+                'status' => CommandStatus::Cancelled,
                 'completed_at' => now(),
             ]);
         }
@@ -148,7 +131,7 @@ class DeviceCommand extends Model
 
     public function scopePending($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->where('status', CommandStatus::Pending);
     }
 
     public function scopeForDevice($query, int $deviceId)

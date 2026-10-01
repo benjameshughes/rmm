@@ -57,6 +57,20 @@ jobs:
         working-directory: resources/tauri/tray-template/src-tauri
         run: cargo build --release
 
+      - name: Run Tests
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: cargo test --release
+
+      # Agents refuse to auto-update unless rmm.exe matches this checksum
+      - name: Generate rmm.exe SHA-256
+        shell: pwsh
+        working-directory: resources/tauri/tray-template/src-tauri/target/release
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath rmm.exe).Hash.ToLowerInvariant()
+          if ($hash -notmatch '^[0-9a-f]{64}$') { throw "Unexpected hash: $hash" }
+          Set-Content -LiteralPath rmm.exe.sha256 -Value "$hash  rmm.exe" -NoNewline -Encoding ascii
+          Write-Host "rmm.exe SHA-256: $hash"
+
       - name: Convert PNG to ICO
         run: magick resources/tauri/tray-template/src-tauri/icons/icon.png -define icon:auto-resize=256,128,64,48,32,16 resources/tauri/tray-template/src-tauri/icons/icon.ico
 
@@ -75,7 +89,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rmm-agent-exe
-          path: resources/tauri/tray-template/src-tauri/target/release/rmm.exe
+          path: |
+            resources/tauri/tray-template/src-tauri/target/release/rmm.exe
+            resources/tauri/tray-template/src-tauri/target/release/rmm.exe.sha256
           retention-days: 90
 
       - name: Create Release
@@ -87,6 +103,7 @@ jobs:
           files: |
             resources/tauri/tray-template/src-tauri/target/wix/*.msi
             resources/tauri/tray-template/src-tauri/target/release/rmm.exe
+            resources/tauri/tray-template/src-tauri/target/release/rmm.exe.sha256
           generate_release_notes: false
           body: |
             ## RMM Agent v${{ steps.version.outputs.VERSION }}
@@ -94,6 +111,7 @@ jobs:
             ### Downloads
             - **MSI Installer** - For fresh installations
             - **rmm.exe** - For auto-updates (agents download this automatically)
+            - **rmm.exe.sha256** - SHA-256 of rmm.exe; agents refuse updates that do not match
 
             ### Installation
             Run the MSI installer or use PowerShell:
@@ -104,6 +122,7 @@ jobs:
             ### After Installation
             The `rmm` command will be available in PATH:
             ```powershell
+            # Run from an elevated (Administrator) prompt
             rmm status           # Show agent status
             rmm update --check   # Check for updates
             rmm --url <URL>      # Set server URL

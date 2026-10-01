@@ -16,6 +16,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             DeviceSeeder::class,
+            ScriptSeeder::class,
+            DeviceGroupSeeder::class,
+            AlertRuleSeeder::class,
         ]);
     }
 }

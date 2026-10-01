@@ -6,10 +6,29 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
-use crate::metrics::MetricsCollector;
+use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
 use crate::updater::Updater;
+
+/// Why a metrics session (one API key) ended
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionEnd {
+    /// Graceful shutdown requested
+    Shutdown,
+    /// The server kept rejecting the API key (401) - re-enroll
+    KeyRejected,
+}
+
+/// Decide why a session ended. Shutdown always wins so a service stop never
+/// deletes the key.
+fn session_end(key_rejected: bool, shutdown_requested: bool) -> SessionEnd {
+    if key_rejected && !shutdown_requested {
+        SessionEnd::KeyRejected
+    } else {
+        SessionEnd::Shutdown
+    }
+}
 
 /// Agent state
 #[derive(Debug, Clone, PartialEq)]
@@ -107,28 +126,57 @@ impl Agent {
     }
 
     /// Start the agent (blocking - runs until cancelled)
+    ///
+    /// Loops: enroll if there is no key, then run the metrics session. If the
+    /// server keeps rejecting the key (see `KeyHealth`), the key is discarded
+    /// and the agent goes back through enrollment and approval.
     pub async fn run(self: Arc<Self>) -> Result<()> {
         info!("Starting RMM Agent");
         info!("Device: {}", self.system_info.hostname);
-        info!("Fingerprint: {}", self.system_info.hardware_fingerprint);
+        info!(
+            "Fingerprint: {}...",
+            self.system_info.fingerprint_prefix()
+        );
         info!("Server URL: {}", self.config.base_url);
 
-        // Check if already enrolled
-        if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
-            info!("Device is already enrolled, starting metrics collection");
+        while !self.cancellation_token.is_cancelled() {
+            let api_key = match self.enrollment_manager.get_api_key().await? {
+                Some(api_key) => {
+                    info!("Device is enrolled, starting metrics collection");
+                    api_key
+                }
+                None => {
+                    info!("Device not enrolled, starting enrollment process");
+                    match self.enroll_and_wait_for_key().await {
+                        Some(api_key) => api_key,
+                        None => return Ok(()),
+                    }
+                }
+            };
+
             self.set_state(AgentState::Active).await;
-            self.run_metrics_loop(api_key).await;
-        } else {
-            // Need to enroll first
-            info!("Device not enrolled, starting enrollment process");
-            self.run_enrollment_then_metrics().await?;
+
+            match self.run_metrics_loop(api_key).await {
+                SessionEnd::Shutdown => break,
+                SessionEnd::KeyRejected => {
+                    warn!("Server no longer accepts this device's API key - re-enrolling");
+                    if let Err(e) = self.enrollment_manager.clear_api_key().await {
+                        let msg = format!("Failed to clear rejected API key: {}", e);
+                        error!("{}", msg);
+                        self.set_state(AgentState::Error(msg)).await;
+                        return Err(e);
+                    }
+                    self.set_state(AgentState::NotEnrolled).await;
+                }
+            }
         }
 
         Ok(())
     }
 
-    /// Run enrollment process, then start metrics collection
-    async fn run_enrollment_then_metrics(&self) -> Result<()> {
+    /// Run enrollment and wait for approval. Returns the API key once the
+    /// device is approved, or None if enrollment failed or was cancelled.
+    async fn enroll_and_wait_for_key(&self) -> Option<String> {
         info!("Enrolling device with backend");
 
         // Submit enrollment request (with built-in retry logic)
@@ -146,7 +194,7 @@ impl Agent {
                 let msg = format!("Enrollment failed: {}", e);
                 error!("{}", msg);
                 self.set_state(AgentState::Error(msg)).await;
-                return Ok(());
+                return None;
             }
         }
 
@@ -159,30 +207,39 @@ impl Agent {
         {
             Ok(_) => {
                 info!("Device approved!");
-                self.set_state(AgentState::Active).await;
-
-                // Get the API key and start metrics
-                if let Some(api_key) = self.enrollment_manager.get_api_key().await? {
-                    self.run_metrics_loop(api_key).await;
-                } else {
-                    let msg = "Device approved but no API key found".to_string();
-                    error!("{}", msg);
-                    self.set_state(AgentState::Error(msg)).await;
+                match self.enrollment_manager.get_api_key().await {
+                    Ok(Some(api_key)) => Some(api_key),
+                    Ok(None) => {
+                        let msg = "Device approved but no API key found".to_string();
+                        error!("{}", msg);
+                        self.set_state(AgentState::Error(msg)).await;
+                        None
+                    }
+                    Err(e) => {
+                        let msg = format!("Device approved but API key unreadable: {}", e);
+                        error!("{}", msg);
+                        self.set_state(AgentState::Error(msg)).await;
+                        None
+                    }
                 }
             }
             Err(e) => {
                 let msg = format!("Enrollment approval failed: {}", e);
                 error!("{}", msg);
                 self.set_state(AgentState::Error(msg)).await;
+                None
             }
         }
-
-        Ok(())
     }
 
-    /// Run the metrics and heartbeat collection loops (blocks until cancelled)
-    async fn run_metrics_loop(&self, api_key: String) {
+    /// Run the metrics, heartbeat and update loops for one key (blocks until
+    /// shutdown or until the key is declared dead).
+    async fn run_metrics_loop(&self, api_key: String) -> SessionEnd {
         info!("Starting metrics, heartbeat, and update check loops");
+
+        // Cancelled on shutdown (parent token) or when the key is rejected.
+        let session_token = self.cancellation_token.child_token();
+        let key_health = Arc::new(KeyHealth::new(session_token.clone()));
 
         let collector = match MetricsCollector::new(
             self.config.clone(),
@@ -191,7 +248,7 @@ impl Agent {
             Ok(c) => c,
             Err(e) => {
                 error!("Failed to create metrics collector: {}", e);
-                return;
+                return SessionEnd::Shutdown;
             }
         };
 
@@ -209,22 +266,23 @@ impl Agent {
             Ok(c) => c,
             Err(e) => {
                 error!("Failed to create heartbeat collector: {}", e);
-                return;
+                return SessionEnd::Shutdown;
             }
         };
 
         // Spawn heartbeat loop as a separate task
         let heartbeat_api_key = api_key.clone();
-        let heartbeat_token = self.cancellation_token.clone();
+        let heartbeat_token = session_token.clone();
+        let heartbeat_health = key_health.clone();
         let heartbeat_handle = tokio::spawn(async move {
             heartbeat_collector
-                .start_heartbeat_loop(heartbeat_api_key, heartbeat_token)
+                .start_heartbeat_loop(heartbeat_api_key, heartbeat_token, heartbeat_health)
                 .await;
         });
 
         // Spawn update check loop as a separate task
         let update_config = self.config.clone();
-        let update_token = self.cancellation_token.clone();
+        let update_token = session_token.clone();
         let update_handle = tokio::spawn(async move {
             match Updater::new(update_config) {
                 Ok(updater) => {
@@ -236,14 +294,20 @@ impl Agent {
             }
         });
 
-        // Start the metrics loop (blocks until cancelled)
+        // Start the metrics loop (blocks until the session is cancelled)
         collector
-            .start_metrics_loop(api_key, self.cancellation_token.clone())
+            .start_metrics_loop(api_key, session_token.clone(), key_health.clone())
             .await;
 
-        // Wait for other loops to finish
+        // Make sure the other loops stop too, then wait for them
+        session_token.cancel();
         let _ = heartbeat_handle.await;
         let _ = update_handle.await;
+
+        session_end(
+            key_health.key_rejected(),
+            self.cancellation_token.is_cancelled(),
+        )
     }
 
     /// Trigger graceful shutdown
@@ -301,5 +365,18 @@ impl Agent {
     /// Get the config
     pub fn config(&self) -> &Config {
         &self.config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shutdown_wins_over_key_rejection() {
+        assert_eq!(session_end(false, false), SessionEnd::Shutdown);
+        assert_eq!(session_end(false, true), SessionEnd::Shutdown);
+        assert_eq!(session_end(true, true), SessionEnd::Shutdown);
+        assert_eq!(session_end(true, false), SessionEnd::KeyRejected);
     }
 }

@@ -12,7 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'device.auth' => \App\Http\Middleware\AuthenticateDevice::class,
+        ]);
+
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            prepend: \App\Http\Middleware\AuthenticateDevice::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

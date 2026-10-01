@@ -4,6 +4,8 @@
   - Installs rmm.exe to Program Files
   - Adds install directory to system PATH
   - Registers and starts the Windows service
+  - Locks the data folder to SYSTEM + Administrators (MsiLockPermissionsEx,
+    Windows Installer 5.0); the service re-applies this at every start
 -->
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
     <Product
@@ -13,13 +15,13 @@
         Manufacturer='Ben Hughes'
         Language='1033'
         Codepage='1252'
-        Version='0.3.0'>
+        Version='$(var.Version)'>
 
         <Package Id='*'
             Keywords='Installer'
             Description='BenJH RMM - Remote Monitoring and Management'
             Manufacturer='Ben Hughes'
-            InstallerVersion='450'
+            InstallerVersion='500'
             Languages='1033'
             Compressed='yes'
             InstallScope='perMachine'
@@ -63,7 +65,10 @@
             <Directory Id='CommonAppDataFolder'>
                 <Directory Id='RMMDataFolder' Name='BenJH RMM'>
                     <Component Id='DataFolderComponent' Guid='E5F6A7B8-C9D0-1234-EF01-345678901234' Win64='yes'>
-                        <CreateFolder/>
+                        <CreateFolder>
+                            <!-- Protected DACL: full control for SYSTEM (SY) and Administrators (BA) only, no inheritance from ProgramData -->
+                            <PermissionEx Id='RMMDataFolderAcl' Sddl='D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'/>
+                        </CreateFolder>
                         <RegistryValue Root='HKLM' Key='Software\BenJH RMM' Name='DataFolder' Type='string' Value='[RMMDataFolder]' KeyPath='yes'/>
                     </Component>
                 </Directory>

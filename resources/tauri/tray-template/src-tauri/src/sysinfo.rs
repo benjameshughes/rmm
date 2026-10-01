@@ -170,6 +170,13 @@ impl SystemInfo {
         hex::encode(result)
     }
 
+    /// First 8 characters of the hardware fingerprint, safe for logs. The full
+    /// fingerprint is what lets an approved device claim its API key, so it
+    /// must never be logged.
+    pub fn fingerprint_prefix(&self) -> &str {
+        fingerprint_prefix(&self.hardware_fingerprint)
+    }
+
     /// Get a summary string for display
     pub fn summary(&self) -> String {
         format!(
@@ -179,9 +186,27 @@ impl SystemInfo {
     }
 }
 
+/// First 8 characters of a fingerprint (or less if it is shorter).
+pub fn fingerprint_prefix(fingerprint: &str) -> &str {
+    let end = fingerprint
+        .char_indices()
+        .nth(8)
+        .map(|(i, _)| i)
+        .unwrap_or(fingerprint.len());
+    &fingerprint[..end]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fingerprint_prefix_is_short() {
+        let fp = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        assert_eq!(fingerprint_prefix(fp), "01234567");
+        assert_eq!(fingerprint_prefix("abc"), "abc");
+        assert_eq!(fingerprint_prefix(""), "");
+    }
 
     #[test]
     fn test_gather_system_info() {

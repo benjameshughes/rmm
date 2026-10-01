@@ -4,49 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ScriptCategory;
+use App\Enums\ScriptPlatform;
+use App\Enums\ScriptType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Script extends Model
+final class Script extends Model
 {
     use HasFactory;
-    use SoftDeletes;
-
-    public const CATEGORY_POWER = 'power';
-
-    public const CATEGORY_NETWORK = 'network';
-
-    public const CATEGORY_MAINTENANCE = 'maintenance';
-
-    public const CATEGORY_SECURITY = 'security';
-
-    public const CATEGORY_INFO = 'info';
-
-    public const CATEGORY_SERVICES = 'services';
-
-    public const CATEGORY_PROCESSES = 'processes';
-
-    public const CATEGORY_UPDATES = 'updates';
-
-    public const CATEGORY_USER = 'user';
-
-    public const PLATFORM_WINDOWS = 'windows';
-
-    public const PLATFORM_LINUX = 'linux';
-
-    public const PLATFORM_MACOS = 'macos';
-
-    public const PLATFORM_ALL = 'all';
-
-    public const TYPE_POWERSHELL = 'powershell';
-
-    public const TYPE_BASH = 'bash';
-
-    public const TYPE_CMD = 'cmd';
-
-    public const TYPE_SH = 'sh';
 
     protected $fillable = [
         'name',
@@ -66,6 +33,9 @@ class Script extends Model
             'is_system' => 'boolean',
             'requires_admin' => 'boolean',
             'timeout_seconds' => 'integer',
+            'category' => ScriptCategory::class,
+            'platform' => ScriptPlatform::class,
+            'script_type' => ScriptType::class,
         ];
     }
 
@@ -84,12 +54,12 @@ class Script extends Model
         return $query->where('is_system', false);
     }
 
-    public function scopeForPlatform($query, string $platform)
+    public function scopeForPlatform($query, ScriptPlatform $platform)
     {
-        return $query->whereIn('platform', [$platform, self::PLATFORM_ALL]);
+        return $query->whereIn('platform', [$platform, ScriptPlatform::All]);
     }
 
-    public function scopeByCategory($query, string $category)
+    public function scopeByCategory($query, ScriptCategory $category)
     {
         return $query->where('category', $category);
     }

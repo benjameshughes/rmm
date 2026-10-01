@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
-class AgentTrayController extends Controller
+final class AgentTrayController
 {
-    public function download()
+    public function download(): BinaryFileResponse
     {
         $appName = 'RMM Tray';
         $baseUrl = url('/');
@@ -60,11 +62,7 @@ class AgentTrayController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
-    /**
-     * Serve the built Tauri exe for direct download.
-     * Upload your built exe to: storage/app/agent/rmm-tray.exe
-     */
-    public function downloadExe()
+    public function downloadExe(): BinaryFileResponse
     {
         $exePath = storage_path('app/agent/rmm-tray.exe');
 

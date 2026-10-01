@@ -3,6 +3,7 @@
 
 mod agent;
 mod config;
+mod data_dir_security;
 mod enrollment;
 mod metrics;
 mod runtime_config;
@@ -173,8 +174,8 @@ async fn cleanup_old_logs(config: &Config) {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
 
-                // Only process .log files
-                if path.extension().and_then(|s| s.to_str()) != Some("log") {
+                // Only process agent log files (agent.log and rolled agent.log.YYYY-MM-DD)
+                if !is_agent_log_file(&path) {
                     continue;
                 }
 
@@ -198,6 +199,14 @@ async fn cleanup_old_logs(config: &Config) {
             warn!("Failed to read log directory for cleanup: {}", e);
         }
     }
+}
+
+/// True for `agent.log` and its daily rolled files (`agent.log.YYYY-MM-DD`).
+fn is_agent_log_file(path: &std::path::Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n.starts_with("agent.log"))
+        .unwrap_or(false)
 }
 
 /// Initialize console logging for status/install commands
@@ -277,14 +286,27 @@ fn service_main(_arguments: Vec<OsString>) {
 
 #[cfg(windows)]
 fn run_service() -> Result<()> {
-    // Load config
-    let runtime_config = RuntimeConfig::load().unwrap_or_default();
+    // Lock down the data directory BEFORE anything in it is read (config.json,
+    // agent.key) or opened for writing (logs). This also deletes the legacy
+    // update\ staging directory. Paths here do not depend on config.json.
+    let default_config = Config::default();
+    let hardening = data_dir_security::secure_data_dir(&default_config.data_dir);
+
+    // Initialize logging (log location is fixed, not taken from config.json)
+    let _guard = init_logging(&default_config);
+
+    info!("Windows service starting (v{})", env!("CARGO_PKG_VERSION"));
+    hardening.log();
+
+    // Load config (only after the directory is locked down)
+    let runtime_config = match RuntimeConfig::load() {
+        Ok(rc) => rc,
+        Err(e) => {
+            warn!("Ignoring unreadable runtime config: {:#}", e);
+            RuntimeConfig::default()
+        }
+    };
     let config = Config::with_runtime_config(&runtime_config);
-
-    // Initialize logging
-    let _guard = init_logging(&config);
-
-    info!("Windows service starting");
 
     // Create tokio runtime
     let rt = tokio::runtime::Runtime::new()?;
@@ -493,7 +515,14 @@ fn stop_service_cmd() -> Result<()> {
 fn show_status() -> Result<()> {
     init_console_logging();
 
-    let runtime_config = RuntimeConfig::load().unwrap_or_default();
+    let runtime_config = match RuntimeConfig::load() {
+        Ok(rc) => rc,
+        Err(e) if data_dir_security::is_permission_denied(&e) => return Err(e),
+        Err(e) => {
+            eprintln!("Warning: ignoring unreadable runtime config: {:#}", e);
+            RuntimeConfig::default()
+        }
+    };
     let config = Config::with_runtime_config(&runtime_config);
 
     println!("RMM Agent Status");
@@ -697,16 +726,23 @@ fn check_for_updates(check_only: bool) -> Result<()> {
 
                 if !check_only {
                     println!();
-                    println!("Downloading update...");
-                    match updater.download_update(&info).await {
+                    println!("Downloading and verifying update...");
+                    match updater.download_and_install(&info).await {
                         Ok(path) => {
-                            println!("Downloaded to: {}", path.display());
-                            println!();
-                            println!("Update downloaded. Restart the service to apply:");
-                            println!("  rmm stop && rmm start");
+                            println!("Installed v{} to {}", info.version, path.display());
+                            println!("Restarting the service to load it...");
+                            if let Err(e) = updater.trigger_restart() {
+                                eprintln!("Restart failed: {}", e);
+                                println!("Restart the service manually: rmm stop && rmm start");
+                            }
                         }
                         Err(e) => {
-                            eprintln!("Download failed: {}", e);
+                            if data_dir_security::is_permission_denied(&e) {
+                                eprintln!("Update failed: access denied.");
+                                eprintln!("Run this command from an elevated (Administrator) prompt.");
+                            } else {
+                                eprintln!("Update failed: {:#}", e);
+                            }
                         }
                     }
                 }
@@ -715,7 +751,7 @@ fn check_for_updates(check_only: bool) -> Result<()> {
                 println!("You are running the latest version.");
             }
             Err(e) => {
-                eprintln!("Update check failed: {}", e);
+                eprintln!("Update check failed: {:#}", e);
             }
         }
     });
@@ -723,26 +759,48 @@ fn check_for_updates(check_only: bool) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
-    // Apply any pending updates FIRST, before anything else
-    let default_config = Config::default();
-    match updater::Updater::apply_pending_update(&default_config) {
-        Ok(true) => {
-            // Update was applied - continue with normal startup
-            // The new binary is now running
-            println!("Update applied successfully!");
-        }
-        Ok(false) => {
-            // No update pending, normal startup
-        }
-        Err(e) => {
-            eprintln!("Warning: Failed to apply pending update: {}", e);
-            // Continue anyway with current binary
+/// Commands that read or write the data directory (config, key, logs).
+/// After lockdown these require an elevated prompt on Windows.
+fn needs_data_dir_access(cli: &Cli) -> bool {
+    cli.url.is_some()
+        || cli.reset
+        || matches!(
+            cli.command,
+            Some(Commands::Run)
+                | Some(Commands::Status)
+                | Some(Commands::Logs { .. })
+                | Some(Commands::Reenroll { .. })
+        )
+}
+
+fn main() {
+    let cli = Cli::parse();
+    let data_dir = Config::default().data_dir;
+
+    if needs_data_dir_access(&cli) {
+        if let Err(e) = data_dir_security::check_data_dir_access(&data_dir) {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                eprintln!("{}", data_dir_security::elevation_message(&data_dir));
+            } else {
+                eprintln!("Cannot access {}: {}", data_dir.display(), e);
+            }
+            std::process::exit(1);
         }
     }
 
-    let cli = Cli::parse();
+    if let Err(e) = run_cli(cli) {
+        if data_dir_security::is_permission_denied(&e) {
+            eprintln!("Error: {:#}", e);
+            eprintln!();
+            eprintln!("{}", data_dir_security::elevation_message(&data_dir));
+        } else {
+            eprintln!("Error: {:#}", e);
+        }
+        std::process::exit(1);
+    }
+}
 
+fn run_cli(cli: Cli) -> Result<()> {
     // Load runtime config
     let mut runtime_config = RuntimeConfig::load().unwrap_or_default();
 

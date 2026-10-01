@@ -2,13 +2,13 @@
     <div class="flex items-center justify-between">
         <flux:heading size="xl">{{ $device->hostname }}</flux:heading>
         <div class="flex items-center gap-2">
-            @if($device->status === \App\Models\Device::STATUS_ACTIVE)
-                @if($device->isOnline())
+            @if($device->status === \App\Enums\DeviceStatus::Active)
+                @if($device->isOnline)
                     <flux:badge color="green" size="lg">Online</flux:badge>
                 @else
                     <flux:badge color="red" size="lg">Offline</flux:badge>
                 @endif
-            @elseif($device->status === \App\Models\Device::STATUS_PENDING)
+            @elseif($device->status === \App\Enums\DeviceStatus::Pending)
                 <flux:badge color="amber" size="lg">Pending</flux:badge>
             @else
                 <flux:badge color="gray" size="lg">Revoked</flux:badge>
@@ -113,8 +113,31 @@
             <flux:button wire:click="checkForUpdates" icon="arrow-down-tray">
                 Check for Updates
             </flux:button>
+            <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">
+                Run Script
+            </flux:button>
         </div>
     </flux:card>
+
+    <flux:modal wire:model="showScriptModal" class="md:w-96">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">Run Script</flux:heading>
+                <flux:text class="mt-2">Execute a script on {{ $device->hostname }}.</flux:text>
+            </div>
+
+            <flux:select wire:model="selectedScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
+                @foreach($scripts as $script)
+                    <flux:select.option value="{{ $script->id }}">{{ $script->name }} ({{ $script->platform->name }})</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showScriptModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="runScript" variant="primary" icon="play">Execute</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     {{-- Recent Commands --}}
     @if($recentCommands->count() > 0)
@@ -139,19 +162,19 @@
                                 <flux:text class="font-mono text-sm">{{ Str::limit($command->script_content, 50) }}</flux:text>
                             </flux:table.cell>
                             <flux:table.cell>
-                                @if($command->status === \App\Models\DeviceCommand::STATUS_PENDING)
+                                @if($command->status === \App\Enums\CommandStatus::Pending)
                                     <flux:badge color="gray">Pending</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_SENT)
+                                @elseif($command->status === \App\Enums\CommandStatus::Sent)
                                     <flux:badge color="blue">Sent</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_RUNNING)
+                                @elseif($command->status === \App\Enums\CommandStatus::Running)
                                     <flux:badge color="blue">Running</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_COMPLETED)
+                                @elseif($command->status === \App\Enums\CommandStatus::Completed)
                                     <flux:badge color="green">Completed</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_FAILED)
+                                @elseif($command->status === \App\Enums\CommandStatus::Failed)
                                     <flux:badge color="red">Failed</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_TIMED_OUT)
+                                @elseif($command->status === \App\Enums\CommandStatus::TimedOut)
                                     <flux:badge color="amber">Timed Out</flux:badge>
-                                @elseif($command->status === \App\Models\DeviceCommand::STATUS_CANCELLED)
+                                @elseif($command->status === \App\Enums\CommandStatus::Cancelled)
                                     <flux:badge color="zinc">Cancelled</flux:badge>
                                 @endif
                             </flux:table.cell>
@@ -162,6 +185,28 @@
             </flux:table>
         </flux:card>
     @endif
+
+    {{-- Group & Tags --}}
+    <div class="grid gap-6 md:grid-cols-2">
+        <flux:card>
+            <flux:heading size="sm" class="mb-4">Group</flux:heading>
+            <flux:select wire:model.live="selectedGroupId" placeholder="No group">
+                <flux:select.option value="">No group</flux:select.option>
+                @foreach($allGroups as $group)
+                    <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        </flux:card>
+
+        <flux:card>
+            <flux:heading size="sm" class="mb-4">Tags</flux:heading>
+            <flux:select wire:model.live="selectedTagIds" variant="listbox" multiple placeholder="Select tags...">
+                @foreach($allTags as $tag)
+                    <flux:select.option value="{{ $tag->id }}">{{ $tag->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        </flux:card>
+    </div>
 
     {{-- Device Info & System Info --}}
     <div class="grid gap-6 md:grid-cols-2">
@@ -178,10 +223,29 @@
                     <dd class="font-medium font-mono">{{ $device->last_ip ?? '—' }}</dd>
                 </div>
                 <flux:separator variant="subtle" />
-                <div class="flex justify-between">
+                @php $apiKeyState = $device->apiKeyState(); @endphp
+                <div class="flex items-center justify-between gap-4">
                     <dt class="text-zinc-500 dark:text-zinc-400">API Key</dt>
-                    <dd class="font-medium font-mono">{{ $device->api_key ? substr($device->api_key, 0, 8).'…' : '—' }}</dd>
+                    <dd class="flex items-center gap-2 font-medium">
+                        <flux:badge size="sm" :color="$apiKeyState->color()">{{ $apiKeyState->label() }}</flux:badge>
+                        @if($apiKeyState === \App\Enums\ApiKeyState::Claimed)
+                            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">{{ $device->api_key_claimed_at->diffForHumans() }}</flux:text>
+                        @elseif($apiKeyState === \App\Enums\ApiKeyState::AwaitingAgent && $device->api_key_issued_at)
+                            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">issued {{ $device->api_key_issued_at->diffForHumans() }}</flux:text>
+                        @endif
+                    </dd>
                 </div>
+                @if($device->status !== \App\Enums\DeviceStatus::Pending)
+                    <flux:separator variant="subtle" />
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-zinc-500 dark:text-zinc-400">Enrolment</dt>
+                        <dd>
+                            <flux:button size="xs" variant="danger" icon="arrow-path" wire:click="resetEnrolment" wire:confirm="Reset enrolment for {{ $device->hostname }}? The current key stops working immediately. Run 'rmm reenroll' on the device, then approve it again.">
+                                Reset enrolment
+                            </flux:button>
+                        </dd>
+                    </div>
+                @endif
                 @if(optional($device->latestMetric)->agent_version)
                     <flux:separator variant="subtle" />
                     <div class="flex justify-between">

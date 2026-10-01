@@ -1,20 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Livewire\Devices;
 
+use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
-class Agent extends Component
+final class Agent extends Component
 {
-    public function render(): mixed
+    public function render(): View
     {
-        $downloadUrl = route('agent.download');
-
         return view('livewire.devices.agent', [
-            'downloadUrl' => $downloadUrl,
+            'downloadUrl' => route('agent.download'),
         ]);
     }
 }
-

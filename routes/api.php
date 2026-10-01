@@ -9,21 +9,22 @@ use Illuminate\Support\Facades\Route;
 Route::post('/enroll', [DeviceEnrollmentController::class, 'store'])
     ->middleware('throttle:api.enroll');
 
-Route::post('/metrics', [DeviceMetricsController::class, 'store'])
-    ->middleware('throttle:api.metrics');
-
-Route::post('/heartbeat', [HeartbeatController::class, 'store'])
-    ->middleware('throttle:api.heartbeat');
-
 Route::match(['GET', 'POST'], '/check', [DeviceEnrollmentController::class, 'check'])
     ->middleware('throttle:api.check');
 
-// Command execution endpoints (agent polls these)
-Route::get('/commands/pending', [DeviceCommandController::class, 'pending'])
-    ->middleware('throttle:api.heartbeat');
+Route::middleware(['device.auth'])->group(function (): void {
+    Route::post('/metrics', [DeviceMetricsController::class, 'store'])
+        ->middleware('throttle:api.metrics');
 
-Route::post('/commands/{commandId}/started', [DeviceCommandController::class, 'started'])
-    ->middleware('throttle:api.metrics');
+    Route::post('/heartbeat', [HeartbeatController::class, 'store'])
+        ->middleware('throttle:api.heartbeat');
 
-Route::post('/commands/{commandId}/result', [DeviceCommandController::class, 'result'])
-    ->middleware('throttle:api.metrics');
+    Route::get('/commands/pending', [DeviceCommandController::class, 'pending'])
+        ->middleware('throttle:api.heartbeat');
+
+    Route::post('/commands/{commandId}/started', [DeviceCommandController::class, 'started'])
+        ->middleware('throttle:api.metrics');
+
+    Route::post('/commands/{commandId}/result', [DeviceCommandController::class, 'result'])
+        ->middleware('throttle:api.metrics');
+});

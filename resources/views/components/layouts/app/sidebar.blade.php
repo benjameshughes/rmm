@@ -16,6 +16,10 @@
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
                     <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index') || request()->routeIs('devices.show')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
                     <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>{{ __('Pending') }}</flux:navlist.item>
+                    <flux:navlist.item icon="code-bracket" :href="route('scripts.index')" :current="request()->routeIs('scripts.*')" wire:navigate>{{ __('Scripts') }}</flux:navlist.item>
+                    <flux:navlist.item icon="rectangle-group" :href="route('device-groups.index')" :current="request()->routeIs('device-groups.*') || request()->routeIs('tags.*')" wire:navigate>{{ __('Groups') }}</flux:navlist.item>
+                    <flux:navlist.item icon="bell-alert" :href="route('alerts.index')" :current="request()->routeIs('alerts.*') || request()->routeIs('alert-rules.*')" wire:navigate>{{ __('Alerts') }}</flux:navlist.item>
+                    <flux:navlist.item icon="calendar" :href="route('scheduled-tasks.index')" :current="request()->routeIs('scheduled-tasks.*')" wire:navigate>{{ __('Schedules') }}</flux:navlist.item>
                     <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>{{ __('Agent') }}</flux:navlist.item>
                 </flux:navlist.group>
             </flux:navlist>
@@ -83,6 +87,10 @@
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <flux:spacer />
+
+            @auth
+                <livewire:alert-bell />
+            @endauth
 
             <flux:dropdown position="top" align="end">
                 <flux:profile

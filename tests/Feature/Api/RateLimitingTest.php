@@ -110,9 +110,7 @@ describe('check endpoint rate limiting', function (): void {
 
 describe('metrics rate limiting', function (): void {
     it('allows up to 120 metrics requests per minute per API key', function (): void {
-        $device = Device::factory()->active()->create([
-            'api_key' => 'RATE-LIMIT-TEST-KEY',
-        ]);
+        $device = Device::factory()->active()->withApiKey('RATE-LIMIT-TEST-KEY')->create();
 
         $payload = [
             'cpu' => 45.5,
@@ -136,13 +134,9 @@ describe('metrics rate limiting', function (): void {
     });
 
     it('rate limits metrics by API key not by IP', function (): void {
-        $device1 = Device::factory()->active()->create([
-            'api_key' => 'KEY-DEVICE-1',
-        ]);
+        $device1 = Device::factory()->active()->withApiKey('KEY-DEVICE-1')->create();
 
-        $device2 = Device::factory()->active()->create([
-            'api_key' => 'KEY-DEVICE-2',
-        ]);
+        $device2 = Device::factory()->active()->withApiKey('KEY-DEVICE-2')->create();
 
         $payload = [
             'cpu' => 45.5,

@@ -9,7 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 pest()->use(RefreshDatabase::class);
 
 it('parses cpu and ram from netdata-like payloads', function (): void {
-    $device = Device::factory()->active()->create(['api_key' => 'KEY-PARSE']);
+    $device = Device::factory()->active()->withApiKey('KEY-PARSE')->create();
 
     $cpuJson = json_encode([
         'labels' => ['time', 'user', 'system', 'idle'],

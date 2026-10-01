@@ -4,31 +4,23 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\CommandStatus;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
 
-class DeviceCommandController extends Controller
+final class DeviceCommandController
 {
-    /**
-     * Get pending commands for the authenticated device.
-     * Agent polls this endpoint to check for work.
-     */
     public function pending(Request $request): JsonResponse
     {
-        $device = $this->authenticateDevice($request);
+        /** @var Device $device */
+        $device = $request->attributes->get('device');
 
-        if ($device === null) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        // Get the oldest pending command for this device
         $command = DeviceCommand::query()
             ->where('device_id', $device->id)
-            ->where('status', DeviceCommand::STATUS_PENDING)
+            ->where('status', CommandStatus::Pending)
             ->orderBy('queued_at', 'asc')
             ->first();
 
@@ -36,7 +28,6 @@ class DeviceCommandController extends Controller
             return response()->json(['command' => null]);
         }
 
-        // Mark as sent
         $command->markAsSent();
 
         Log::info('api.command.sent', [
@@ -55,16 +46,10 @@ class DeviceCommandController extends Controller
         ]);
     }
 
-    /**
-     * Agent reports that command execution has started.
-     */
     public function started(Request $request, int $commandId): JsonResponse
     {
-        $device = $this->authenticateDevice($request);
-
-        if ($device === null) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
+        /** @var Device $device */
+        $device = $request->attributes->get('device');
 
         $command = DeviceCommand::query()
             ->where('id', $commandId)
@@ -73,6 +58,10 @@ class DeviceCommandController extends Controller
 
         if ($command === null) {
             return response()->json(['message' => 'Command not found'], 404);
+        }
+
+        if ($command->status->isTerminal()) {
+            return response()->json(['message' => 'Command is already finished'], 409);
         }
 
         $command->markAsRunning();
@@ -85,16 +74,10 @@ class DeviceCommandController extends Controller
         return response()->json(['message' => 'OK']);
     }
 
-    /**
-     * Agent reports command result.
-     */
     public function result(Request $request, int $commandId): JsonResponse
     {
-        $device = $this->authenticateDevice($request);
-
-        if ($device === null) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
+        /** @var Device $device */
+        $device = $request->attributes->get('device');
 
         $command = DeviceCommand::query()
             ->where('id', $commandId)
@@ -103,6 +86,10 @@ class DeviceCommandController extends Controller
 
         if ($command === null) {
             return response()->json(['message' => 'Command not found'], 404);
+        }
+
+        if ($command->status->isTerminal()) {
+            return response()->json(['message' => 'Command is already finished'], 409);
         }
 
         $validated = $request->validate([
@@ -114,7 +101,7 @@ class DeviceCommandController extends Controller
         $exitCode = (int) $validated['exit_code'];
         $output = $validated['output'] ?? '';
 
-        if (isset($validated['error_message']) && $validated['error_message']) {
+        if (! empty($validated['error_message'])) {
             $command->markAsFailed($validated['error_message'], $output, $exitCode);
         } else {
             $command->markAsCompleted($output, $exitCode);
@@ -124,26 +111,9 @@ class DeviceCommandController extends Controller
             'device_id' => $device->id,
             'command_id' => $command->id,
             'exit_code' => $exitCode,
-            'status' => $command->status,
+            'status' => $command->fresh()->status,
         ]);
 
         return response()->json(['message' => 'OK']);
-    }
-
-    /**
-     * Authenticate device from API key header.
-     */
-    private function authenticateDevice(Request $request): ?Device
-    {
-        $apiKey = $request->header('X-Agent-Key') ?? $request->header('X-Device-Key');
-
-        if (! $apiKey) {
-            return null;
-        }
-
-        return Device::query()
-            ->where('api_key', trim($apiKey))
-            ->where('status', Device::STATUS_ACTIVE)
-            ->first();
     }
 }

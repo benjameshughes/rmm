@@ -2,53 +2,32 @@
 
 namespace Database\Factories;
 
+use App\Enums\CommandStatus;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DeviceCommand>
- */
+/** @extends Factory<DeviceCommand> */
 class DeviceCommandFactory extends Factory
 {
     protected $model = DeviceCommand::class;
 
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         $scriptTypes = ['powershell', 'cmd', 'bash', 'sh'];
         $statuses = [
-            DeviceCommand::STATUS_PENDING,
-            DeviceCommand::STATUS_SENT,
-            DeviceCommand::STATUS_RUNNING,
-            DeviceCommand::STATUS_COMPLETED,
-            DeviceCommand::STATUS_FAILED,
+            CommandStatus::Pending,
+            CommandStatus::Sent,
+            CommandStatus::Running,
+            CommandStatus::Completed,
+            CommandStatus::Failed,
         ];
 
         $scripts = [
-            'powershell' => [
-                'Get-Process',
-                'Get-Service',
-                'Stop-Computer -Force',
-                'Restart-Computer -Force',
-                'Get-WindowsUpdate',
-            ],
-            'cmd' => [
-                'ipconfig /all',
-                'systeminfo',
-                'logoff',
-            ],
-            'bash' => [
-                'ps aux',
-                'systemctl status',
-                'df -h',
-                'free -m',
-            ],
+            'powershell' => ['Get-Process', 'Get-Service', 'Stop-Computer -Force', 'Restart-Computer -Force'],
+            'cmd' => ['ipconfig /all', 'systeminfo', 'logoff'],
+            'bash' => ['ps aux', 'systemctl status', 'df -h', 'free -m'],
         ];
 
         $scriptType = $this->faker->randomElement($scriptTypes);
@@ -69,7 +48,7 @@ class DeviceCommandFactory extends Factory
     public function pending(): static
     {
         return $this->state(fn (): array => [
-            'status' => DeviceCommand::STATUS_PENDING,
+            'status' => CommandStatus::Pending,
             'sent_at' => null,
             'started_at' => null,
             'completed_at' => null,
@@ -79,7 +58,7 @@ class DeviceCommandFactory extends Factory
     public function completed(): static
     {
         return $this->state(fn (): array => [
-            'status' => DeviceCommand::STATUS_COMPLETED,
+            'status' => CommandStatus::Completed,
             'sent_at' => now()->subMinutes(5),
             'started_at' => now()->subMinutes(4),
             'completed_at' => now()->subMinutes(1),
@@ -91,7 +70,7 @@ class DeviceCommandFactory extends Factory
     public function failed(): static
     {
         return $this->state(fn (): array => [
-            'status' => DeviceCommand::STATUS_FAILED,
+            'status' => CommandStatus::Failed,
             'sent_at' => now()->subMinutes(5),
             'started_at' => now()->subMinutes(4),
             'completed_at' => now()->subMinutes(1),

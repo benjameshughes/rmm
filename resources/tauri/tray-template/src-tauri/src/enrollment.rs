@@ -46,10 +46,23 @@ struct CheckRequest {
 }
 
 /// Status check response
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct CheckResponse {
     status: String,
     api_key: Option<String>,
+}
+
+/// Never print the API key, even at debug level.
+impl std::fmt::Debug for CheckResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CheckResponse")
+            .field("status", &self.status)
+            .field(
+                "api_key",
+                &self.api_key.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 /// Enrollment manager
@@ -328,5 +341,20 @@ impl EnrollmentStatus {
             EnrollmentStatus::Revoked => "Revoked",
             EnrollmentStatus::Unknown(_) => "Unknown",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_response_debug_redacts_api_key() {
+        let response: CheckResponse =
+            serde_json::from_str(r#"{"status":"approved","api_key":"super-secret-key"}"#).unwrap();
+        let printed = format!("{:?}", response);
+        assert!(printed.contains("approved"));
+        assert!(printed.contains("<redacted>"));
+        assert!(!printed.contains("super-secret-key"));
     }
 }

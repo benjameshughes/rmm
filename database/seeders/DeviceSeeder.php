@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\DeviceStatus;
 use App\Models\Device;
 use App\Models\DeviceMetric;
 use Illuminate\Database\Seeder;
@@ -40,7 +41,7 @@ class DeviceSeeder extends Seeder
         // Create a pending device (no metrics)
         Device::factory()->windows()->create([
             'hostname' => 'NEW-PC-PENDING',
-            'status' => Device::STATUS_PENDING,
+            'status' => DeviceStatus::Pending,
         ]);
 
         // Create a few more random active devices

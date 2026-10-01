@@ -2,13 +2,12 @@
 
 namespace Database\Factories;
 
+use App\Enums\DeviceStatus;
 use App\Models\Device;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
-/**
- * @extends Factory<Device>
- */
+/** @extends Factory<Device> */
 class DeviceFactory extends Factory
 {
     protected $model = Device::class;
@@ -43,8 +42,11 @@ class DeviceFactory extends Factory
                 ? $this->faker->randomElement($this->windowsHostnames).'-'.Str::upper(Str::random(4))
                 : $this->faker->randomElement($this->linuxHostnames),
             'hardware_fingerprint' => Str::uuid()->toString(),
-            'api_key' => null,
-            'status' => Device::STATUS_PENDING,
+            'api_key_hash' => null,
+            'pending_api_key' => null,
+            'api_key_issued_at' => null,
+            'api_key_claimed_at' => null,
+            'status' => DeviceStatus::Pending,
             'os' => $isWindows ? 'Windows 11 Pro' : 'Ubuntu 24.04 LTS',
             'os_name' => $isWindows ? 'Windows' : 'Ubuntu',
             'os_version' => $isWindows ? '10.0.22631' : '24.04',
@@ -59,19 +61,44 @@ class DeviceFactory extends Factory
 
     public function active(): static
     {
-        return $this->state(fn (): array => [
-            'status' => Device::STATUS_ACTIVE,
-            'api_key' => Str::random(64),
+        return $this->withApiKey()->state(fn (): array => [
             'last_seen' => now()->subMinutes($this->faker->numberBetween(1, 10)),
         ]);
     }
 
     public function offline(): static
     {
-        return $this->state(fn (): array => [
-            'status' => Device::STATUS_ACTIVE,
-            'api_key' => Str::random(64),
+        return $this->withApiKey()->state(fn (): array => [
             'last_seen' => now()->subHours($this->faker->numberBetween(1, 48)),
+        ]);
+    }
+
+    /**
+     * An approved device whose agent has already collected the given key.
+     * A random key is generated per model when none is given.
+     */
+    public function withApiKey(?string $apiKey = null): static
+    {
+        return $this->state(fn (): array => [
+            'status' => DeviceStatus::Active,
+            'api_key_hash' => Device::hashApiKey($apiKey ?? Str::random(64)),
+            'pending_api_key' => null,
+            'api_key_issued_at' => now()->subMinute(),
+            'api_key_claimed_at' => now(),
+        ]);
+    }
+
+    /**
+     * An approved device whose key has been issued but not yet collected by the agent.
+     */
+    public function awaitingKeyClaim(string $apiKey = 'TEST-KEY'): static
+    {
+        return $this->state(fn (): array => [
+            'status' => DeviceStatus::Active,
+            'api_key_hash' => Device::hashApiKey($apiKey),
+            'pending_api_key' => $apiKey,
+            'api_key_issued_at' => now(),
+            'api_key_claimed_at' => null,
         ]);
     }
 

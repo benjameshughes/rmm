@@ -2,14 +2,23 @@
 
 use App\Http\Controllers\AgentInstallerController;
 use App\Http\Controllers\AgentTrayController;
+use App\Livewire\AlertRules\Index as AlertRulesIndex;
+use App\Livewire\Alerts\Index as AlertsIndex;
+use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
 use App\Livewire\Devices\Index as DevicesIndex;
 use App\Livewire\Devices\Pending as DevicesPending;
 use App\Livewire\Devices\Show as DevicesShow;
+use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
+use App\Livewire\Scripts\Create as ScriptsCreate;
+use App\Livewire\Scripts\Edit as ScriptsEdit;
+use App\Livewire\Scripts\Index as ScriptsIndex;
+use App\Livewire\Scripts\Show as ScriptsShow;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
+use App\Livewire\Tags\Index as TagsIndex;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -44,6 +53,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('devices/pending', DevicesPending::class)->name('devices.pending');
     Route::get('devices/agent', DevicesAgent::class)->name('devices.agent');
     Route::get('devices/{device}', DevicesShow::class)->name('devices.show');
+
+    // Scripts
+    Route::get('scripts', ScriptsIndex::class)->name('scripts.index');
+    Route::get('scripts/create', ScriptsCreate::class)->name('scripts.create');
+    Route::get('scripts/{script}', ScriptsShow::class)->name('scripts.show');
+    Route::get('scripts/{script}/edit', ScriptsEdit::class)->name('scripts.edit');
+
+    // Device Groups & Tags
+    Route::get('device-groups', DeviceGroupsIndex::class)->name('device-groups.index');
+    Route::get('tags', TagsIndex::class)->name('tags.index');
+
+    // Alerts
+    Route::get('alerts', AlertsIndex::class)->name('alerts.index');
+    Route::get('alert-rules', AlertRulesIndex::class)->name('alert-rules.index');
+
+    // Schedules
+    Route::get('scheduled-tasks', ScheduledTasksIndex::class)->name('scheduled-tasks.index');
 });
 
 // Public download for the agent installer script

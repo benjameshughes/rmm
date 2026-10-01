@@ -1,21 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class EnrollRequest extends FormRequest
+final class EnrollRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, array<int, string>|string>
-     */
     public function rules(): array
     {
         return [
@@ -34,19 +31,15 @@ class EnrollRequest extends FormRequest
             'disks.*.available_bytes' => ['nullable', 'integer'],
             'disks.*.total_gb' => ['nullable', 'numeric'],
             'disks.*.available_gb' => ['nullable', 'numeric'],
-            'hardware_fingerprint' => ['nullable', 'string', 'max:255'],
+            'hardware_fingerprint' => ['required', 'string', 'max:255'],
         ];
     }
 
-    /**
-     * Custom validation messages.
-     *
-     * @return array<string, string>
-     */
     public function messages(): array
     {
         return [
             'hostname.required' => 'Hostname is required for enrollment.',
+            'hardware_fingerprint.required' => 'A hardware fingerprint is required for enrollment.',
         ];
     }
 }

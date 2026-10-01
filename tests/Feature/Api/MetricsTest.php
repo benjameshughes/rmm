@@ -28,8 +28,7 @@ it('rejects metrics with invalid device key', function (): void {
 });
 
 it('accepts metrics and updates last_seen', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create([
         'last_seen' => null,
     ]);
 
@@ -53,9 +52,7 @@ it('accepts metrics and updates last_seen', function (): void {
 });
 
 it('accepts metrics with netdata cpu json format', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $cpuJson = json_encode([
         'labels' => ['time', 'user', 'system', 'idle'],
@@ -75,9 +72,7 @@ it('accepts metrics with netdata cpu json format', function (): void {
 });
 
 it('accepts metrics with netdata ram json format', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $ramJson = json_encode([
         'labels' => ['time', 'used', 'free', 'cached', 'buffers'],
@@ -97,9 +92,7 @@ it('accepts metrics with netdata ram json format', function (): void {
 });
 
 it('accepts metrics with jsonwrap format', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $cpuJson = json_encode([
         'result' => [
@@ -129,9 +122,7 @@ it('accepts metrics with jsonwrap format', function (): void {
 });
 
 it('stores null when cpu parsing fails', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $response = $this->withHeaders(['X-Device-Key' => 'VALID-KEY-123'])
         ->postJson('/api/metrics', [
@@ -147,9 +138,7 @@ it('stores null when cpu parsing fails', function (): void {
 });
 
 it('stores null when ram parsing fails', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $response = $this->withHeaders(['X-Device-Key' => 'VALID-KEY-123'])
         ->postJson('/api/metrics', [
@@ -165,8 +154,7 @@ it('stores null when ram parsing fails', function (): void {
 });
 
 it('accepts v3 format with extended metrics', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create([
         'os_name' => null,
     ]);
 
@@ -231,9 +219,7 @@ it('accepts v3 format with extended metrics', function (): void {
 });
 
 it('accepts raw netdata v3 format from simplified agent', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     // This mimics the raw Netdata v3 API response the simplified agent will send
     $netdataMetrics = [
@@ -278,9 +264,7 @@ it('accepts raw netdata v3 format from simplified agent', function (): void {
 });
 
 it('accepts raw netdata v3 ram format', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     $netdataMetrics = [
         'view' => [
@@ -317,9 +301,7 @@ it('accepts raw netdata v3 ram format', function (): void {
 });
 
 it('accepts new simplified agent format with separate netdata fields', function (): void {
-    $device = Device::factory()->active()->create([
-        'api_key' => 'VALID-KEY-123',
-    ]);
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
 
     // Separate Netdata responses - as sent by the new simplified agent
     $cpuData = [

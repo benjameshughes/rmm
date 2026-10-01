@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Device;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -47,23 +48,32 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('api.metrics', function (Request $request): Limit {
-            $apiKey = $request->header('X-Device-Key') ?? $request->header('X-Agent-Key') ?? $request->ip();
 
             return Limit::perMinute(120)
-                ->by($apiKey)
+                ->by($this->deviceThrottleKey($request))
                 ->response(fn (Request $request, array $headers) => response()->json([
                     'message' => 'Too many metric submissions. Please try again later.',
                 ], 429, $headers));
         });
 
         RateLimiter::for('api.heartbeat', function (Request $request): Limit {
-            $apiKey = $request->header('X-Device-Key') ?? $request->header('X-Agent-Key') ?? $request->ip();
 
             return Limit::perMinute(10)
-                ->by($apiKey)
+                ->by($this->deviceThrottleKey($request))
                 ->response(fn (Request $request, array $headers) => response()->json([
                     'message' => 'Too many heartbeat requests. Please try again later.',
                 ], 429, $headers));
         });
+    }
+
+    /**
+     * Device routes are throttled per authenticated device rather than by the
+     * raw key header, so the limiter key is never attacker-controlled.
+     */
+    protected function deviceThrottleKey(Request $request): string
+    {
+        $device = $request->attributes->get('device');
+
+        return $device instanceof Device ? 'device:'.$device->getKey() : 'ip:'.$request->ip();
     }
 }

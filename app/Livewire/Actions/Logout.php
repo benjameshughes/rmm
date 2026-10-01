@@ -1,16 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Livewire\Actions;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 
-class Logout
+final class Logout
 {
-    /**
-     * Log the current user out of the application.
-     */
-    public function __invoke()
+    public function __invoke(): mixed
     {
         Auth::guard('web')->logout();
 
