@@ -45,3 +45,15 @@ function something()
 {
     // ..
 }
+
+/**
+ * Netdata v3 responses captured from a real Windows agent (DESKTOP-5ULJ14E,
+ * 1 Oct 2026), keyed by the raw payload field the 0.6.0 agent sends them in.
+ * Apps are trimmed to ten; every value is as captured.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function netdataWindowsFixture(): array
+{
+    return json_decode(file_get_contents(__DIR__.'/Fixtures/netdata-windows-2026-10-01.json'), true);
+}

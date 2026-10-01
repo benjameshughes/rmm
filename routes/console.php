@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\DeviceAppMetric;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -12,3 +13,4 @@ Schedule::command('devices:check-offline')->everyMinute();
 Schedule::command('schedule:run-tasks')->everyMinute();
 Schedule::command('commands:expire-stale')->everyFiveMinutes();
 Schedule::command('agent:check-version')->hourly();
+Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class]])->hourly();

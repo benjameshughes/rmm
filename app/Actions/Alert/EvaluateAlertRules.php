@@ -45,6 +45,9 @@ final class EvaluateAlertRules
             AlertMetric::Cpu => $deviceMetric->cpu,
             AlertMetric::Ram => $deviceMetric->ram,
             AlertMetric::Disk => $this->getMaxDiskUsage($deviceMetric),
+            AlertMetric::CpuQueue => $deviceMetric->cpu_queue_length,
+            AlertMetric::DiskBusy => $deviceMetric->disk_busy_percent,
+            AlertMetric::PageFile => $deviceMetric->pageFilePercent(),
             AlertMetric::Offline => $this->getOfflineMinutes($device),
             AlertMetric::AgentOutdated => null,
         };
@@ -116,7 +119,7 @@ final class EvaluateAlertRules
     private function findViolationStart(AlertRule $rule, Device $device): ?Carbon
     {
         $windowMetrics = $device->metrics()
-            ->select(['id', 'device_id', 'cpu', 'ram', 'recorded_at'])
+            ->select(['id', 'device_id', 'cpu', 'ram', 'cpu_queue_length', 'disk_busy_percent', 'swap_used_mib', 'swap_total_mib', 'recorded_at'])
             ->when($rule->metric === AlertMetric::Disk, fn ($query) => $query->with('diskMetrics:id,device_metric_id,usage_percent'))
             ->where('recorded_at', '>=', now()->subMinutes($rule->duration_minutes + 5))
             ->latest('recorded_at')

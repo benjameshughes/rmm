@@ -1,6 +1,6 @@
 [package]
 name = "rmm"
-version = "0.5.1"
+version = "0.6.0"
 description = "RMM Agent - Remote Monitoring and Management Service"
 authors = ["Ben Hughes"]
 edition = "2021"

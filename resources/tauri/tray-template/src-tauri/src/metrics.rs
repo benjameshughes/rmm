@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::config::Config;
+use crate::config::{Config, NETDATA_GROUP_BY_INSTANCE};
 
 // ============================================================================
 // API key health (dead-key detection)
@@ -182,9 +182,37 @@ pub struct RawMetricsPayload {
     /// Raw Netdata /api/v3/data response for disk space metrics
     #[serde(skip_serializing_if = "Option::is_none")]
     pub netdata_disk: Option<serde_json::Value>,
-    /// Raw Netdata /api/v3/data response for network metrics
+    /// Raw Netdata /api/v3/data response for machine-wide network throughput
+    /// (kept for servers that predate per-adapter rows)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub netdata_net: Option<serde_json::Value>,
+    /// Processor queue length (Windows' stand-in for load average)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_cpu_queue: Option<serde_json::Value>,
+    /// Per-app CPU utilisation, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_apps_cpu: Option<serde_json::Value>,
+    /// Per-app memory usage, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_apps_mem: Option<serde_json::Value>,
+    /// Per-physical-disk busy time, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_disk_util: Option<serde_json::Value>,
+    /// Swap / page file usage
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_swap: Option<serde_json::Value>,
+    /// Per-adapter throughput, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_net_interfaces: Option<serde_json::Value>,
+    /// Per-adapter errors, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_net_errors: Option<serde_json::Value>,
+    /// Per-adapter drops, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_net_drops: Option<serde_json::Value>,
+    /// Per-adapter link speed, grouped by instance and dimension
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub netdata_net_speed: Option<serde_json::Value>,
 }
 
 // ============================================================================
@@ -273,15 +301,43 @@ impl MetricsCollector {
     pub async fn collect_metrics(&self) -> RawMetricsPayload {
         debug!("Collecting raw metrics from Netdata");
 
+        let by_instance = Some(NETDATA_GROUP_BY_INSTANCE);
+
         // Fetch all contexts in parallel
-        let (netdata_info, netdata_cpu, netdata_ram, netdata_load, netdata_uptime, netdata_disk, netdata_net) = tokio::join!(
+        let (
+            netdata_info,
+            netdata_cpu,
+            netdata_ram,
+            netdata_load,
+            netdata_uptime,
+            netdata_disk,
+            netdata_net,
+            netdata_cpu_queue,
+            netdata_apps_cpu,
+            netdata_apps_mem,
+            netdata_disk_util,
+            netdata_swap,
+            netdata_net_interfaces,
+            netdata_net_errors,
+            netdata_net_drops,
+            netdata_net_speed,
+        ) = tokio::join!(
             self.fetch_netdata_info(),
             self.fetch_netdata_context("system.cpu"),
             self.fetch_netdata_context("system.ram"),
             self.fetch_netdata_context("system.load"),
             self.fetch_netdata_context("system.uptime"),
-            self.fetch_netdata_query("disk.space", Some("instance,dimension")),
+            self.fetch_netdata_query("disk.space", by_instance),
             self.fetch_netdata_context("system.net"),
+            self.fetch_netdata_context("system.processor_queue_length"),
+            self.fetch_netdata_query("app.cpu_utilization", by_instance),
+            self.fetch_netdata_query("app.mem_usage", by_instance),
+            self.fetch_netdata_query("disk.util", by_instance),
+            self.fetch_netdata_context("mem.swap"),
+            self.fetch_netdata_query("net.net", by_instance),
+            self.fetch_netdata_query("net.errors", by_instance),
+            self.fetch_netdata_query("net.drops", by_instance),
+            self.fetch_netdata_query("net.speed", by_instance),
         );
 
         RawMetricsPayload {
@@ -295,6 +351,15 @@ impl MetricsCollector {
             netdata_uptime,
             netdata_disk,
             netdata_net,
+            netdata_cpu_queue,
+            netdata_apps_cpu,
+            netdata_apps_mem,
+            netdata_disk_util,
+            netdata_swap,
+            netdata_net_interfaces,
+            netdata_net_errors,
+            netdata_net_drops,
+            netdata_net_speed,
         }
     }
 
@@ -481,6 +546,88 @@ impl MetricsCollector {
 mod tests {
     use super::*;
 
+    fn empty_payload() -> RawMetricsPayload {
+        RawMetricsPayload {
+            hostname: "test-host".to_string(),
+            timestamp: "2026-10-01T10:00:00Z".to_string(),
+            agent_version: "0.6.0".to_string(),
+            netdata_info: None,
+            netdata_cpu: None,
+            netdata_ram: None,
+            netdata_load: None,
+            netdata_uptime: None,
+            netdata_disk: None,
+            netdata_net: None,
+            netdata_cpu_queue: None,
+            netdata_apps_cpu: None,
+            netdata_apps_mem: None,
+            netdata_disk_util: None,
+            netdata_swap: None,
+            netdata_net_interfaces: None,
+            netdata_net_errors: None,
+            netdata_net_drops: None,
+            netdata_net_speed: None,
+        }
+    }
+
+    fn netdata_response<S: Serialize>(ids: &[S], averages: &[f64]) -> serde_json::Value {
+        serde_json::json!({
+            "view": { "dimensions": { "ids": ids, "sts": { "avg": averages } } }
+        })
+    }
+
+    #[test]
+    fn serialises_windows_performance_fields() {
+        let adapter = "Intel[R] Ethernet Connection [17] I219-LM@node";
+        let payload = RawMetricsPayload {
+            netdata_cpu_queue: Some(netdata_response(&["threads"], &[0.265])),
+            netdata_apps_cpu: Some(netdata_response(
+                &["user,app.Netdata_Agent_cpu_utilization@node"],
+                &[1.2472645],
+            )),
+            netdata_apps_mem: Some(netdata_response(
+                &["rss,app.Dell_TechHub_mem_usage@node"],
+                &[484.723591],
+            )),
+            netdata_disk_util: Some(netdata_response(&["utilization,disk_util.Disk 0@node"], &[0.81])),
+            netdata_swap: Some(netdata_response(&["free", "used"], &[11621.7496083, 5474.9808583])),
+            netdata_net_interfaces: Some(netdata_response(
+                &[&format!("received,net.{adapter}"), &format!("sent,net.{adapter}")],
+                &[14.0066736, -6.87891],
+            )),
+            netdata_net_errors: Some(netdata_response(&[&format!("inbound,net_errors.{adapter}")], &[0.0])),
+            netdata_net_drops: Some(netdata_response(&[&format!("inbound,net_drops.{adapter}")], &[0.0])),
+            netdata_net_speed: Some(netdata_response(&[&format!("speed,net_speed.{adapter}")], &[1000000.0])),
+            ..empty_payload()
+        };
+
+        let json: serde_json::Value = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["netdata_cpu_queue"]["view"]["dimensions"]["sts"]["avg"][0], 0.265);
+        assert_eq!(
+            json["netdata_apps_cpu"]["view"]["dimensions"]["ids"][0],
+            "user,app.Netdata_Agent_cpu_utilization@node"
+        );
+        assert_eq!(json["netdata_apps_mem"]["view"]["dimensions"]["sts"]["avg"][0], 484.723591);
+        assert_eq!(json["netdata_disk_util"]["view"]["dimensions"]["sts"]["avg"][0], 0.81);
+        assert_eq!(json["netdata_swap"]["view"]["dimensions"]["ids"][1], "used");
+        assert_eq!(json["netdata_net_interfaces"]["view"]["dimensions"]["sts"]["avg"][1], -6.87891);
+        assert!(json.get("netdata_net_errors").is_some());
+        assert!(json.get("netdata_net_drops").is_some());
+        assert_eq!(json["netdata_net_speed"]["view"]["dimensions"]["sts"]["avg"][0], 1000000.0);
+    }
+
+    #[test]
+    fn omits_missing_netdata_fields() {
+        let json: serde_json::Value = serde_json::to_value(empty_payload()).unwrap();
+        let keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+
+        assert_eq!(keys.len(), 3);
+        assert!(keys.contains(&"hostname"));
+        assert!(keys.contains(&"timestamp"));
+        assert!(keys.contains(&"agent_version"));
+    }
+
     #[test]
     fn test_raw_payload_serialization() {
         let payload = RawMetricsPayload {
@@ -503,6 +650,7 @@ mod tests {
             netdata_uptime: None,
             netdata_disk: None,
             netdata_net: None,
+            ..empty_payload()
         };
 
         let json = serde_json::to_string(&payload).unwrap();

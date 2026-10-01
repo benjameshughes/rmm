@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\DTOs\NetdataAppUsage;
 use App\DTOs\NetdataCpuMetric;
+use App\DTOs\NetdataNetworkAdapters;
 use App\DTOs\NetdataRamMetric;
 use App\DTOs\NetdataV3Metrics;
 use App\Events\MetricsReceived;
@@ -94,6 +96,7 @@ final class StoreDeviceMetrics
         $memoryDetails = $ramParser->getMemoryDetails();
         $loadAverages = $loadParser->parseLoadAverages();
         $uptime = $uptimeParser->parseUptime();
+        $swap = (new NetdataV3Metrics($input['netdata_swap'] ?? []))->parseSwap();
 
         $metric = DeviceMetric::create([
             'device_id' => $device->id,
@@ -119,11 +122,16 @@ final class StoreDeviceMetrics
             'memory_cached_mib' => $memoryDetails['cached_mib'],
             'memory_buffers_mib' => $memoryDetails['buffers_mib'],
             'memory_available_mib' => $memoryDetails['available_mib'],
+            'cpu_queue_length' => (new NetdataV3Metrics($input['netdata_cpu_queue'] ?? []))->parseCpuQueueLength(),
+            'swap_used_mib' => $swap['used_mib'] ?? null,
+            'swap_total_mib' => $swap['total_mib'] ?? null,
+            'disk_busy_percent' => (new NetdataV3Metrics($input['netdata_disk_util'] ?? []))->parseBusiestDiskPercent(),
             'payload' => $this->rawPayload($input),
         ]);
 
         $metric->recordDisks((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
-        $metric->recordNetworkInterfaces($this->networkTotals(new NetdataV3Metrics($input['netdata_net'] ?? [])));
+        $metric->recordNetworkInterfaces(NetdataNetworkAdapters::fromPayload($input)->rows(config('devices.network.ignored_interfaces')));
+        $metric->recordApps((new NetdataAppUsage($input['netdata_apps_cpu'] ?? [], $input['netdata_apps_mem'] ?? []))->top(config('devices.metrics.top_apps')));
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input['agent_version'] ?? null);
 
         MetricsReceived::dispatch($device, $metric);
@@ -213,14 +221,6 @@ final class StoreDeviceMetrics
         }
 
         return $metricData;
-    }
-
-    /** @return array<int, array{interface: string, received_kbps: float, sent_kbps: float}> */
-    private function networkTotals(NetdataV3Metrics $parser): array
-    {
-        $totals = $parser->parseNetworkTotals();
-
-        return $totals === null ? [] : [['interface' => 'total', ...$totals]];
     }
 
     private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, ?string $agentVersion): void

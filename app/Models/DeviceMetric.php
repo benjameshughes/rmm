@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\FormatsMebibytes;
 use Carbon\CarbonInterval;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class DeviceMetric extends Model
 {
+    use FormatsMebibytes;
+
     /** @use HasFactory<\Database\Factories\DeviceMetricFactory> */
     use HasFactory;
 
@@ -46,6 +50,10 @@ final class DeviceMetric extends Model
         'processes_running',
         'processes_blocked',
         'processes_total',
+        'cpu_queue_length',
+        'swap_used_mib',
+        'swap_total_mib',
+        'disk_busy_percent',
         'payload',
         'recorded_at',
     ];
@@ -55,6 +63,15 @@ final class DeviceMetric extends Model
         return [
             'cpu' => 'float',
             'ram' => 'float',
+            'load1' => 'float',
+            'load5' => 'float',
+            'load15' => 'float',
+            'memory_used_mib' => 'float',
+            'memory_total_mib' => 'float',
+            'cpu_queue_length' => 'float',
+            'swap_used_mib' => 'float',
+            'swap_total_mib' => 'float',
+            'disk_busy_percent' => 'float',
             'payload' => 'array',
             'recorded_at' => 'datetime',
         ];
@@ -73,6 +90,13 @@ final class DeviceMetric extends Model
     public function networkMetrics(): HasMany
     {
         return $this->hasMany(DeviceNetworkMetric::class);
+    }
+
+    public function appMetrics(): HasMany
+    {
+        return $this->hasMany(DeviceAppMetric::class)
+            ->orderByDesc('cpu_percent')
+            ->orderByDesc('memory_mib');
     }
 
     /** @param array<int, array<string, mixed>>|mixed $disks */
@@ -112,7 +136,80 @@ final class DeviceMetric extends Model
                 'sent_kbps' => $interface['sent_kbps'] ?? null,
                 'received_bytes' => $interface['received_bytes'] ?? null,
                 'sent_bytes' => $interface['sent_bytes'] ?? null,
+                'errors_inbound' => $interface['errors_inbound'] ?? null,
+                'errors_outbound' => $interface['errors_outbound'] ?? null,
+                'drops_inbound' => $interface['drops_inbound'] ?? null,
+                'drops_outbound' => $interface['drops_outbound'] ?? null,
+                'link_speed_kbps' => $interface['link_speed_kbps'] ?? null,
             ]));
+    }
+
+    /** @param array<int, array{name: string, cpu_percent: float|null, memory_mib: float|null}> $apps */
+    public function recordApps(array $apps): void
+    {
+        $this->appMetrics()->createMany($apps);
+    }
+
+    public function pageFilePercent(): ?float
+    {
+        if ($this->swap_used_mib === null || ! $this->swap_total_mib) {
+            return null;
+        }
+
+        return round($this->swap_used_mib / $this->swap_total_mib * 100, 1);
+    }
+
+    public function cpuForHumans(): ?string
+    {
+        return $this->percentForHumans($this->cpu);
+    }
+
+    public function ramForHumans(): ?string
+    {
+        return $this->percentForHumans($this->ram);
+    }
+
+    public function memoryUsageForHumans(): ?string
+    {
+        if (! $this->memory_total_mib) {
+            return null;
+        }
+
+        return number_format($this->memory_used_mib / 1024, 1).' / '.number_format($this->memory_total_mib / 1024, 1).' GB';
+    }
+
+    public function loadForHumans(): ?string
+    {
+        return $this->load1 === null ? null : number_format($this->load1, 2);
+    }
+
+    public function loadTrendForHumans(): ?string
+    {
+        return $this->load1 === null ? null : number_format($this->load5 ?? 0, 2).' / '.number_format($this->load15 ?? 0, 2);
+    }
+
+    public function cpuQueueForHumans(): ?string
+    {
+        return $this->cpu_queue_length === null ? null : number_format($this->cpu_queue_length, 2);
+    }
+
+    public function diskBusyForHumans(): ?string
+    {
+        return $this->percentForHumans($this->disk_busy_percent);
+    }
+
+    public function pageFilePercentForHumans(): ?string
+    {
+        return $this->percentForHumans($this->pageFilePercent());
+    }
+
+    public function pageFileForHumans(): ?string
+    {
+        if ($this->swap_used_mib === null || $this->swap_total_mib === null) {
+            return null;
+        }
+
+        return $this->mebibytesForHumans($this->swap_used_mib).' / '.$this->mebibytesForHumans($this->swap_total_mib);
     }
 
     public function uptimeForHumans(): ?string
@@ -124,5 +221,22 @@ final class DeviceMetric extends Model
         return CarbonInterval::seconds((int) $this->uptime_seconds)
             ->cascade()
             ->forHumans(['short' => true, 'parts' => 2, 'minimumUnit' => 'minute']);
+    }
+
+    protected function hasLoadAverage(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->load1 !== null);
+    }
+
+    protected function hasPerformanceData(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->cpu_queue_length !== null
+            || $this->swap_total_mib !== null
+            || $this->disk_busy_percent !== null);
+    }
+
+    private function percentForHumans(?float $value): ?string
+    {
+        return $value === null ? null : number_format($value, 1).'%';
     }
 }

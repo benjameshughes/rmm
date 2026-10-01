@@ -8,44 +8,8 @@
     </div>
     <flux:separator variant="subtle" />
 
-    {{-- Stat Cards --}}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <flux:card class="space-y-1">
-            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">CPU Usage</flux:text>
-            <flux:heading size="xl">
-                {{ optional($device->latestMetric)->cpu !== null ? number_format($device->latestMetric->cpu, 1).'%' : '—' }}
-            </flux:heading>
-        </flux:card>
-
-        <flux:card class="space-y-1">
-            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">RAM Usage</flux:text>
-            <flux:heading size="xl">
-                {{ optional($device->latestMetric)->ram !== null ? number_format($device->latestMetric->ram, 1).'%' : '—' }}
-            </flux:heading>
-            @if(optional($device->latestMetric)->memory_total_mib)
-                <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">
-                    {{ number_format($device->latestMetric->memory_used_mib / 1024, 1) }} / {{ number_format($device->latestMetric->memory_total_mib / 1024, 1) }} GB
-                </flux:text>
-            @endif
-        </flux:card>
-
-        <flux:card class="space-y-1">
-            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">Load Average</flux:text>
-            @if(optional($device->latestMetric)->load1 !== null)
-                <flux:heading size="xl">{{ number_format($device->latestMetric->load1, 2) }}</flux:heading>
-                <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">
-                    {{ number_format($device->latestMetric->load5 ?? 0, 2) }} / {{ number_format($device->latestMetric->load15 ?? 0, 2) }}
-                </flux:text>
-            @else
-                <flux:heading size="xl">—</flux:heading>
-            @endif
-        </flux:card>
-
-        <flux:card class="space-y-1">
-            <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">Uptime</flux:text>
-            <flux:heading size="xl">{{ $device->latestMetric?->uptimeForHumans() ?? '—' }}</flux:heading>
-        </flux:card>
-    </div>
+    <x-device.stats.summary :metric="$device->latestMetric" />
+    <x-device.stats.performance :metric="$device->latestMetric" />
 
     {{-- Alerts Summary --}}
     @if(optional($device->latestMetric)->alerts_warning !== null || optional($device->latestMetric)->alerts_critical !== null)
@@ -138,7 +102,7 @@
                                 <flux:text class="text-sm">{{ $command->displayName() }}</flux:text>
                             </flux:table.cell>
                             <flux:table.cell>
-<flux:badge size="sm" :color="$command->status->color()">{{ $command->status->label() }}</flux:badge>
+                                <flux:badge size="sm" :color="$command->status->color()">{{ $command->status->label() }}</flux:badge>
                             </flux:table.cell>
                             <flux:table.cell>{{ $command->queuedBy?->name ?? '—' }}</flux:table.cell>
                         </flux:table.row>
@@ -262,39 +226,9 @@
         </flux:card>
     </div>
 
-    {{-- Disk Storage --}}
-    @if($diskUsage->isNotEmpty())
-        <flux:card>
-            <flux:heading size="sm" class="mb-4">Disk Storage</flux:heading>
-            <div class="space-y-4">
-                @foreach($diskUsage as $disk)
-                    <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <div>
-                                <flux:text class="font-medium">{{ $disk['name'] }}</flux:text>
-                                @if($disk['mountPoint'])
-                                    <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $disk['mountPoint'] }}</flux:text>
-                                @endif
-                            </div>
-                            @if($disk['totalGb'] !== null && $disk['availableGb'] !== null)
-                                <flux:text size="sm" class="text-zinc-500 dark:text-zinc-400">
-                                    {{ number_format($disk['availableGb'], 1) }} GB free of {{ number_format($disk['totalGb'], 1) }} GB
-                                </flux:text>
-                            @endif
-                        </div>
-                        @if($disk['usedPercent'] !== null)
-                            <div class="h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                                <div class="h-full {{ $disk['barColor'] }} rounded-full transition-all" style="width: {{ number_format($disk['usedPercent'], 1) }}%"></div>
-                            </div>
-                            <flux:text size="xs" class="mt-1 text-zinc-500 dark:text-zinc-400">
-                                {{ number_format($disk['usedPercent'], 1) }}% used
-                            </flux:text>
-                        @endif
-                    </div>
-                @endforeach
-            </div>
-        </flux:card>
-    @endif
+    <x-device.disk-storage :disks="$diskUsage" />
+    <x-device.network-adapters :adapters="$device->latestMetric?->networkMetrics" />
+    <x-device.top-apps :apps="$device->latestMetric?->appMetrics" />
 
     {{-- Recent Metrics Table --}}
     <flux:card>
@@ -311,9 +245,9 @@
                 @forelse ($metrics as $metric)
                     <flux:table.row>
                         <flux:table.cell>{{ $metric->recorded_at->diffForHumans() }}</flux:table.cell>
-                        <flux:table.cell>{{ $metric->cpu !== null ? number_format($metric->cpu, 1).'%' : '—' }}</flux:table.cell>
-                        <flux:table.cell>{{ $metric->ram !== null ? number_format($metric->ram, 1).'%' : '—' }}</flux:table.cell>
-                        <flux:table.cell>{{ $metric->load1 !== null ? number_format($metric->load1, 2) : '—' }}</flux:table.cell>
+                        <flux:table.cell>{{ $metric->cpuForHumans() ?? '—' }}</flux:table.cell>
+                        <flux:table.cell>{{ $metric->ramForHumans() ?? '—' }}</flux:table.cell>
+                        <flux:table.cell>{{ $metric->loadForHumans() ?? '—' }}</flux:table.cell>
                         <flux:table.cell>
                             @if($metric->alerts_critical > 0)
                                 <flux:badge size="sm" color="red">{{ $metric->alerts_critical }} critical</flux:badge>

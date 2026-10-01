@@ -37,6 +37,9 @@ pub const DEFAULT_COMMAND_DRAIN_GRACE_SECS: u64 = 5;
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
+/// Netdata `group_by` that keeps each instance (volume, adapter, app) apart
+pub const NETDATA_GROUP_BY_INSTANCE: &str = "instance,dimension";
+
 /// Default base URL placeholder (replaced at build time)
 pub const DEFAULT_BASE_URL: &str = "https://rmm.fnstr.uk";
 

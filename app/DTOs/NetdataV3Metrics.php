@@ -161,21 +161,17 @@ final class NetdataV3Metrics
 
     /**
      * Per-volume disk rows from a `disk.space` query grouped by instance and
-     * dimension (ids look like `used,disk_space.C:@<node>`). Responses grouped by
-     * dimension only average every volume together, so they yield nothing.
+     * dimension. Responses grouped by dimension only average every volume
+     * together, so they yield nothing.
      *
      * @param  array<int, string>  $ignoredVolumePatterns
      * @return array<int, array{mount_point: string, used_gb: float, available_gb: float, total_gb: float, usage_percent: float|null}>
      */
     public function parseDiskVolumes(array $ignoredVolumePatterns = []): array
     {
-        return collect($this->getDimensionAverages())
-            ->map(fn (float $value, string $id): ?array => preg_match('/^(?<dimension>avail|used),disk_space\.(?<volume>.+)@[^@]+$/', $id, $match)
-                ? ['volume' => $match['volume'], 'dimension' => $match['dimension'], 'value' => $value]
-                : null)
-            ->filter()
-            ->reject(fn (array $dimension): bool => Str::is($ignoredVolumePatterns, $dimension['volume']))
-            ->groupBy('volume')
+        return $this->groupedDimensions('disk_space')
+            ->reject(fn (array $dimension): bool => Str::is($ignoredVolumePatterns, $dimension['instance']))
+            ->groupBy('instance')
             ->map(fn (Collection $dimensions, string $volume): array => $this->diskVolumeRow(
                 $volume,
                 (float) ($dimensions->firstWhere('dimension', 'used')['value'] ?? 0),
@@ -183,6 +179,62 @@ final class NetdataV3Metrics
             ))
             ->values()
             ->all();
+    }
+
+    /**
+     * Dimensions of a query grouped by instance and dimension, whose ids look
+     * like `<dimension>,<prefix>.<instance><suffix>@<node>`. Ungrouped ids
+     * (just `<dimension>`) never match, so averaged-together data is dropped.
+     *
+     * @return Collection<int, array{instance: string, dimension: string, value: float}>
+     */
+    public function groupedDimensions(string $prefix, string $suffix = ''): Collection
+    {
+        $pattern = '/^(?<dimension>[^,]+),'.preg_quote($prefix, '/').'\.(?<instance>.+)'.preg_quote($suffix, '/').'@[^@]+$/';
+
+        return collect($this->getDimensionAverages())
+            ->map(fn (float $value, string $id): ?array => preg_match($pattern, $id, $match)
+                ? ['instance' => $match['instance'], 'dimension' => $match['dimension'], 'value' => $value]
+                : null)
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * Windows has no load average; `system.processor_queue_length` is the
+     * nearest equivalent (threads waiting for a CPU).
+     */
+    public function parseCpuQueueLength(): ?float
+    {
+        return $this->getDimensionAverages()['threads'] ?? null;
+    }
+
+    /** @return array{used_mib: float, total_mib: float}|null */
+    public function parseSwap(): ?array
+    {
+        $averages = $this->getDimensionAverages();
+
+        if (! isset($averages['used'], $averages['free']) || $averages['used'] + $averages['free'] <= 0) {
+            return null;
+        }
+
+        return [
+            'used_mib' => round($averages['used'], 2),
+            'total_mib' => round($averages['used'] + $averages['free'], 2),
+        ];
+    }
+
+    /**
+     * Busy-time percentage of the busiest physical disk, from a `disk.util`
+     * query grouped by instance and dimension.
+     */
+    public function parseBusiestDiskPercent(): ?float
+    {
+        $busiest = $this->groupedDimensions('disk_util')
+            ->where('dimension', 'utilization')
+            ->max('value');
+
+        return $busiest === null ? null : max(0.0, min(100.0, round($busiest, 2)));
     }
 
     /**

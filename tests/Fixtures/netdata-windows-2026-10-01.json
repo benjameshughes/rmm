@@ -1,0 +1,201 @@
+{
+  "netdata_cpu_queue": {
+    "view": {
+      "units": "threads",
+      "dimensions": {
+        "ids": [
+          "threads"
+        ],
+        "sts": {
+          "avg": [
+            0.265
+          ]
+        }
+      }
+    }
+  },
+  "netdata_apps_cpu": {
+    "view": {
+      "units": "percentage",
+      "dimensions": {
+        "ids": [
+          "user,app.go_d_plugin_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.go_d_plugin_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Netdata_Agent_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Netdata_Agent_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Windows_Mobile_Hotspot_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Windows_Mobile_Hotspot_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Dell_SupportAssist_Remediation_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Dell_SupportAssist_Remediation_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Dell_TechHub_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Dell_TechHub_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Intel_Connectivity_Network_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Intel_Connectivity_Network_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Microsoft_Defender_Antivirus_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Microsoft_Defender_Antivirus_Service_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Windows_Event_Log_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Windows_Event_Log_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.desktop_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.desktop_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "user,app.Windows_Update_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "system,app.Windows_Update_cpu_utilization@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            0,
+            0.0052122,
+            1.2472645,
+            0.981781,
+            0.0026089,
+            0,
+            0.2293594,
+            0.9821942,
+            0.1224767,
+            0.028658,
+            0.0208388,
+            0.036447,
+            0.1275501,
+            0.0520706,
+            0.2343228,
+            0.3074418,
+            0.3176815,
+            0.1119959,
+            0.3445288,
+            0.2382167
+          ]
+        }
+      }
+    }
+  },
+  "netdata_apps_mem": {
+    "view": {
+      "units": "MiB",
+      "dimensions": {
+        "ids": [
+          "rss,app.go_d_plugin_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Netdata_Agent_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Windows_Mobile_Hotspot_Service_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Dell_SupportAssist_Remediation_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Dell_TechHub_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Intel_Connectivity_Network_Service_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Microsoft_Defender_Antivirus_Service_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Windows_Event_Log_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.desktop_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "rss,app.Windows_Update_mem_usage@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            28.5540574,
+            106.8235743,
+            1.1085091,
+            47.5238596,
+            484.723591,
+            80.4702727,
+            240.2718565,
+            16.9011924,
+            57.4151237,
+            29.8873254
+          ]
+        }
+      }
+    }
+  },
+  "netdata_disk_util": {
+    "view": {
+      "units": "% of time working",
+      "dimensions": {
+        "ids": [
+          "utilization,disk_util.Disk 0@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            0.81
+          ]
+        }
+      }
+    }
+  },
+  "netdata_swap": {
+    "view": {
+      "units": "MiB",
+      "dimensions": {
+        "ids": [
+          "free",
+          "used"
+        ],
+        "sts": {
+          "avg": [
+            11621.7496083,
+            5474.9808583
+          ]
+        }
+      }
+    }
+  },
+  "netdata_net_interfaces": {
+    "view": {
+      "units": "kilobits/s",
+      "dimensions": {
+        "ids": [
+          "received,net.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "sent,net.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            14.0066736,
+            -6.87891
+          ]
+        }
+      }
+    }
+  },
+  "netdata_net_errors": {
+    "view": {
+      "units": "errors/s",
+      "dimensions": {
+        "ids": [
+          "inbound,net_errors.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "outbound,net_errors.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            0,
+            0
+          ]
+        }
+      }
+    }
+  },
+  "netdata_net_drops": {
+    "view": {
+      "units": "drops/s",
+      "dimensions": {
+        "ids": [
+          "inbound,net_drops.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78",
+          "outbound,net_drops.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            0,
+            0
+          ]
+        }
+      }
+    }
+  },
+  "netdata_net_speed": {
+    "view": {
+      "units": "kilobits/s",
+      "dimensions": {
+        "ids": [
+          "speed,net_speed.Intel[R] Ethernet Connection [17] I219-LM@5fb86e46-890a-af4f-afde-034c792a2a78"
+        ],
+        "sts": {
+          "avg": [
+            1000000
+          ]
+        }
+      }
+    }
+  }
+}

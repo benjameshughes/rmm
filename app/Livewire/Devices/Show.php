@@ -38,14 +38,14 @@ final class Show extends Component
     {
         $this->authorize('view', $device);
 
-        $this->device = $device->load(['latestMetric.diskMetrics', 'group', 'tags']);
+        $this->device = $device->load([...self::latestMetricRelations(), 'group', 'tags']);
         $this->syncSelectionsFromDevice();
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
     public function refreshDevice(): void
     {
-        $this->device->refresh()->load('latestMetric.diskMetrics');
+        $this->device->refresh()->load(self::latestMetricRelations());
         $this->syncSelectionsFromDevice();
     }
 
@@ -131,6 +131,12 @@ final class Show extends Component
         $this->authorize('runCommands', $this->device);
         $action(Script::findSystem($slug), $this->device, auth()->user());
         $this->dispatch('command-queued');
+    }
+
+    /** @return array<int, string> Everything the device page reads from the latest report */
+    private static function latestMetricRelations(): array
+    {
+        return ['latestMetric.diskMetrics', 'latestMetric.networkMetrics', 'latestMetric.appMetrics'];
     }
 
     private function syncSelectionsFromDevice(): void
