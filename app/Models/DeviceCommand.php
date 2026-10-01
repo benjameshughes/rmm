@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CommandStatus;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 final class DeviceCommand extends Model
 {
@@ -56,6 +58,36 @@ final class DeviceCommand extends Model
     public function queuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'queued_by');
+    }
+
+    public function displayName(): string
+    {
+        return $this->script?->name ?? Str::headline($this->script_type);
+    }
+
+    public function stdout(): string
+    {
+        return Str::before((string) $this->output, config('commands.stderr_separator'));
+    }
+
+    public function stderr(): ?string
+    {
+        $separator = config('commands.stderr_separator');
+
+        return Str::contains((string) $this->output, $separator)
+            ? Str::after((string) $this->output, $separator)
+            : null;
+    }
+
+    public function durationForHumans(): ?string
+    {
+        $startedAt = $this->started_at ?? $this->sent_at;
+
+        if ($startedAt === null || $this->completed_at === null) {
+            return null;
+        }
+
+        return $startedAt->diffForHumans($this->completed_at, CarbonInterface::DIFF_ABSOLUTE, short: true, parts: 2);
     }
 
     public function isPending(): bool

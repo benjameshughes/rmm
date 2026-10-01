@@ -111,7 +111,7 @@ final class Show extends Component
     public function render(): View
     {
         $metrics = $this->device->metrics()->latest('recorded_at')->paginate(10);
-        $recentCommands = $this->device->commands()->latest('queued_at')->limit(10)->get();
+        $recentCommands = $this->device->commands()->with(['script', 'queuedBy'])->latest('queued_at')->limit(10)->get();
 
         return view('livewire.devices.show', [
             'device' => $this->device,

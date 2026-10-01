@@ -77,14 +77,14 @@
                 </flux:table.columns>
                 <flux:table.rows>
                     @foreach($recentCommands as $command)
-                        <flux:table.row>
+                        <flux:table.row :key="'command-'.$command->id" class="cursor-pointer" wire:click="$dispatch('show-command', { commandId: {{ $command->id }} })">
                             <flux:table.cell>
                                 <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $command->device)" wire:navigate>
                                     {{ $command->device->hostname }}
                                 </flux:button>
                             </flux:table.cell>
                             <flux:table.cell>
-                                <flux:badge size="sm" :color="$command->status === \App\Enums\CommandStatus::Completed ? 'green' : ($command->status === \App\Enums\CommandStatus::Failed ? 'red' : ($command->status === \App\Enums\CommandStatus::Running ? 'blue' : 'gray'))">
+                                <flux:badge size="sm" :color="$command->status->color()">
                                     {{ $command->status->label() }}
                                 </flux:badge>
                             </flux:table.cell>
@@ -100,6 +100,8 @@
             </flux:table>
         </flux:card>
     @endif
+
+    <livewire:commands.detail />
 
     <div>
         <flux:button as="a" variant="ghost" :href="route('scripts.index')" wire:navigate>

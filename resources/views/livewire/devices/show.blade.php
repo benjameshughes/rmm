@@ -147,36 +147,22 @@
                 <flux:table.columns>
                     <flux:table.column>Queued</flux:table.column>
                     <flux:table.column>Type</flux:table.column>
-                    <flux:table.column>Script</flux:table.column>
+                    <flux:table.column>Command</flux:table.column>
                     <flux:table.column>Status</flux:table.column>
                     <flux:table.column>Queued By</flux:table.column>
                 </flux:table.columns>
                 <flux:table.rows>
                     @foreach($recentCommands as $command)
-                        <flux:table.row>
+                        <flux:table.row :key="'command-'.$command->id" class="cursor-pointer" wire:click="$dispatch('show-command', { commandId: {{ $command->id }} })">
                             <flux:table.cell>{{ $command->queued_at->diffForHumans() }}</flux:table.cell>
                             <flux:table.cell>
                                 <flux:badge size="sm" color="zinc">{{ $command->script_type }}</flux:badge>
                             </flux:table.cell>
                             <flux:table.cell>
-                                <flux:text class="font-mono text-sm">{{ Str::limit($command->script_content, 50) }}</flux:text>
+                                <flux:text class="text-sm">{{ $command->displayName() }}</flux:text>
                             </flux:table.cell>
                             <flux:table.cell>
-                                @if($command->status === \App\Enums\CommandStatus::Pending)
-                                    <flux:badge color="gray">Pending</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::Sent)
-                                    <flux:badge color="blue">Sent</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::Running)
-                                    <flux:badge color="blue">Running</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::Completed)
-                                    <flux:badge color="green">Completed</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::Failed)
-                                    <flux:badge color="red">Failed</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::TimedOut)
-                                    <flux:badge color="amber">Timed Out</flux:badge>
-                                @elseif($command->status === \App\Enums\CommandStatus::Cancelled)
-                                    <flux:badge color="zinc">Cancelled</flux:badge>
-                                @endif
+<flux:badge size="sm" :color="$command->status->color()">{{ $command->status->label() }}</flux:badge>
                             </flux:table.cell>
                             <flux:table.cell>{{ $command->queuedBy?->name ?? '—' }}</flux:table.cell>
                         </flux:table.row>
@@ -185,6 +171,8 @@
             </flux:table>
         </flux:card>
     @endif
+
+    <livewire:commands.detail />
 
     {{-- Group & Tags --}}
     <div class="grid gap-6 md:grid-cols-2">

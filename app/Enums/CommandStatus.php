@@ -24,6 +24,18 @@ enum CommandStatus: string
         ]);
     }
 
+    public function color(): string
+    {
+        return match ($this) {
+            self::Pending => 'zinc',
+            self::Sent, self::Running => 'blue',
+            self::Completed => 'green',
+            self::Failed => 'red',
+            self::TimedOut => 'amber',
+            self::Cancelled => 'zinc',
+        };
+    }
+
     public function label(): string
     {
         return match ($this) {
