@@ -52,12 +52,21 @@ return [
             'requires_admin' => true,
         ],
         'windows-update' => [
-            'name' => 'Windows Update',
-            'description' => 'Install available Windows updates (does not restart)',
+            'name' => 'Windows Update (Patches)',
+            'description' => 'Install security and quality patches, skipping feature upgrades (does not restart)',
             'category' => 'updates',
             'platform' => 'windows',
             'file' => 'windows/windows-update.ps1',
             'timeout_seconds' => 3600,
+            'requires_admin' => true,
+        ],
+        'windows-feature-upgrade' => [
+            'name' => 'Windows Feature Upgrade',
+            'description' => 'Install a new Windows version such as 25H2. Expect a long restart (does not restart)',
+            'category' => 'updates',
+            'platform' => 'windows',
+            'file' => 'windows/windows-feature-upgrade.ps1',
+            'timeout_seconds' => 7200,
             'requires_admin' => true,
         ],
         'ip-configuration' => [

@@ -1,27 +1,23 @@
 # Uses the built-in Windows Update Agent API (no PSWindowsUpdate module needed).
-# Installs security and quality patches only: feature upgrades (new Windows
-# versions) are skipped and have their own script. Never reboots on its own.
+# Installs feature upgrades only (new Windows versions such as 25H2). Expect a
+# long restart afterwards. Never reboots on its own.
 
 $upgradesCategoryId = '3689BDC8-B205-4AF4-8D4A-A63924C5E9D5'
 
 $session = New-Object -ComObject Microsoft.Update.Session
 $searcher = $session.CreateUpdateSearcher()
 
-Write-Output 'Searching for updates...'
-$searchResult = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0")
+Write-Output 'Searching for feature upgrades...'
+$searchResult = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0 and CategoryIDs contains '$upgradesCategoryId'")
 
-$patches = @($searchResult.Updates | Where-Object {
-    -not ($_.Categories | Where-Object { $_.CategoryID -eq $upgradesCategoryId })
-})
-
-if ($patches.Count -eq 0) {
-    Write-Output 'No patches available.'
+if ($searchResult.Updates.Count -eq 0) {
+    Write-Output 'No feature upgrades available.'
     exit 0
 }
 
 $updates = New-Object -ComObject Microsoft.Update.UpdateColl
 
-$patches | ForEach-Object {
+$searchResult.Updates | ForEach-Object {
     if (-not $_.EulaAccepted) { $_.AcceptEula() }
     [void]$updates.Add($_)
     Write-Output "Found: $($_.Title)"
