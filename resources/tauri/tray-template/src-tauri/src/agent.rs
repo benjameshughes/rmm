@@ -6,6 +6,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
+use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
@@ -280,6 +281,22 @@ impl Agent {
                 .await;
         });
 
+        let command_client = match CommandClient::new(self.config.clone()) {
+            Ok(client) => client,
+            Err(e) => {
+                error!("Failed to create command client: {}", e);
+                return SessionEnd::Shutdown;
+            }
+        };
+        let command_api_key = api_key.clone();
+        let command_token = session_token.clone();
+        let command_health = key_health.clone();
+        let command_handle = tokio::spawn(async move {
+            command_client
+                .start_command_loop(command_api_key, command_token, command_health)
+                .await;
+        });
+
         // Spawn update check loop as a separate task
         let update_config = self.config.clone();
         let update_token = session_token.clone();
@@ -302,6 +319,7 @@ impl Agent {
         // Make sure the other loops stop too, then wait for them
         session_token.cancel();
         let _ = heartbeat_handle.await;
+        let _ = command_handle.await;
         let _ = update_handle.await;
 
         session_end(

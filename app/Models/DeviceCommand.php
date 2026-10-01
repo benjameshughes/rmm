@@ -110,11 +110,13 @@ final class DeviceCommand extends Model
         ]);
     }
 
-    public function markAsTimedOut(): void
+    public function markAsTimedOut(?string $output = null, ?int $exitCode = null): void
     {
         $this->update([
             'status' => CommandStatus::TimedOut,
             'error_message' => "Command timed out after {$this->timeout_seconds} seconds",
+            'output' => $output,
+            'exit_code' => $exitCode,
             'completed_at' => now(),
         ]);
     }

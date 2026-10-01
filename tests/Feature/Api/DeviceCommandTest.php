@@ -225,3 +225,90 @@ it('refuses updates for a command that has already finished', function (string $
     'started' => ['started', []],
     'result' => ['result', ['exit_code' => 0, 'output' => 'too late']],
 ]);
+
+it('marks the command timed out when the agent reports a timeout', function (): void {
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
+    $user = User::factory()->create();
+
+    $command = DeviceCommand::create([
+        'device_id' => $device->id,
+        'script_content' => 'Start-Sleep 600',
+        'script_type' => 'powershell',
+        'status' => CommandStatus::Running,
+        'queued_at' => now(),
+        'queued_by' => $user->id,
+        'timeout_seconds' => 300,
+    ]);
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])
+        ->postJson("/api/commands/{$command->id}/result", [
+            'exit_code' => -1,
+            'output' => 'partial output',
+            'error_message' => 'Command timed out after 300 seconds',
+            'timed_out' => true,
+        ])
+        ->assertSuccessful();
+
+    $command->refresh();
+    expect($command->status)->toBe(CommandStatus::TimedOut);
+    expect($command->output)->toBe('partial output');
+    expect($command->exit_code)->toBe(-1);
+    expect($command->error_message)->toBe('Command timed out after 300 seconds');
+    expect($command->completed_at)->not->toBeNull();
+});
+
+it('keeps the normal result handling when timed_out is absent or false', function (array $extra, int $exitCode, CommandStatus $expected): void {
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
+    $user = User::factory()->create();
+
+    $command = DeviceCommand::create([
+        'device_id' => $device->id,
+        'script_content' => 'Get-Process',
+        'script_type' => 'powershell',
+        'status' => CommandStatus::Running,
+        'queued_at' => now(),
+        'queued_by' => $user->id,
+        'timeout_seconds' => 300,
+    ]);
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])
+        ->postJson("/api/commands/{$command->id}/result", [
+            'exit_code' => $exitCode,
+            'output' => 'done',
+            ...$extra,
+        ])
+        ->assertSuccessful();
+
+    $command->refresh();
+    expect($command->status)->toBe($expected);
+    expect($command->output)->toBe('done');
+})->with([
+    'absent, exit 0' => [[], 0, CommandStatus::Completed],
+    'absent, exit 1' => [[], 1, CommandStatus::Failed],
+    'false, exit 0' => [['timed_out' => false], 0, CommandStatus::Completed],
+]);
+
+it('rejects a non-boolean timed_out flag', function (): void {
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
+    $user = User::factory()->create();
+
+    $command = DeviceCommand::create([
+        'device_id' => $device->id,
+        'script_content' => 'Get-Process',
+        'script_type' => 'powershell',
+        'status' => CommandStatus::Running,
+        'queued_at' => now(),
+        'queued_by' => $user->id,
+        'timeout_seconds' => 300,
+    ]);
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])
+        ->postJson("/api/commands/{$command->id}/result", [
+            'exit_code' => -1,
+            'timed_out' => 'definitely',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('timed_out');
+
+    expect($command->refresh()->status)->toBe(CommandStatus::Running);
+});

@@ -16,6 +16,24 @@ pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
 /// Default interval for checking for updates (24 hours)
 pub const DEFAULT_UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 
+/// Default interval for asking the server for queued commands
+pub const DEFAULT_COMMAND_POLL_INTERVAL_SECS: u64 = 30;
+
+/// Shortest timeout a command may run with
+pub const DEFAULT_COMMAND_MIN_TIMEOUT_SECS: u64 = 10;
+
+/// Longest timeout a command may run with (2 hours)
+pub const DEFAULT_COMMAND_MAX_TIMEOUT_SECS: u64 = 7200;
+
+/// Most characters of command output sent back (the server rejects more)
+pub const DEFAULT_COMMAND_OUTPUT_LIMIT_CHARS: usize = 1_000_000;
+
+/// HTTP timeout for command poll/report requests
+pub const DEFAULT_COMMAND_REQUEST_TIMEOUT_SECS: u64 = 30;
+
+/// How long to wait for a killed script's output pipes to close
+pub const DEFAULT_COMMAND_DRAIN_GRACE_SECS: u64 = 5;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
@@ -49,6 +67,18 @@ pub struct Config {
     pub enrollment_poll_interval: u64,
     /// Update check interval in seconds
     pub update_check_interval: u64,
+    /// Command poll interval in seconds
+    pub command_poll_interval: u64,
+    /// Shortest allowed command timeout in seconds
+    pub command_min_timeout: u64,
+    /// Longest allowed command timeout in seconds
+    pub command_max_timeout: u64,
+    /// Most characters of command output reported to the server
+    pub command_output_limit: usize,
+    /// HTTP timeout for command requests in seconds
+    pub command_request_timeout: u64,
+    /// Seconds to wait for a killed script's output pipes to close
+    pub command_drain_grace: u64,
     /// Skip automatic updates
     pub skip_updates: bool,
     /// Netdata API base URL
@@ -84,6 +114,12 @@ impl Default for Config {
             status_check_interval: DEFAULT_STATUS_CHECK_INTERVAL_SECS,
             enrollment_poll_interval: DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS,
             update_check_interval: DEFAULT_UPDATE_CHECK_INTERVAL_SECS,
+            command_poll_interval: DEFAULT_COMMAND_POLL_INTERVAL_SECS,
+            command_min_timeout: DEFAULT_COMMAND_MIN_TIMEOUT_SECS,
+            command_max_timeout: DEFAULT_COMMAND_MAX_TIMEOUT_SECS,
+            command_output_limit: DEFAULT_COMMAND_OUTPUT_LIMIT_CHARS,
+            command_request_timeout: DEFAULT_COMMAND_REQUEST_TIMEOUT_SECS,
+            command_drain_grace: DEFAULT_COMMAND_DRAIN_GRACE_SECS,
             skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }

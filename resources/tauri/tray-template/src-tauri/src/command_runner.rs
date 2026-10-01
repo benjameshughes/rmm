@@ -1,0 +1,527 @@
+//! Runs a single admin-queued script on this machine and captures the result.
+//!
+//! Scripts are written to a uniquely named file inside the agent's locked data
+//! directory (SYSTEM + Administrators only), executed with an absolute
+//! interpreter path, killed together with any child processes when they exceed
+//! their timeout, and deleted afterwards.
+
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::process::Command;
+
+const STDERR_SEPARATOR: &str = "\n\n--- stderr ---\n";
+const TRUNCATION_MARKER: &str = "\n[output truncated]";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScriptType {
+    Powershell,
+    Cmd,
+    Bash,
+    Sh,
+    Unknown(String),
+}
+
+impl ScriptType {
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "powershell" => ScriptType::Powershell,
+            "cmd" => ScriptType::Cmd,
+            "bash" => ScriptType::Bash,
+            "sh" => ScriptType::Sh,
+            other => ScriptType::Unknown(other.to_string()),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            ScriptType::Powershell => "powershell",
+            ScriptType::Cmd => "cmd",
+            ScriptType::Bash => "bash",
+            ScriptType::Sh => "sh",
+            ScriptType::Unknown(name) => name,
+        }
+    }
+
+    fn file_extension(&self) -> &'static str {
+        match self {
+            ScriptType::Powershell => "ps1",
+            ScriptType::Cmd => "cmd",
+            ScriptType::Bash | ScriptType::Sh | ScriptType::Unknown(_) => "sh",
+        }
+    }
+
+    fn is_supported_here(&self) -> bool {
+        if cfg!(windows) {
+            matches!(self, ScriptType::Powershell | ScriptType::Cmd)
+        } else {
+            matches!(self, ScriptType::Bash | ScriptType::Sh)
+        }
+    }
+}
+
+/// How long a script may run, how much output to keep, and where to stage it.
+#[derive(Debug, Clone)]
+pub struct RunLimits {
+    pub timeout: Duration,
+    pub output_limit: usize,
+    pub drain_grace: Duration,
+    pub work_dir: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionResult {
+    pub exit_code: i32,
+    pub output: String,
+    pub error_message: Option<String>,
+    pub timed_out: bool,
+    pub duration: Duration,
+}
+
+impl ExecutionResult {
+    fn failed(message: String, started: Instant) -> Self {
+        Self {
+            exit_code: -1,
+            output: String::new(),
+            error_message: Some(message),
+            timed_out: false,
+            duration: started.elapsed(),
+        }
+    }
+}
+
+pub fn clamp_timeout(requested_secs: u64, min_secs: u64, max_secs: u64) -> Duration {
+    Duration::from_secs(requested_secs.clamp(min_secs, max_secs.max(min_secs)))
+}
+
+pub fn combine_output(stdout: &[u8], stderr: &[u8], limit_chars: usize) -> String {
+    let stdout = String::from_utf8_lossy(stdout);
+    let stderr = String::from_utf8_lossy(stderr);
+
+    let combined = match stderr.trim().is_empty() {
+        true => stdout.into_owned(),
+        false => format!("{}{}{}", stdout, STDERR_SEPARATOR, stderr),
+    };
+
+    truncate_chars(combined, limit_chars)
+}
+
+fn truncate_chars(text: String, limit_chars: usize) -> String {
+    if text.chars().count() <= limit_chars {
+        return text;
+    }
+
+    let keep = limit_chars.saturating_sub(TRUNCATION_MARKER.chars().count());
+    let mut truncated: String = text.chars().take(keep).collect();
+    truncated.push_str(TRUNCATION_MARKER);
+    truncated
+}
+
+/// Execute `content` as a script of `script_type` within `limits`.
+pub async fn run_script(
+    script_type: &ScriptType,
+    content: &str,
+    command_id: u64,
+    limits: &RunLimits,
+) -> ExecutionResult {
+    let started = Instant::now();
+
+    if !script_type.is_supported_here() {
+        return ExecutionResult::failed(
+            format!(
+                "Script type '{}' is not supported on {}",
+                script_type.name(),
+                std::env::consts::OS
+            ),
+            started,
+        );
+    }
+
+    let script_path = match write_script(script_type, content, &limits.work_dir, command_id) {
+        Ok(path) => path,
+        Err(e) => {
+            return ExecutionResult::failed(
+                format!("Could not write the script file: {}", e),
+                started,
+            )
+        }
+    };
+
+    let result = execute(script_type, &script_path, limits, started).await;
+    let _ = std::fs::remove_file(&script_path);
+    result
+}
+
+fn write_script(
+    script_type: &ScriptType,
+    content: &str,
+    work_dir: &Path,
+    command_id: u64,
+) -> std::io::Result<PathBuf> {
+    use std::io::Write;
+
+    std::fs::create_dir_all(work_dir)?;
+    let path = work_dir.join(format!(
+        "command-{}-{}.{}",
+        command_id,
+        std::process::id(),
+        script_type.file_extension()
+    ));
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
+
+    file.write_all(&script_bytes(script_type, content))?;
+    file.sync_all()?;
+    Ok(path)
+}
+
+/// Windows PowerShell 5.1 reads a BOM-less .ps1 as ANSI, so non-ASCII text
+/// would be mangled without the UTF-8 BOM; output is forced to UTF-8 too.
+fn script_bytes(script_type: &ScriptType, content: &str) -> Vec<u8> {
+    match script_type {
+        ScriptType::Powershell => {
+            let mut bytes = vec![0xEF, 0xBB, 0xBF];
+            bytes
+                .extend_from_slice(b"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n");
+            bytes.extend_from_slice(content.as_bytes());
+            bytes
+        }
+        _ => content.as_bytes().to_vec(),
+    }
+}
+
+async fn execute(
+    script_type: &ScriptType,
+    script_path: &Path,
+    limits: &RunLimits,
+    started: Instant,
+) -> ExecutionResult {
+    let mut command = interpreter_command(script_type, script_path);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            return ExecutionResult::failed(
+                format!("Could not start {}: {}", script_type.name(), e),
+                started,
+            )
+        }
+    };
+
+    let byte_limit = limits.output_limit.saturating_mul(4);
+    let stdout_task = tokio::spawn(read_capped(child.stdout.take(), byte_limit));
+    let stderr_task = tokio::spawn(read_capped(child.stderr.take(), byte_limit));
+
+    let (exit_code, timed_out) = match tokio::time::timeout(limits.timeout, child.wait()).await {
+        Ok(Ok(status)) => (status.code().unwrap_or(-1), false),
+        Ok(Err(e)) => {
+            return ExecutionResult::failed(
+                format!("Lost track of the script process: {}", e),
+                started,
+            )
+        }
+        Err(_) => {
+            kill_process_tree(child.id());
+            let _ = child.kill().await;
+            (-1, true)
+        }
+    };
+
+    let stdout = drain(stdout_task, limits.drain_grace).await;
+    let stderr = drain(stderr_task, limits.drain_grace).await;
+
+    ExecutionResult {
+        exit_code,
+        output: combine_output(&stdout, &stderr, limits.output_limit),
+        error_message: timed_out.then(|| {
+            format!(
+                "Command timed out after {} seconds",
+                limits.timeout.as_secs()
+            )
+        }),
+        timed_out,
+        duration: started.elapsed(),
+    }
+}
+
+async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, limit: usize) -> Vec<u8> {
+    let Some(mut pipe) = pipe else {
+        return Vec::new();
+    };
+
+    let mut captured = Vec::new();
+    let _ = (&mut pipe)
+        .take(limit as u64)
+        .read_to_end(&mut captured)
+        .await;
+    let _ = tokio::io::copy(&mut pipe, &mut tokio::io::sink()).await;
+    captured
+}
+
+async fn drain(task: tokio::task::JoinHandle<Vec<u8>>, grace: Duration) -> Vec<u8> {
+    match tokio::time::timeout(grace, task).await {
+        Ok(Ok(bytes)) => bytes,
+        _ => Vec::new(),
+    }
+}
+
+#[cfg(windows)]
+fn interpreter_command(script_type: &ScriptType, script_path: &Path) -> Command {
+    use crate::data_dir_security::system32_tool;
+
+    let system_root = std::env::var("SystemRoot").ok();
+
+    match script_type {
+        ScriptType::Cmd => {
+            let mut command = Command::new(system32_tool(system_root.as_deref(), "cmd.exe"));
+            command.arg("/d").arg("/c").arg(script_path);
+            command
+        }
+        _ => {
+            let mut command = Command::new(system32_tool(
+                system_root.as_deref(),
+                r"WindowsPowerShell\v1.0\powershell.exe",
+            ));
+            command
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                ])
+                .arg(script_path);
+            command
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn interpreter_command(script_type: &ScriptType, script_path: &Path) -> Command {
+    let shell = match script_type {
+        ScriptType::Bash => "/bin/bash",
+        _ => "/bin/sh",
+    };
+
+    let mut command = Command::new(shell);
+    command.arg(script_path).process_group(0);
+    command
+}
+
+#[cfg(windows)]
+fn kill_process_tree(pid: Option<u32>) {
+    use crate::data_dir_security::system32_tool;
+
+    let Some(pid) = pid else {
+        return;
+    };
+
+    let system_root = std::env::var("SystemRoot").ok();
+    let _ = std::process::Command::new(system32_tool(system_root.as_deref(), "taskkill.exe"))
+        .args(["/T", "/F", "/PID", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(windows))]
+fn kill_process_tree(pid: Option<u32>) {
+    let Some(pid) = pid else {
+        return;
+    };
+
+    let _ = std::process::Command::new("/bin/kill")
+        .args(["-KILL", &format!("-{}", pid)])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn limits(work_dir: &Path, timeout_secs: u64, output_limit: usize) -> RunLimits {
+        RunLimits {
+            timeout: Duration::from_secs(timeout_secs),
+            output_limit,
+            drain_grace: Duration::from_secs(5),
+            work_dir: work_dir.to_path_buf(),
+        }
+    }
+
+    #[test]
+    fn parses_script_types_case_insensitively() {
+        assert_eq!(ScriptType::parse("PowerShell"), ScriptType::Powershell);
+        assert_eq!(ScriptType::parse(" cmd "), ScriptType::Cmd);
+        assert_eq!(ScriptType::parse("bash"), ScriptType::Bash);
+        assert_eq!(ScriptType::parse("sh"), ScriptType::Sh);
+        assert_eq!(
+            ScriptType::parse("cobol"),
+            ScriptType::Unknown("cobol".to_string())
+        );
+    }
+
+    #[test]
+    fn clamps_timeouts_into_range() {
+        assert_eq!(clamp_timeout(1, 10, 7200), Duration::from_secs(10));
+        assert_eq!(clamp_timeout(300, 10, 7200), Duration::from_secs(300));
+        assert_eq!(clamp_timeout(99_999, 10, 7200), Duration::from_secs(7200));
+        assert_eq!(clamp_timeout(50, 10, 5), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn combines_stdout_and_stderr() {
+        assert_eq!(combine_output(b"hello", b"", 100), "hello");
+        assert_eq!(combine_output(b"hello", b"  \n", 100), "hello");
+        assert_eq!(
+            combine_output(b"hello", b"oops", 100),
+            format!("hello{}oops", STDERR_SEPARATOR)
+        );
+    }
+
+    #[test]
+    fn truncates_to_the_character_limit_with_a_marker() {
+        let output = combine_output("é".repeat(50).as_bytes(), b"", 30);
+
+        assert_eq!(output.chars().count(), 30);
+        assert!(output.ends_with(TRUNCATION_MARKER));
+    }
+
+    #[test]
+    fn decodes_invalid_utf8_lossily() {
+        assert_eq!(combine_output(&[0x66, 0xFF, 0x6F], b"", 100), "f\u{FFFD}o");
+    }
+
+    #[test]
+    fn powershell_scripts_get_a_bom_and_utf8_output() {
+        let bytes = script_bytes(&ScriptType::Powershell, "Get-Date");
+
+        assert!(bytes.starts_with(&[0xEF, 0xBB, 0xBF]));
+        assert!(String::from_utf8_lossy(&bytes).ends_with("Get-Date"));
+        assert_eq!(script_bytes(&ScriptType::Cmd, "dir"), b"dir".to_vec());
+    }
+
+    #[tokio::test]
+    async fn refuses_unsupported_types_without_writing_anything() {
+        let dir = tempfile::tempdir().unwrap();
+        let foreign = if cfg!(windows) {
+            ScriptType::Bash
+        } else {
+            ScriptType::Powershell
+        };
+
+        let result = run_script(&foreign, "echo hi", 1, &limits(dir.path(), 5, 100)).await;
+
+        assert_eq!(result.exit_code, -1);
+        assert!(result.error_message.unwrap().contains("not supported"));
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn refuses_unknown_types() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let result = run_script(
+            &ScriptType::Unknown("cobol".to_string()),
+            "DISPLAY 'HI'",
+            1,
+            &limits(dir.path(), 5, 100),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, -1);
+        assert!(result.error_message.unwrap().contains("'cobol'"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn runs_a_shell_script_and_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let result = run_script(
+            &ScriptType::Sh,
+            "echo hello\necho problem >&2\nexit 3\n",
+            7,
+            &limits(dir.path(), 10, 1000),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 3);
+        assert!(!result.timed_out);
+        assert!(result.error_message.is_none());
+        assert_eq!(
+            result.output,
+            format!("hello\n{}problem\n", STDERR_SEPARATOR)
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn kills_scripts_and_their_children_on_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let started = Instant::now();
+
+        let result = run_script(
+            &ScriptType::Sh,
+            "echo before\nsleep 30 &\nsleep 30\n",
+            8,
+            &limits(dir.path(), 1, 1000),
+        )
+        .await;
+
+        assert!(result.timed_out);
+        assert_eq!(result.exit_code, -1);
+        assert!(result.output.contains("before"));
+        assert_eq!(
+            result.error_message.as_deref(),
+            Some("Command timed out after 1 seconds")
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn runs_a_powershell_script() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let result = run_script(
+            &ScriptType::Powershell,
+            "Write-Output 'hello from powershell'\nexit 4",
+            9,
+            &limits(dir.path(), 60, 1000),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 4, "output: {}", result.output);
+        assert!(result.output.contains("hello from powershell"));
+        assert!(!result.timed_out);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn runs_a_cmd_script() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let result = run_script(
+            &ScriptType::Cmd,
+            "@echo off\r\necho hello from cmd\r\nexit /b 0\r\n",
+            10,
+            &limits(dir.path(), 60, 1000),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 0, "output: {}", result.output);
+        assert!(result.output.contains("hello from cmd"));
+    }
+}

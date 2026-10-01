@@ -96,16 +96,17 @@ final class DeviceCommandController
             'exit_code' => 'required|integer',
             'output' => 'nullable|string|max:1000000',
             'error_message' => 'nullable|string|max:10000',
+            'timed_out' => 'sometimes|boolean',
         ]);
 
         $exitCode = (int) $validated['exit_code'];
         $output = $validated['output'] ?? '';
 
-        if (! empty($validated['error_message'])) {
-            $command->markAsFailed($validated['error_message'], $output, $exitCode);
-        } else {
-            $command->markAsCompleted($output, $exitCode);
-        }
+        match (true) {
+            (bool) ($validated['timed_out'] ?? false) => $command->markAsTimedOut($output, $exitCode),
+            ! empty($validated['error_message']) => $command->markAsFailed($validated['error_message'], $output, $exitCode),
+            default => $command->markAsCompleted($output, $exitCode),
+        };
 
         Log::info('api.command.completed', [
             'device_id' => $device->id,

@@ -1,6 +1,6 @@
 [package]
 name = "rmm"
-version = "0.4.1"
+version = "0.5.0"
 description = "RMM Agent - Remote Monitoring and Management Service"
 authors = ["Ben Hughes"]
 edition = "2021"
@@ -24,7 +24,7 @@ clap = { version = "4", features = ["derive"] }
 windows-service = "0.7"
 
 # Async runtime
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "sync", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "sync", "signal", "process", "io-util"] }
 tokio-util = "0.7"
 futures-util = "0.3"
 
