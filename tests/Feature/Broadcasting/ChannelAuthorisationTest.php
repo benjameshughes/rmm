@@ -83,3 +83,19 @@ it('exposes the csrf token Echo needs to authorise private channels', function (
         ->assertSuccessful()
         ->assertSee('<meta name="csrf-token" content="'.csrf_token().'" />', false);
 });
+
+it('lets a user join their own notification channel', function (): void {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    authoriseChannel("private-App.Models.User.{$user->id}")
+        ->assertSuccessful()
+        ->assertJsonStructure(['auth']);
+});
+
+it('refuses a user on someone else\'s notification channel', function (): void {
+    $colleague = User::factory()->create();
+    $this->actingAs(User::factory()->create());
+
+    authoriseChannel("private-App.Models.User.{$colleague->id}")->assertForbidden();
+});

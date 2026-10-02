@@ -17,6 +17,14 @@ enum AlertSeverity: string
         };
     }
 
+    public function toastVariant(): string
+    {
+        return match ($this) {
+            self::Warning => 'warning',
+            self::Critical => 'danger',
+        };
+    }
+
     public function label(): string
     {
         return match ($this) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events;
 
+use App\Enums\AlertStatus;
 use App\Models\Alert;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -34,6 +35,14 @@ final class AlertChanged implements ShouldBroadcast, ShouldDispatchAfterCommit, 
         $this->deviceId = $alert->device_id;
         $this->status = $alert->status->value;
         $this->isCreatedOrStatusChanged = ($alert->wasRecentlyCreated && ! $alert->wasChanged()) || $alert->wasChanged('status');
+    }
+
+    /**
+     * Alerts only ever enter Triggered when they are created, so a status change into it means a fresh alert.
+     */
+    public function isNewlyTriggered(): bool
+    {
+        return $this->isCreatedOrStatusChanged && $this->status === AlertStatus::Triggered->value;
     }
 
     /**

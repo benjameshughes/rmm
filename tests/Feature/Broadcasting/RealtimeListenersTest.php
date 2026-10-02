@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\AlertStatus;
 use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
 use App\Livewire\AlertBell;
@@ -142,15 +141,15 @@ it('refreshes the alert list when an alert changes', function (): void {
         ->assertSee($alert->device->hostname);
 });
 
-it('updates the alert bell count without polling', function (): void {
+it('updates the alert bell from the user notification channel without polling', function (): void {
     $component = Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
         ->assertDontSeeHtml('wire:poll')
-        ->assertViewHas('count', 0);
+        ->assertViewHas('unreadCount', 0);
 
     $alert = Alert::factory()->triggered()->create();
 
-    $component->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $alert->device_id, 'status' => AlertStatus::Triggered->value])
-        ->assertViewHas('count', 1);
+    $component->dispatch("echo-private:App.Models.User.{$this->user->id},.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated", ['id' => $this->user->notifications()->sole()->id, 'alertId' => $alert->id])
+        ->assertViewHas('unreadCount', 1);
 });
 
 it('has no polling anywhere in the views', function (): void {
