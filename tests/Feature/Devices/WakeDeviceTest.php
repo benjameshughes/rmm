@@ -12,42 +12,6 @@ use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
 
-/**
- * Point Wake-on-LAN at a UDP socket on localhost so the test reads the real packets.
- *
- * @return resource
- */
-function listenForWakePackets()
-{
-    $listener = stream_socket_server('udp://127.0.0.1:0', $errorCode, $errorMessage, STREAM_SERVER_BIND);
-    stream_set_blocking($listener, false);
-
-    config([
-        'devices.wake_on_lan.broadcast_address' => '127.0.0.1',
-        'devices.wake_on_lan.port' => (int) str(stream_socket_get_name($listener, false))->afterLast(':')->value(),
-    ]);
-
-    return $listener;
-}
-
-/**
- * @param  resource  $listener
- * @return array<int, string>
- */
-function receivedWakePackets($listener): array
-{
-    return collect(range(1, 10))
-        ->map(fn (): string|false => stream_socket_recvfrom($listener, 1024))
-        ->filter()
-        ->values()
-        ->all();
-}
-
-function magicPacketFor(string $mac): string
-{
-    return str_repeat("\xFF", 6).str_repeat(hex2bin(str_replace(':', '', $mac)), 16);
-}
-
 beforeEach(function (): void {
     $this->user = User::factory()->create();
 });

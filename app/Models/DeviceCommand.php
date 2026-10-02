@@ -19,6 +19,7 @@ final class DeviceCommand extends Model
     protected $fillable = [
         'device_id',
         'script_id',
+        'scheduled_task_id',
         'script_content',
         'script_type',
         'status',
@@ -62,6 +63,11 @@ final class DeviceCommand extends Model
         return $this->belongsTo(Script::class);
     }
 
+    public function scheduledTask(): BelongsTo
+    {
+        return $this->belongsTo(ScheduledTask::class);
+    }
+
     public function queuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'queued_by');
@@ -84,6 +90,26 @@ final class DeviceCommand extends Model
         return Str::contains((string) $this->output, $separator)
             ? Str::after((string) $this->output, $separator)
             : null;
+    }
+
+    /**
+     * Scripts print their one-line verdict first, so the first non-empty line
+     * of stdout is the summary. Falls back to stderr, the error message, then
+     * the status for commands that died without saying anything.
+     */
+    public function summaryLine(): string
+    {
+        $firstLine = fn (?string $text): ?string => Str::of((string) $text)
+            ->explode("\n")
+            ->map(fn (string $line): string => trim($line))
+            ->first(fn (string $line): bool => $line !== '');
+
+        $summary = $firstLine($this->stdout())
+            ?? $firstLine($this->stderr())
+            ?? $firstLine($this->error_message)
+            ?? $this->status->label();
+
+        return Str::limit($summary, config('alerts.scheduled_script_failed.summary_max_length'));
     }
 
     public function durationForHumans(): ?string

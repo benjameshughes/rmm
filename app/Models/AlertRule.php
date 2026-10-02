@@ -53,6 +53,22 @@ final class AlertRule extends Model
         ]);
     }
 
+    /**
+     * The built-in rule behind failed scheduled script alerts, created on first
+     * use so it can be switched off under Alert Rules like any other rule.
+     */
+    public static function scheduledScriptFailed(): self
+    {
+        return self::query()->firstOrCreate(['metric' => AlertMetric::ScriptFailed], [
+            'name' => config('alerts.scheduled_script_failed.rule_name'),
+            'operator' => AlertOperator::GreaterThan,
+            'threshold' => 0,
+            'duration_minutes' => 0,
+            'severity' => AlertSeverity::from(config('alerts.scheduled_script_failed.severity')),
+            'is_active' => true,
+        ]);
+    }
+
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);

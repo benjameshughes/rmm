@@ -19,6 +19,7 @@ final class Alert extends Model
     protected $fillable = [
         'alert_rule_id',
         'device_id',
+        'scheduled_task_id',
         'status',
         'severity',
         'metric',
@@ -59,6 +60,11 @@ final class Alert extends Model
     public function device(): BelongsTo
     {
         return $this->belongsTo(Device::class);
+    }
+
+    public function scheduledTask(): BelongsTo
+    {
+        return $this->belongsTo(ScheduledTask::class);
     }
 
     public function acknowledgedBy(): BelongsTo

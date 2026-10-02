@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DeviceStatus;
+use App\Enums\ScheduledTaskAction;
 use App\Enums\ScheduleTargetType;
 use Cron\CronExpression;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,6 +19,7 @@ final class ScheduledTask extends Model
 
     protected $fillable = [
         'name',
+        'action',
         'script_id',
         'cron_expression',
         'target_type',
@@ -34,6 +36,7 @@ final class ScheduledTask extends Model
             'is_active' => 'boolean',
             'last_run_at' => 'datetime',
             'next_run_at' => 'datetime',
+            'action' => ScheduledTaskAction::class,
             'target_type' => ScheduleTargetType::class,
         ];
     }

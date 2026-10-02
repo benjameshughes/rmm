@@ -11,7 +11,7 @@
         <flux:table>
             <flux:table.columns>
                 <flux:table.column>Name</flux:table.column>
-                <flux:table.column>Script</flux:table.column>
+                <flux:table.column>Action</flux:table.column>
                 <flux:table.column>Target</flux:table.column>
                 <flux:table.column>Schedule</flux:table.column>
                 <flux:table.column>Last Run</flux:table.column>
@@ -26,9 +26,14 @@
                             <flux:text class="font-medium">{{ $task->name }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:button as="a" size="sm" variant="ghost" :href="route('scripts.show', $task->script)" wire:navigate>
-                                {{ $task->script->name }}
-                            </flux:button>
+                            <div class="flex items-center gap-2">
+                                <flux:badge size="sm" color="zinc">{{ $task->action->label() }}</flux:badge>
+                                @if($task->script)
+                                    <flux:button as="a" size="sm" variant="ghost" :href="route('scripts.show', $task->script)" wire:navigate>
+                                        {{ $task->script->name }}
+                                    </flux:button>
+                                @endif
+                            </div>
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:badge size="sm" color="zinc">{{ $task->target_type->label() }}</flux:badge>
@@ -62,7 +67,7 @@
                 @empty
                     <flux:table.row>
                         <flux:table.cell colspan="8">
-                            <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">No scheduled tasks. Create one to automate script execution.</div>
+                            <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">No scheduled tasks. Create one to run scripts or wake devices on a schedule.</div>
                         </flux:table.cell>
                     </flux:table.row>
                 @endforelse
@@ -76,11 +81,19 @@
 
             <flux:input wire:model="name" label="Name" placeholder="e.g. Daily System Info" required />
 
-            <flux:select wire:model="script_id" label="Script" placeholder="Select a script..." variant="listbox" searchable required>
-                @foreach($scripts as $script)
-                    <flux:select.option value="{{ $script->id }}">{{ $script->name }}</flux:select.option>
+            <flux:select wire:model.live="action" label="Action" required>
+                @foreach($actions as $scheduledAction)
+                    <flux:select.option value="{{ $scheduledAction->value }}">{{ $scheduledAction->label() }}</flux:select.option>
                 @endforeach
             </flux:select>
+
+            @if($this->requiresScript)
+                <flux:select wire:model="script_id" label="Script" placeholder="Select a script..." variant="listbox" searchable required>
+                    @foreach($scripts as $script)
+                        <flux:select.option value="{{ $script->id }}">{{ $script->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            @endif
 
             <div>
                 <flux:input wire:model="cron_expression" label="Cron Expression" placeholder="0 2 * * *" class="font-mono" required />

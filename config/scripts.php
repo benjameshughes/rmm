@@ -80,6 +80,15 @@ return [
             'timeout_seconds' => 7200,
             'requires_admin' => true,
         ],
+        'winget-upgrade-all' => [
+            'name' => 'Upgrade All Apps (winget)',
+            'description' => 'Silently upgrade every machine-wide app winget knows about, installing winget first if it is missing',
+            'category' => 'updates',
+            'platform' => 'windows',
+            'file' => 'windows/winget-upgrade-all.ps1',
+            'timeout_seconds' => 3600,
+            'requires_admin' => true,
+        ],
         'update-agent' => [
             'name' => 'Update Agent',
             'description' => 'Install the latest RMM agent release. The agent restarts itself, so this often ends as Timed Out: the update badge disappearing is the real confirmation',
@@ -87,6 +96,15 @@ return [
             'platform' => 'windows',
             'file' => 'windows/update-agent.ps1',
             'timeout_seconds' => 300,
+            'requires_admin' => true,
+        ],
+        'patch-status' => [
+            'name' => 'Patch Status',
+            'description' => 'Check when the PC was last patched, which updates are waiting and whether a restart is pending. Fails when patching needs attention',
+            'category' => 'updates',
+            'platform' => 'windows',
+            'file' => 'windows/patch-status.ps1',
+            'timeout_seconds' => 900,
             'requires_admin' => true,
         ],
         'ip-configuration' => [
@@ -116,6 +134,15 @@ return [
             'timeout_seconds' => 120,
             'requires_admin' => false,
         ],
+        'installed-software' => [
+            'name' => 'Installed Software',
+            'description' => 'List installed applications with version, publisher and install date',
+            'category' => 'info',
+            'platform' => 'windows',
+            'file' => 'windows/installed-software.ps1',
+            'timeout_seconds' => 120,
+            'requires_admin' => false,
+        ],
         'process-list' => [
             'name' => 'Process List',
             'description' => 'List the top 20 processes by CPU',
@@ -141,6 +168,15 @@ return [
             'platform' => 'windows',
             'file' => 'windows/firewall-status.ps1',
             'timeout_seconds' => 30,
+            'requires_admin' => true,
+        ],
+        'event-log-check' => [
+            'name' => 'Event Log Check',
+            'description' => 'Look for blue screens, unexpected shutdowns, disk errors and repeated failed logons in the last 24 hours. Fails when something needs attention',
+            'category' => 'security',
+            'platform' => 'windows',
+            'file' => 'windows/event-log-check.ps1',
+            'timeout_seconds' => 120,
             'requires_admin' => true,
         ],
         'network-interfaces' => [

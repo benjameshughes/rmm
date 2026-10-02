@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ScheduledTaskAction;
 use App\Enums\ScheduleTargetType;
 use App\Models\ScheduledTask;
 use App\Models\Script;
@@ -17,6 +18,7 @@ class ScheduledTaskFactory extends Factory
     {
         return [
             'name' => fake()->words(3, true),
+            'action' => ScheduledTaskAction::RunScript,
             'script_id' => Script::factory(),
             'cron_expression' => '0 2 * * *',
             'target_type' => ScheduleTargetType::All,
@@ -24,6 +26,14 @@ class ScheduledTaskFactory extends Factory
             'is_active' => true,
             'created_by' => User::factory(),
         ];
+    }
+
+    public function wake(): static
+    {
+        return $this->state(fn (): array => [
+            'action' => ScheduledTaskAction::Wake,
+            'script_id' => null,
+        ]);
     }
 
     public function inactive(): static

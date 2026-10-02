@@ -14,6 +14,7 @@ enum AlertMetric: string
     case PageFile = 'page_file';
     case Offline = 'offline';
     case AgentOutdated = 'agent_outdated';
+    case ScriptFailed = 'script_failed';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -32,6 +33,7 @@ enum AlertMetric: string
             self::PageFile => 'Page File Usage',
             self::Offline => 'Device Offline',
             self::AgentOutdated => 'Agent Outdated',
+            self::ScriptFailed => 'Scheduled Script Failed',
         };
     }
 
@@ -41,19 +43,21 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated => '',
+            self::AgentOutdated, self::ScriptFailed => '',
         };
     }
 
     /**
      * Agent versions are not numbers, so that alert is raised by agent:check-version
      * from a built-in rule rather than by comparing a metric against a threshold.
+     * Scheduled script failures likewise come from a built-in rule, raised when a
+     * scheduled command finishes.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated => false,
+            self::AgentOutdated, self::ScriptFailed => false,
         };
     }
 }
