@@ -18,7 +18,7 @@ if ($adapters.Count -eq 0) {
 
 $wakeSettings = @(Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceWakeEnable -ErrorAction SilentlyContinue)
 
-$results = $adapters | ForEach-Object {
+$results = @($adapters | ForEach-Object {
     $name = $_.Name
     $pnpId = $_.PnPDeviceID
 
@@ -45,7 +45,7 @@ $results = $adapters | ForEach-Object {
         WakeArmed = $wakeArmed
         IsReady = ($magicPacket -eq 'Enabled') -and ($wakeArmed -ne 'False')
     }
-}
+})
 
 Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -Name HiberbootEnabled -Value 0
 $fastStartupOff = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -Name HiberbootEnabled).HiberbootEnabled -eq 0
