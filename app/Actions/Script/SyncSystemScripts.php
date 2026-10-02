@@ -35,7 +35,7 @@ final class SyncSystemScripts
     }
 
     /**
-     * @param  array{name: string, description: string, category: string, platform: string, file: string, timeout_seconds: int, requires_admin: bool}  $definition
+     * @param  array{name: string, description: string, category: string, platform: string, file: string, timeout_seconds: int, requires_admin: bool, parameters?: array<int, array{name: string, label: string, type: string, required?: bool, default?: ?string, options?: array<int, string>}>}  $definition
      */
     private function sync(string $slug, array $definition): void
     {
@@ -52,6 +52,7 @@ final class SyncSystemScripts
             'script_content' => File::get($path),
             'timeout_seconds' => $definition['timeout_seconds'],
             'requires_admin' => $definition['requires_admin'],
+            'parameters' => $definition['parameters'] ?? [],
             'is_system' => true,
         ]);
     }

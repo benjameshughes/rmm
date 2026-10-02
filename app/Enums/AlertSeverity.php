@@ -25,6 +25,14 @@ enum AlertSeverity: string
         };
     }
 
+    public function notificationLevel(): NotificationLevel
+    {
+        return match ($this) {
+            self::Warning => NotificationLevel::Warning,
+            self::Critical => NotificationLevel::Critical,
+        };
+    }
+
     public function label(): string
     {
         return match ($this) {

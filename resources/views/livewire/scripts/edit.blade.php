@@ -32,6 +32,8 @@
 
         <flux:textarea wire:model="script_content" label="Script Content" placeholder="Enter script content..." rows="8" class="font-mono text-sm" required />
 
+        <x-script.parameter-editor :rows="$parameterRows" :types="$parameterTypes" />
+
         <div class="grid gap-4 sm:grid-cols-2">
             <flux:input wire:model="timeout_seconds" label="Timeout (seconds)" type="number" min="10" max="7200" />
 

@@ -4,7 +4,12 @@
 //! directory (SYSTEM + Administrators only), executed with an absolute
 //! interpreter path, killed together with any child processes when they exceed
 //! their timeout, and deleted afterwards.
+//!
+//! Script parameters reach the child only as `RMM_<NAME>` environment
+//! variables, never spliced into the script text, so values need no escaping
+//! and cannot inject code.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -13,6 +18,7 @@ use tokio::process::Command;
 
 const STDERR_SEPARATOR: &str = "\n\n--- stderr ---\n";
 const TRUNCATION_MARKER: &str = "\n[output truncated]";
+const PARAMETER_ENV_PREFIX: &str = "RMM_";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScriptType {
@@ -118,10 +124,30 @@ fn truncate_chars(text: String, limit_chars: usize) -> String {
     truncated
 }
 
-/// Execute `content` as a script of `script_type` within `limits`.
+/// The server already validates names; this guard keeps a malformed name
+/// (`=`, NUL, spaces) from ever reaching the process environment.
+fn is_valid_parameter_name(name: &str) -> bool {
+    let mut chars = name.chars();
+
+    matches!(chars.next(), Some(first) if first.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// `RMM_<NAME>` pairs for every well-formed parameter, name casing preserved.
+pub fn parameter_env_vars(parameters: &HashMap<String, String>) -> Vec<(String, String)> {
+    parameters
+        .iter()
+        .filter(|(name, _)| is_valid_parameter_name(name))
+        .map(|(name, value)| (format!("{}{}", PARAMETER_ENV_PREFIX, name), value.clone()))
+        .collect()
+}
+
+/// Execute `content` as a script of `script_type` within `limits`, exposing
+/// each of `parameters` as an `RMM_<NAME>` environment variable.
 pub async fn run_script(
     script_type: &ScriptType,
     content: &str,
+    parameters: &HashMap<String, String>,
     command_id: u64,
     limits: &RunLimits,
 ) -> ExecutionResult {
@@ -148,7 +174,7 @@ pub async fn run_script(
         }
     };
 
-    let result = execute(script_type, &script_path, limits, started).await;
+    let result = execute(script_type, &script_path, parameters, limits, started).await;
     let _ = std::fs::remove_file(&script_path);
     result
 }
@@ -197,11 +223,13 @@ fn script_bytes(script_type: &ScriptType, content: &str) -> Vec<u8> {
 async fn execute(
     script_type: &ScriptType,
     script_path: &Path,
+    parameters: &HashMap<String, String>,
     limits: &RunLimits,
     started: Instant,
 ) -> ExecutionResult {
     let mut command = interpreter_command(script_type, script_path);
     command
+        .envs(parameter_env_vars(parameters))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -420,7 +448,14 @@ mod tests {
             ScriptType::Powershell
         };
 
-        let result = run_script(&foreign, "echo hi", 1, &limits(dir.path(), 5, 100)).await;
+        let result = run_script(
+            &foreign,
+            "echo hi",
+            &HashMap::new(),
+            1,
+            &limits(dir.path(), 5, 100),
+        )
+        .await;
 
         assert_eq!(result.exit_code, -1);
         assert!(result.error_message.unwrap().contains("not supported"));
@@ -434,6 +469,7 @@ mod tests {
         let result = run_script(
             &ScriptType::Unknown("cobol".to_string()),
             "DISPLAY 'HI'",
+            &HashMap::new(),
             1,
             &limits(dir.path(), 5, 100),
         )
@@ -451,6 +487,7 @@ mod tests {
         let result = run_script(
             &ScriptType::Sh,
             "echo hello\necho problem >&2\nexit 3\n",
+            &HashMap::new(),
             7,
             &limits(dir.path(), 10, 1000),
         )
@@ -466,6 +503,62 @@ mod tests {
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 
+    #[test]
+    fn prefixes_parameter_names_and_drops_malformed_ones() {
+        let parameters = HashMap::from([
+            ("PackageId".to_string(), "Mozilla.Firefox".to_string()),
+            ("bad=name".to_string(), "x".to_string()),
+            ("1st".to_string(), "x".to_string()),
+            ("".to_string(), "x".to_string()),
+        ]);
+
+        assert_eq!(
+            parameter_env_vars(&parameters),
+            vec![("RMM_PackageId".to_string(), "Mozilla.Firefox".to_string())]
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn exposes_parameters_to_a_bash_script_as_env_vars() {
+        let dir = tempfile::tempdir().unwrap();
+        let parameters = HashMap::from([(
+            "PackageId".to_string(),
+            "it's \"quoted\" $(whoami); rm -rf /".to_string(),
+        )]);
+
+        let result = run_script(
+            &ScriptType::Bash,
+            "printf '%s' \"$RMM_PackageId\"\n",
+            &parameters,
+            11,
+            &limits(dir.path(), 10, 1000),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 0, "output: {}", result.output);
+        assert_eq!(result.output, "it's \"quoted\" $(whoami); rm -rf /");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn exposes_parameters_to_a_powershell_script_as_env_vars() {
+        let dir = tempfile::tempdir().unwrap();
+        let parameters = HashMap::from([("PackageId".to_string(), "Mozilla.Firefox".to_string())]);
+
+        let result = run_script(
+            &ScriptType::Powershell,
+            "Write-Output $env:RMM_PackageId",
+            &parameters,
+            12,
+            &limits(dir.path(), 60, 1000),
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 0, "output: {}", result.output);
+        assert!(result.output.contains("Mozilla.Firefox"));
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn kills_scripts_and_their_children_on_timeout() {
@@ -475,6 +568,7 @@ mod tests {
         let result = run_script(
             &ScriptType::Sh,
             "echo before\nsleep 30 &\nsleep 30\n",
+            &HashMap::new(),
             8,
             &limits(dir.path(), 1, 1000),
         )
@@ -498,6 +592,7 @@ mod tests {
         let result = run_script(
             &ScriptType::Powershell,
             "Write-Output 'hello from powershell'\nexit 4",
+            &HashMap::new(),
             9,
             &limits(dir.path(), 60, 1000),
         )
@@ -516,6 +611,7 @@ mod tests {
         let result = run_script(
             &ScriptType::Cmd,
             "@echo off\r\necho hello from cmd\r\nexit /b 0\r\n",
+            &HashMap::new(),
             10,
             &limits(dir.path(), 60, 1000),
         )

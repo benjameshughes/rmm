@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
@@ -9,3 +10,5 @@ Broadcast::channel('App.Models.User.{id}', fn (User $user, int $id): bool => $us
 Broadcast::channel('devices', fn (User $user): bool => $user->can('viewAny', Device::class));
 
 Broadcast::channel('devices.{device}', fn (User $user, Device $device): bool => $user->can('view', $device));
+
+Broadcast::channel('audit', fn (User $user): bool => $user->can('viewAny', AuditLog::class));

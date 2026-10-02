@@ -42,6 +42,7 @@ final class DeviceCommandController
                 'script_content' => $command->script_content,
                 'script_type' => $command->script_type,
                 'timeout_seconds' => $command->timeout_seconds,
+                'parameters' => (object) ($command->parameters ?? []),
             ],
         ]);
     }

@@ -177,11 +177,13 @@
                 <flux:text class="mt-2">Execute a script on {{ count($selectedDevices) }} {{ Str::plural('device', count($selectedDevices)) }}.</flux:text>
             </div>
 
-            <flux:select wire:model="bulkScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
+            <flux:select wire:model.live="bulkScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
                 @foreach($scripts as $script)
                     <flux:select.option value="{{ $script->id }}">{{ $script->name }} ({{ $script->platform->name }})</flux:select.option>
                 @endforeach
             </flux:select>
+
+            <x-script.parameter-inputs :parameters="$this->parameterFields" />
 
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="$set('showBulkScriptModal', false)" variant="ghost">Cancel</flux:button>

@@ -27,4 +27,16 @@ enum AlertStatus: string
             self::Resolved => 'Resolved',
         };
     }
+
+    /**
+     * What moving an alert into this status records in the audit log; alerts only enter Triggered when they are raised.
+     */
+    public function auditAction(): ?AuditAction
+    {
+        return match ($this) {
+            self::Triggered => null,
+            self::Acknowledged => AuditAction::AlertAcknowledged,
+            self::Resolved => AuditAction::AlertResolved,
+        };
+    }
 }

@@ -25,6 +25,25 @@ return [
         'sh' => 'bash',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Script Parameters
+    |--------------------------------------------------------------------------
+    |
+    | Scripts may declare parameters. The agent hands each value to the script
+    | as an `RMM_<Name>` environment variable, so names must be valid variable
+    | names and values are never spliced into the script text. System scripts
+    | declare theirs under a `parameters` key below.
+    |
+    */
+
+    'parameters' => [
+        'name_pattern' => '/^[A-Za-z][A-Za-z0-9_]{0,63}$/',
+        'max_per_script' => 20,
+        'max_label_length' => 255,
+        'max_value_length' => 1000,
+    ],
+
     'system' => [
         'shutdown' => [
             'name' => 'Shutdown',
@@ -88,6 +107,18 @@ return [
             'file' => 'windows/winget-upgrade-all.ps1',
             'timeout_seconds' => 3600,
             'requires_admin' => true,
+        ],
+        'winget-install' => [
+            'name' => 'Install App (winget)',
+            'description' => 'Silently install one app machine-wide by its winget package ID, such as Mozilla.Firefox, installing winget first if it is missing',
+            'category' => 'updates',
+            'platform' => 'windows',
+            'file' => 'windows/winget-install.ps1',
+            'timeout_seconds' => 1800,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'PackageId', 'label' => 'Package ID', 'type' => 'text', 'required' => true],
+            ],
         ],
         'update-agent' => [
             'name' => 'Update Agent',

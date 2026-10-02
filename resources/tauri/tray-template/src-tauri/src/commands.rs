@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::metrics::{KeyHealth, RequestOutcome};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -25,6 +26,9 @@ struct PendingCommand {
     script_content: String,
     script_type: String,
     timeout_seconds: Option<u64>,
+    /// Servers older than script parameters leave this out entirely.
+    #[serde(default)]
+    parameters: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,6 +96,7 @@ impl CommandClient {
         let result = command_runner::run_script(
             &script_type,
             &command.script_content,
+            &command.parameters,
             command.id,
             &self.run_limits(command.timeout_seconds),
         )
@@ -265,6 +270,31 @@ mod tests {
         assert_eq!(command.id, 42);
         assert_eq!(command.script_type, "powershell");
         assert_eq!(command.timeout_seconds, Some(300));
+        assert!(command.parameters.is_empty());
+    }
+
+    #[test]
+    fn parses_pending_command_parameters() {
+        let body: PendingResponse = serde_json::from_str(
+            r#"{"command":{"id":43,"script_content":"winget","script_type":"powershell","timeout_seconds":1800,"parameters":{"PackageId":"Mozilla.Firefox"}}}"#,
+        )
+        .unwrap();
+
+        let command = body.command.unwrap();
+        assert_eq!(
+            command.parameters.get("PackageId").map(String::as_str),
+            Some("Mozilla.Firefox")
+        );
+    }
+
+    #[test]
+    fn parses_an_empty_parameters_object() {
+        let body: PendingResponse = serde_json::from_str(
+            r#"{"command":{"id":44,"script_content":"Get-Date","script_type":"powershell","timeout_seconds":60,"parameters":{}}}"#,
+        )
+        .unwrap();
+
+        assert!(body.command.unwrap().parameters.is_empty());
     }
 
     #[test]

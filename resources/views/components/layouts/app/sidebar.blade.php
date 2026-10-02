@@ -29,6 +29,9 @@
                     <flux:navlist.item icon="bell-alert" :href="route('alerts.index')" :current="request()->routeIs('alerts.*') || request()->routeIs('alert-rules.*')" wire:navigate>{{ __('Alerts') }}</flux:navlist.item>
                     <flux:navlist.item icon="calendar" :href="route('scheduled-tasks.index')" :current="request()->routeIs('scheduled-tasks.*')" wire:navigate>{{ __('Schedules') }}</flux:navlist.item>
                     <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>{{ __('Agent') }}</flux:navlist.item>
+                    @can('viewAny', App\Models\AuditLog::class)
+                        <flux:navlist.item icon="shield-check" :href="route('audit.index')" :current="request()->routeIs('audit.*')" wire:navigate>{{ __('Audit Log') }}</flux:navlist.item>
+                    @endcan
                 </flux:navlist.group>
             </flux:navlist>
 

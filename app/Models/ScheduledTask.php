@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\DeviceStatus;
 use App\Enums\ScheduledTaskAction;
 use App\Enums\ScheduleTargetType;
+use App\Models\Concerns\Auditable;
 use Cron\CronExpression;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,7 @@ use Illuminate\Support\Collection;
 
 final class ScheduledTask extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -28,6 +30,7 @@ final class ScheduledTask extends Model
         'last_run_at',
         'next_run_at',
         'created_by',
+        'parameters',
     ];
 
     protected function casts(): array
@@ -38,6 +41,7 @@ final class ScheduledTask extends Model
             'next_run_at' => 'datetime',
             'action' => ScheduledTaskAction::class,
             'target_type' => ScheduleTargetType::class,
+            'parameters' => 'array',
         ];
     }
 

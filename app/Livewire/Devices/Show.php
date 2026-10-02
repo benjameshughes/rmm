@@ -8,6 +8,8 @@ use App\Actions\Device\AssignDeviceGroup;
 use App\Actions\Device\SyncDeviceTags;
 use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Actions\Script\ValidateScriptParameterValues;
+use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
@@ -15,7 +17,6 @@ use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -24,6 +25,7 @@ use Livewire\WithPagination;
 #[Layout('components.layouts.app')]
 final class Show extends Component
 {
+    use EntersScriptParameterValues;
     use WithPagination;
 
     public Device $device;
@@ -64,6 +66,11 @@ final class Show extends Component
         $group = $this->selectedGroupId ? DeviceGroup::find($this->selectedGroupId) : null;
         $action($this->device, $group);
         $this->device->refresh();
+    }
+
+    public function updatedSelectedScriptId(): void
+    {
+        $this->fillParameterValues();
     }
 
     public function updatedSelectedTagIds(SyncDeviceTags $action): void
@@ -115,26 +122,25 @@ final class Show extends Component
         $this->device->resetEnrolment();
         $this->device->refresh();
 
-        Log::warning('device.enrolment_reset', [
-            'device_id' => $this->device->id,
-            'hostname' => $this->device->hostname,
-            'user_id' => auth()->id(),
-        ]);
-
         $this->dispatch('notify', message: 'Enrolment reset. Re-approve the device after running "rmm reenroll" on it.');
     }
 
-    public function runScript(ExecuteScriptOnDevice $action): void
+    public function runScript(ExecuteScriptOnDevice $action, ValidateScriptParameterValues $validateParameters): void
     {
         $this->authorize('runCommands', $this->device);
         abort_unless($this->selectedScriptId !== null, 422);
 
         $script = Script::findOrFail($this->selectedScriptId);
-        $action($script, $this->device, auth()->user());
+        $action($script, $this->device, auth()->user(), parameters: $this->validatedParameterValues($validateParameters, $script));
 
         $this->showScriptModal = false;
-        $this->reset('selectedScriptId');
+        $this->reset('selectedScriptId', 'parameterValues');
         $this->dispatch('command-queued');
+    }
+
+    protected function parameterScript(): ?Script
+    {
+        return $this->selectedScriptId === null ? null : Script::find($this->selectedScriptId);
     }
 
     private function runSystemScript(ExecuteScriptOnDevice $action, string $slug): void

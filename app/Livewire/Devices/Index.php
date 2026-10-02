@@ -6,14 +6,18 @@ namespace App\Livewire\Devices;
 
 use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Actions\Script\ValidateScriptParameterValues;
+use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
+use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -22,6 +26,7 @@ use Livewire\WithPagination;
 #[Layout('components.layouts.app')]
 final class Index extends Component
 {
+    use EntersScriptParameterValues;
     use WithPagination;
 
     public string $search = '';
@@ -61,6 +66,11 @@ final class Index extends Component
     public function updatingTagFilter(): void
     {
         $this->resetPage();
+    }
+
+    public function updatedBulkScriptId(): void
+    {
+        $this->fillParameterValues();
     }
 
     public function updatedSelectAll(): void
@@ -104,17 +114,27 @@ final class Index extends Component
         $this->bulkRunSystemScript($action, 'shutdown');
     }
 
-    public function bulkRunScript(BulkExecuteScript $action): void
+    public function bulkRunScript(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
         abort_unless($this->bulkScriptId !== null, 422);
 
         $script = Script::findOrFail($this->bulkScriptId);
-        $action($script, $this->authorizedSelectedDevices(), auth()->user());
+        $parameters = $this->validatedParameterValues($validateParameters, $script);
+        $devices = $this->authorizedSelectedDevices();
+        $queued = $action($script, $devices, auth()->user(), $parameters);
 
         $this->showBulkScriptModal = false;
-        $this->reset('bulkScriptId');
+        $this->reset('bulkScriptId', 'parameterValues');
         $this->clearSelection();
         $this->dispatch('command-queued');
+
+        if ($queued < $devices->count()) {
+            Flux::toast(
+                text: 'Inactive devices and devices whose agent is older than '.config('agent.parameters_min_version').' were skipped.',
+                heading: "Queued on {$queued} of {$devices->count()} ".Str::plural('device', $devices->count()),
+                variant: 'warning',
+            );
+        }
     }
 
     public function updateOutdatedAgents(BulkExecuteScript $action, AgentVersionQueries $agentVersions): void
@@ -153,6 +173,11 @@ final class Index extends Component
             'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->orderBy('name')->get(),
         ]);
+    }
+
+    protected function parameterScript(): ?Script
+    {
+        return $this->bulkScriptId === null ? null : Script::find($this->bulkScriptId);
     }
 
     private function runSystemScript(ExecuteScriptOnDevice $action, Device $device, string $slug): void

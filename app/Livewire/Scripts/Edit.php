@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Livewire\Scripts;
 
 use App\Enums\ScriptCategory;
+use App\Enums\ScriptParameterType;
 use App\Enums\ScriptPlatform;
 use App\Enums\ScriptType;
+use App\Livewire\Concerns\DefinesScriptParameters;
 use App\Models\Script;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -16,6 +19,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 final class Edit extends Component
 {
+    use DefinesScriptParameters;
+
     public Script $script;
 
     public string $name = '';
@@ -47,6 +52,7 @@ final class Edit extends Component
         $this->script_content = $script->script_content;
         $this->timeout_seconds = $script->timeout_seconds;
         $this->requires_admin = $script->requires_admin;
+        $this->fillParameterRows($script->parameters);
     }
 
     public function save(): void
@@ -60,9 +66,13 @@ final class Edit extends Component
             'script_content' => ['required', 'string'],
             'timeout_seconds' => ['required', 'integer', 'min:10', 'max:7200'],
             'requires_admin' => ['boolean'],
-        ]);
+            ...$this->parameterRules(),
+        ], $this->parameterMessages());
 
-        $this->script->update($validated);
+        $this->script->update([
+            ...Arr::except($validated, 'parameterRows'),
+            'parameters' => $this->parameterDefinitions(),
+        ]);
 
         $this->redirect(route('scripts.show', $this->script), navigate: true);
     }
@@ -73,6 +83,7 @@ final class Edit extends Component
             'categories' => ScriptCategory::cases(),
             'platforms' => ScriptPlatform::cases(),
             'scriptTypes' => ScriptType::cases(),
+            'parameterTypes' => ScriptParameterType::cases(),
         ]);
     }
 }

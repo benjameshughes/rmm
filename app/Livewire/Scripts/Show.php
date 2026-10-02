@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Livewire\Scripts;
 
 use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceStatus;
+use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\Script;
 use Illuminate\Contracts\View\View;
@@ -16,6 +18,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 final class Show extends Component
 {
+    use EntersScriptParameterValues;
+
     public Script $script;
 
     public bool $showExecuteModal = false;
@@ -27,23 +31,30 @@ final class Show extends Component
     public function mount(Script $script): void
     {
         $this->script = $script;
+        $this->fillParameterValues();
     }
 
     #[On('echo-private:devices,CommandUpdated')]
     public function refreshExecutions(): void {}
 
-    public function executeOnDevice(ExecuteScriptOnDevice $action): void
+    public function executeOnDevice(ExecuteScriptOnDevice $action, ValidateScriptParameterValues $validateParameters): void
     {
         abort_unless($this->selectedDeviceId !== null, 422);
 
         $device = Device::findOrFail($this->selectedDeviceId);
         $this->authorize('runCommands', $device);
 
-        $action($this->script, $device, auth()->user());
+        $action($this->script, $device, auth()->user(), parameters: $this->validatedParameterValues($validateParameters, $this->script));
 
         $this->showExecuteModal = false;
         $this->reset('selectedDeviceId', 'deviceSearch');
+        $this->fillParameterValues();
         $this->dispatch('command-queued');
+    }
+
+    protected function parameterScript(): ?Script
+    {
+        return $this->script;
     }
 
     public function render(): View

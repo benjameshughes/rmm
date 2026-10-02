@@ -71,11 +71,15 @@
                 <flux:text class="mt-2">Execute a script on {{ $device->hostname }}.</flux:text>
             </div>
 
-            <flux:select wire:model="selectedScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
+            <flux:select wire:model.live="selectedScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
                 @foreach($scripts as $script)
                     <flux:select.option value="{{ $script->id }}">{{ $script->name }} ({{ $script->platform->name }})</flux:select.option>
                 @endforeach
             </flux:select>
+
+            <x-script.parameter-inputs :parameters="$this->parameterFields" />
+
+            <flux:error name="script" />
 
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="$set('showScriptModal', false)" variant="ghost">Cancel</flux:button>

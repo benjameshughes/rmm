@@ -184,9 +184,9 @@ it('rejects an unknown action', function (): void {
 it('shows the script picker only for script runs', function (): void {
     Livewire::actingAs(User::factory()->create())
         ->test(Index::class)
-        ->assertSeeHtml('wire:model="script_id"')
+        ->assertSeeHtml('wire:model.live="script_id"')
         ->set('action', 'wake')
-        ->assertDontSeeHtml('wire:model="script_id"');
+        ->assertDontSeeHtml('wire:model.live="script_id"');
 });
 
 it('lists the action and the script when there is one', function (): void {

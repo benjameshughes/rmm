@@ -30,7 +30,7 @@ it('notifies every user when an alert triggers', function (): void {
     $alert = Alert::factory()->triggered()->create();
 
     Notification::assertSentTo([$this->user, $colleague], AlertTriggered::class, fn (AlertTriggered $notification): bool => $notification->alert->is($alert));
-    Notification::assertCount(2);
+    Notification::assertSentTimes(AlertTriggered::class, 2);
 });
 
 it('does not notify again while an alert carries on, gets acknowledged or resolves', function (): void {

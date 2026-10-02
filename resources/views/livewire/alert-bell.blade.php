@@ -23,10 +23,10 @@
                         @if($notification->isUnread)
                             <span class="size-2 shrink-0 rounded-full bg-blue-500"></span>
                         @endif
-                        <span class="truncate font-medium">{{ $notification->hostname }}</span>
-                        <flux:badge size="sm" :color="$notification->severity->color()" class="ms-auto">{{ $notification->severity->label() }}</flux:badge>
+                        <span class="truncate font-medium">{{ $notification->title }}</span>
+                        <flux:badge size="sm" :color="$notification->level->color()" class="ms-auto">{{ $notification->level->label() }}</flux:badge>
                     </div>
-                    <span class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $notification->condition }}</span>
+                    <span class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $notification->body }}</span>
                     <span class="text-xs text-zinc-400 dark:text-zinc-500">{{ $notification->createdAt->diffForHumans() }}</span>
                 </div>
             </flux:menu.item>

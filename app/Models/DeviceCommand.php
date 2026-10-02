@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\CommandStatus;
 use App\Events\CommandUpdated;
+use App\Models\Concerns\Auditable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +15,7 @@ use Illuminate\Support\Str;
 
 final class DeviceCommand extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -32,6 +34,7 @@ final class DeviceCommand extends Model
         'completed_at',
         'timeout_seconds',
         'queued_by',
+        'parameters',
     ];
 
     /** @var array<string, class-string> */
@@ -50,6 +53,7 @@ final class DeviceCommand extends Model
             'timeout_seconds' => 'integer',
             'exit_code' => 'integer',
             'status' => CommandStatus::class,
+            'parameters' => 'array',
         ];
     }
 

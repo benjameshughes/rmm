@@ -10,6 +10,7 @@ pest()->use(RefreshDatabase::class);
 
 it('logs enroll and check attempts', function (): void {
     Log::spy();
+    Log::shouldReceive('channel')->with('audit')->andReturnSelf();
 
     $this->postJson('/api/enroll', [
         'hostname' => 'TEST-PC',
@@ -54,6 +55,7 @@ it('logs only a fingerprint prefix and never the full fingerprint or key', funct
 
 it('logs metrics success', function (): void {
     Log::spy();
+    Log::shouldReceive('channel')->with('audit')->andReturnSelf();
 
     $device = Device::factory()->active()->withApiKey('KEY-LOG')->create();
 

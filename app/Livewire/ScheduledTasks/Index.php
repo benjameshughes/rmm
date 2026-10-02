@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Livewire\ScheduledTasks;
 
 use App\Actions\Schedule\RunScheduledTask;
+use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\ScheduledTaskAction;
 use App\Enums\ScheduleTargetType;
+use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\ScheduledTask;
@@ -22,6 +24,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 final class Index extends Component
 {
+    use EntersScriptParameterValues;
+
     public string $name = '';
 
     public string $action = 'run_script';
@@ -43,16 +47,28 @@ final class Index extends Component
         $this->authorize('viewAny', ScheduledTask::class);
     }
 
-    public function create(): void
+    public function updatedScriptId(): void
+    {
+        $this->fillParameterValues();
+    }
+
+    public function updatedAction(): void
+    {
+        $this->fillParameterValues();
+    }
+
+    public function create(ValidateScriptParameterValues $validateParameters): void
     {
         $this->authorize('create', ScheduledTask::class);
 
         $this->validate($this->validationRules(), $this->validationMessages());
+        $parameters = $this->validatedParameters($validateParameters);
 
         $task = ScheduledTask::create([
             'name' => $this->name,
             'action' => $this->action,
             'script_id' => $this->requiresScript ? $this->script_id : null,
+            'parameters' => $parameters,
             'cron_expression' => $this->cron_expression,
             'target_type' => $this->target_type,
             'target_id' => $this->target_type === 'all' ? null : $this->target_id,
@@ -74,14 +90,16 @@ final class Index extends Component
         $this->cron_expression = $task->cron_expression;
         $this->target_type = $task->target_type->value;
         $this->target_id = $task->target_id;
+        $this->fillParameterValues($task->parameters ?? []);
         $this->showModal = true;
     }
 
-    public function update(): void
+    public function update(ValidateScriptParameterValues $validateParameters): void
     {
         abort_unless($this->editingId !== null, 422);
 
         $this->validate($this->validationRules(), $this->validationMessages());
+        $parameters = $this->validatedParameters($validateParameters);
 
         $task = ScheduledTask::findOrFail($this->editingId);
         $this->authorize('update', $task);
@@ -90,6 +108,7 @@ final class Index extends Component
             'name' => $this->name,
             'action' => $this->action,
             'script_id' => $this->requiresScript ? $this->script_id : null,
+            'parameters' => $parameters,
             'cron_expression' => $this->cron_expression,
             'target_type' => $this->target_type,
             'target_id' => $this->target_type === 'all' ? null : $this->target_id,
@@ -120,7 +139,7 @@ final class Index extends Component
 
     public function resetForm(): void
     {
-        $this->reset('name', 'script_id', 'target_id', 'editingId', 'showModal');
+        $this->reset('name', 'script_id', 'target_id', 'editingId', 'showModal', 'parameterValues');
         $this->action = 'run_script';
         $this->cron_expression = '0 2 * * *';
         $this->target_type = 'all';
@@ -152,6 +171,21 @@ final class Index extends Component
     public function requiresScript(): bool
     {
         return ScheduledTaskAction::tryFrom($this->action)?->requiresScript() ?? false;
+    }
+
+    protected function parameterScript(): ?Script
+    {
+        return $this->requiresScript && $this->script_id !== null ? Script::find($this->script_id) : null;
+    }
+
+    /**
+     * @return array<string, string>|null The schedule's stored values, or null when it runs no parameterised script
+     */
+    private function validatedParameters(ValidateScriptParameterValues $validateParameters): ?array
+    {
+        $script = $this->parameterScript();
+
+        return $script === null ? null : ($this->validatedParameterValues($validateParameters, $script) ?: null);
     }
 
     /** @return array<string, array<int, mixed>> */

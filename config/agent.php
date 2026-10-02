@@ -24,6 +24,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Script Parameters
+    |--------------------------------------------------------------------------
+    |
+    | Older agents ignore the `parameters` field and would run a parameterised
+    | script with none set, so such scripts are only queued on agents at or
+    | above this version.
+    |
+    */
+
+    'parameters_min_version' => '0.6.2',
+
+    /*
+    |--------------------------------------------------------------------------
     | Outdated Agent Alert
     |--------------------------------------------------------------------------
     |

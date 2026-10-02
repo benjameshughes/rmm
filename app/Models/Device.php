@@ -9,6 +9,7 @@ use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,8 @@ use Illuminate\Support\Str;
 
 final class Device extends Model
 {
+    use Auditable;
+
     /** @use HasFactory<\Database\Factories\DeviceFactory> */
     use HasFactory;
 

@@ -6,14 +6,18 @@ use App\Models\Device;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 
 pest()->use(RefreshDatabase::class);
 
 /**
  * Channels register on whichever broadcaster is default at boot (null in tests),
- * so swap to a local-only Reverb config and register them again on it.
+ * so swap to a local-only Reverb config and register them again on it. Creating a
+ * user rings everyone's security bell, which would try to reach that fake Reverb.
  */
 beforeEach(function (): void {
+    Notification::fake();
+
     config([
         'broadcasting.default' => 'reverb',
         'broadcasting.connections.reverb.key' => 'test-key',
@@ -57,6 +61,7 @@ it('refuses guests on every channel', function (string $channel): void {
 })->with([
     'fleet' => 'private-devices',
     'device' => 'private-devices.{id}',
+    'audit' => 'private-audit',
 ]);
 
 it('refuses a channel for a device that does not exist', function (): void {
@@ -75,7 +80,16 @@ it('authorises channels through the device policy', function (string $ability, s
 })->with([
     'fleet' => ['viewAny', 'private-devices'],
     'device' => ['view', 'private-devices.{id}'],
+    'audit' => ['viewAny', 'private-audit'],
 ]);
+
+it('lets an authenticated user join the audit channel', function (): void {
+    $this->actingAs(User::factory()->create());
+
+    authoriseChannel('private-audit')
+        ->assertSuccessful()
+        ->assertJsonStructure(['auth']);
+});
 
 it('exposes the csrf token Echo needs to authorise private channels', function (): void {
     $this->actingAs(User::factory()->create())

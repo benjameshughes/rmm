@@ -4,6 +4,7 @@ use App\Http\Controllers\AgentInstallerController;
 use App\Http\Controllers\AgentTrayController;
 use App\Livewire\AlertRules\Index as AlertRulesIndex;
 use App\Livewire\Alerts\Index as AlertsIndex;
+use App\Livewire\Audit\Index as AuditIndex;
 use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
 use App\Livewire\Devices\Index as DevicesIndex;
@@ -70,6 +71,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Schedules
     Route::get('scheduled-tasks', ScheduledTasksIndex::class)->name('scheduled-tasks.index');
+
+    // Audit
+    Route::get('audit', AuditIndex::class)->name('audit.index');
 });
 
 // Public download for the agent installer script

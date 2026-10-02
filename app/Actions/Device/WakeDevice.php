@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Events\DeviceWakeRequested;
 use App\Models\Device;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -33,6 +34,8 @@ final class WakeDevice
 
         collect($device->mac_addresses)->each(fn (string $mac) => fwrite($socket, $this->magicPacket($mac)));
         fclose($socket);
+
+        DeviceWakeRequested::dispatch($device);
 
         Log::info('device.wake', [
             'device_id' => $device->id,

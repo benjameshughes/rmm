@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Livewire\Scripts;
 
 use App\Enums\ScriptCategory;
+use App\Enums\ScriptParameterType;
 use App\Enums\ScriptPlatform;
 use App\Enums\ScriptType;
+use App\Livewire\Concerns\DefinesScriptParameters;
 use App\Models\Script;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -16,6 +19,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 final class Create extends Component
 {
+    use DefinesScriptParameters;
+
     public string $name = '';
 
     public string $description = '';
@@ -43,10 +48,12 @@ final class Create extends Component
             'script_content' => ['required', 'string'],
             'timeout_seconds' => ['required', 'integer', 'min:10', 'max:7200'],
             'requires_admin' => ['boolean'],
-        ]);
+            ...$this->parameterRules(),
+        ], $this->parameterMessages());
 
         $script = Script::create([
-            ...$validated,
+            ...Arr::except($validated, 'parameterRows'),
+            'parameters' => $this->parameterDefinitions(),
             'is_system' => false,
         ]);
 
@@ -59,6 +66,7 @@ final class Create extends Component
             'categories' => ScriptCategory::cases(),
             'platforms' => ScriptPlatform::cases(),
             'scriptTypes' => ScriptType::cases(),
+            'parameterTypes' => ScriptParameterType::cases(),
         ]);
     }
 }

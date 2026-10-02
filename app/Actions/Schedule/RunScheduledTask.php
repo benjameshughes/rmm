@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Schedule;
 
+use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Device\WakeDevice;
-use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Enums\ScheduledTaskAction;
 use App\Models\Device;
 use App\Models\ScheduledTask;
@@ -13,7 +13,7 @@ use App\Models\ScheduledTask;
 final class RunScheduledTask
 {
     public function __construct(
-        private ExecuteScriptOnDevice $executeScript,
+        private BulkExecuteScript $bulkExecuteScript,
         private WakeDevice $wakeDevice,
     ) {}
 
@@ -39,9 +39,7 @@ final class RunScheduledTask
 
     private function runScript(ScheduledTask $task): int
     {
-        return $task->resolveDevices()
-            ->each(fn (Device $device) => ($this->executeScript)($task->script, $device, $task->createdBy, $task))
-            ->count();
+        return ($this->bulkExecuteScript)($task->script, $task->resolveDevices(), $task->createdBy, $task->parameters ?? [], $task);
     }
 
     /**

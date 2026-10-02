@@ -88,11 +88,13 @@
             </flux:select>
 
             @if($this->requiresScript)
-                <flux:select wire:model="script_id" label="Script" placeholder="Select a script..." variant="listbox" searchable required>
+                <flux:select wire:model.live="script_id" label="Script" placeholder="Select a script..." variant="listbox" searchable required>
                     @foreach($scripts as $script)
                         <flux:select.option value="{{ $script->id }}">{{ $script->name }}</flux:select.option>
                     @endforeach
                 </flux:select>
+
+                <x-script.parameter-inputs :parameters="$this->parameterFields" />
             @endif
 
             <div>

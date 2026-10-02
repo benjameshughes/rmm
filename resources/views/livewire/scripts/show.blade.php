@@ -65,6 +65,48 @@
         </flux:card>
     </div>
 
+    @if($script->parameters->isNotEmpty())
+        <flux:card>
+            <flux:heading size="sm" class="mb-1">Parameters</flux:heading>
+            <flux:text size="sm" class="mb-4 text-zinc-500 dark:text-zinc-400">Values reach the script as environment variables. Agents older than {{ config('agent.parameters_min_version') }} cannot run this script.</flux:text>
+            <flux:table>
+                <flux:table.columns>
+                    <flux:table.column>Variable</flux:table.column>
+                    <flux:table.column>Label</flux:table.column>
+                    <flux:table.column>Type</flux:table.column>
+                    <flux:table.column>Required</flux:table.column>
+                    <flux:table.column>Default</flux:table.column>
+                </flux:table.columns>
+                <flux:table.rows>
+                    @foreach($script->parameters as $parameter)
+                        <flux:table.row :key="'parameter-'.$parameter->name">
+                            <flux:table.cell>
+                                <flux:text class="font-mono">RMM_{{ $parameter->name }}</flux:text>
+                            </flux:table.cell>
+                            <flux:table.cell>{{ $parameter->label }}</flux:table.cell>
+                            <flux:table.cell>
+                                <flux:badge size="sm" color="zinc">{{ $parameter->type->label() }}</flux:badge>
+                                @if($parameter->options)
+                                    <flux:text size="sm" class="mt-1 text-zinc-500 dark:text-zinc-400">{{ implode(', ', $parameter->options) }}</flux:text>
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                @if($parameter->isRequired)
+                                    <flux:badge size="sm" color="amber">Yes</flux:badge>
+                                @else
+                                    <flux:badge size="sm" color="zinc">No</flux:badge>
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <flux:text class="font-mono">{{ $parameter->default ?? '—' }}</flux:text>
+                            </flux:table.cell>
+                        </flux:table.row>
+                    @endforeach
+                </flux:table.rows>
+            </flux:table>
+        </flux:card>
+    @endif
+
     @if($recentCommands->count() > 0)
         <flux:card>
             <flux:heading size="sm" class="mb-4">Recent Executions</flux:heading>
@@ -121,6 +163,10 @@
                     <flux:select.option value="{{ $device->id }}">{{ $device->hostname }}</flux:select.option>
                 @endforeach
             </flux:select>
+
+            <x-script.parameter-inputs :parameters="$this->parameterFields" />
+
+            <flux:error name="script" />
 
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="$set('showExecuteModal', false)" variant="ghost">Cancel</flux:button>

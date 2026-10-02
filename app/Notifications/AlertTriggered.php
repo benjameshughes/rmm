@@ -29,7 +29,11 @@ final class AlertTriggered extends Notification implements ShouldQueue
         return ['database', 'broadcast'];
     }
 
-    /** @return array{alertId: int, deviceId: int, hostname: string, severity: string, condition: string, message: string} */
+    /**
+     * The alert fields plus the title, body, level and url every bell notification stores.
+     *
+     * @return array{alertId: int, deviceId: int, hostname: string, severity: string, condition: string, message: string, title: string, body: string, level: string, url: string}
+     */
     public function toDatabase(object $notifiable): array
     {
         return [
@@ -39,6 +43,10 @@ final class AlertTriggered extends Notification implements ShouldQueue
             'severity' => $this->alert->severity->value,
             'condition' => $this->alert->conditionLabel(),
             'message' => $this->alert->message,
+            'title' => $this->alert->device->hostname,
+            'body' => $this->alert->conditionLabel(),
+            'level' => $this->alert->severity->notificationLevel()->value,
+            'url' => route('devices.show', $this->alert->device_id),
         ];
     }
 

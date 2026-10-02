@@ -17,6 +17,16 @@ final class AgentVersionQueries
     }
 
     /**
+     * Agents older than the configured version ignore the parameters a
+     * command carries, so parameterised scripts must not be sent to them.
+     */
+    public function supportsScriptParameters(Device $device): bool
+    {
+        return $device->agent_version !== null
+            && version_compare($device->agent_version, config('agent.parameters_min_version'), '>=');
+    }
+
+    /**
      * Versions are compared in PHP with version_compare because SQL sorts them
      * as strings (0.10.0 < 0.9.0). Fine for a fleet of a few dozen devices.
      *

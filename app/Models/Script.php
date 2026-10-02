@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\ScriptParameters;
 use App\Enums\ScriptCategory;
 use App\Enums\ScriptPlatform;
 use App\Enums\ScriptType;
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Script extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -26,6 +29,7 @@ final class Script extends Model
         'is_system',
         'timeout_seconds',
         'requires_admin',
+        'parameters',
     ];
 
     protected function casts(): array
@@ -37,6 +41,7 @@ final class Script extends Model
             'category' => ScriptCategory::class,
             'platform' => ScriptPlatform::class,
             'script_type' => ScriptType::class,
+            'parameters' => ScriptParameters::class,
         ];
     }
 

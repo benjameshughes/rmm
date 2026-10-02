@@ -7,10 +7,12 @@ use App\Enums\AlertStatus;
 use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
 use App\Events\AlertChanged;
+use App\Events\AuditLogged;
 use App\Events\CommandUpdated;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Alert;
+use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Tag;
@@ -192,4 +194,15 @@ it('queues broadcasts after commit and rescues broadcast failures', function (st
     DeviceUpdated::class,
     CommandUpdated::class,
     AlertChanged::class,
+    AuditLogged::class,
 ]);
+
+it('announces audit entries on the audit channel with scalars only', function (): void {
+    Event::fake([AuditLogged::class]);
+
+    $auditLog = AuditLog::factory()->create(['properties' => ['label' => 'SECRET-LABEL', 'command' => 'SECRET-COMMAND']]);
+
+    Event::assertDispatched(AuditLogged::class, fn (AuditLogged $event): bool => channelNames($event) === ['private-audit']
+        && $event->broadcastWith() === ['auditLogId' => $auditLog->id, 'action' => $auditLog->action->value]
+        && ! str_contains(serialize($event), 'SECRET-'));
+});

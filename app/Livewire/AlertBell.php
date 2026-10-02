@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
-use App\DTOs\AlertNotification;
+use App\DTOs\BellNotification;
 use App\Models\Alert;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -39,9 +39,9 @@ final class AlertBell extends Component
             return;
         }
 
-        $alert = AlertNotification::fromDatabase($notification);
+        $bellNotification = BellNotification::fromDatabase($notification);
 
-        Flux::toast(text: $alert->condition, heading: $alert->hostname, variant: $alert->severity->toastVariant());
+        Flux::toast(text: $bellNotification->body, heading: $bellNotification->title, variant: $bellNotification->level->toastVariant());
     }
 
     public function open(string $notificationId): void
@@ -49,7 +49,7 @@ final class AlertBell extends Component
         $notification = auth()->user()->notifications()->findOrFail($notificationId);
         $notification->markAsRead();
 
-        $this->redirectRoute('devices.show', ['device' => $notification->data['deviceId']], navigate: true);
+        $this->redirect(BellNotification::fromDatabase($notification)->url, navigate: true);
     }
 
     public function markAllAsRead(): void
@@ -65,7 +65,7 @@ final class AlertBell extends Component
             ->latest()
             ->limit(config('alerts.bell_limit'))
             ->get()
-            ->map(fn (DatabaseNotification $notification): AlertNotification => AlertNotification::fromDatabase($notification));
+            ->map(fn (DatabaseNotification $notification): BellNotification => BellNotification::fromDatabase($notification));
 
         return view('livewire.alert-bell', [
             'notifications' => $notifications,
