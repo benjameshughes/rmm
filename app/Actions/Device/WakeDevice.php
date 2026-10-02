@@ -12,7 +12,8 @@ use RuntimeException;
 final class WakeDevice
 {
     /**
-     * Broadcast a Wake-on-LAN magic packet to every MAC the device reported.
+     * Broadcast Wake-on-LAN magic packets to every MAC the device reported,
+     * several per MAC because a NIC in deep sleep often misses the first.
      * The packet is fire-and-forget: the device coming back online is the
      * only confirmation it worked.
      */
@@ -32,7 +33,9 @@ final class WakeDevice
 
         throw_unless($socket, RuntimeException::class, "Could not open a broadcast socket to {$address}:{$port}: {$errorMessage}");
 
-        collect($device->mac_addresses)->each(fn (string $mac) => fwrite($socket, $this->magicPacket($mac)));
+        collect($device->mac_addresses)
+            ->flatMap(fn (string $mac): array => array_fill(0, config('devices.wake_on_lan.packets_per_mac'), $this->magicPacket($mac)))
+            ->each(fn (string $packet) => fwrite($socket, $packet));
         fclose($socket);
 
         DeviceWakeRequested::dispatch($device);

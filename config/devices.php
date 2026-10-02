@@ -98,12 +98,14 @@ return [
     | Magic packets are broadcast from this server, so it needs a leg on the
     | devices' LAN and the broadcast address of that subnet. 255.255.255.255
     | leaves through the default route, which is usually the wrong network.
+    | Each MAC gets packets_per_mac packets: a sleeping NIC can miss one.
     |
     */
 
     'wake_on_lan' => [
         'broadcast_address' => env('WAKE_ON_LAN_BROADCAST_ADDRESS', '255.255.255.255'),
         'port' => (int) env('WAKE_ON_LAN_PORT', 9),
+        'packets_per_mac' => 3,
     ],
 
 ];

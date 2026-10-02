@@ -23,8 +23,8 @@ it('sends a magic packet to every MAC the device reported', function (): void {
     app(WakeDevice::class)($device);
 
     expect(receivedWakePackets($listener))->toBe([
-        magicPacketFor('BC:24:11:8D:62:14'),
-        magicPacketFor('00:4E:01:B6:32:71'),
+        ...array_fill(0, 3, magicPacketFor('BC:24:11:8D:62:14')),
+        ...array_fill(0, 3, magicPacketFor('00:4E:01:B6:32:71')),
     ]);
 });
 
@@ -70,7 +70,7 @@ it('wakes the device from its page and toasts', function (): void {
         ->call('wake')
         ->assertDispatched('toast-show');
 
-    expect(receivedWakePackets($listener))->toBe([magicPacketFor('AA:BB:CC:DD:EE:FF')]);
+    expect(receivedWakePackets($listener))->toBe(array_fill(0, 3, magicPacketFor('AA:BB:CC:DD:EE:FF')));
 });
 
 it('checks the wake ability before sending anything', function (): void {
@@ -83,4 +83,14 @@ it('checks the wake ability before sending anything', function (): void {
         ->assertForbidden();
 
     expect(receivedWakePackets($listener))->toBeEmpty();
+});
+
+it('sends as many packets per MAC as configured', function (): void {
+    $listener = listenForWakePackets();
+    config(['devices.wake_on_lan.packets_per_mac' => 5]);
+    $device = Device::factory()->active()->create(['mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
+
+    app(WakeDevice::class)($device);
+
+    expect(receivedWakePackets($listener))->toHaveCount(5);
 });

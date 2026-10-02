@@ -29,7 +29,7 @@ it('wakes only the targeted devices that are asleep and have a MAC', function ()
     $count = app(RunScheduledTask::class)($task);
 
     expect($count)->toBe(1)
-        ->and(receivedWakePackets($listener))->toBe([magicPacketFor('AA:AA:AA:AA:AA:01')])
+        ->and(receivedWakePackets($listener))->toBe(array_fill(0, 3, magicPacketFor('AA:AA:AA:AA:AA:01')))
         ->and(DeviceCommand::query()->count())->toBe(0);
 });
 
