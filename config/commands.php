@@ -29,4 +29,25 @@ return [
 
     'stale_grace_seconds' => 300,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Ad-hoc Commands
+    |--------------------------------------------------------------------------
+    |
+    | Limits for commands typed straight into a device's Run Command box
+    | rather than saved as a script. The label length is how much of the
+    | command's first line the recent commands list shows.
+    |
+    */
+
+    'ad_hoc' => [
+        'max_length' => 10000,
+        'label_max_length' => 60,
+        'timeout_seconds' => [
+            'default' => 300,
+            'min' => 10,
+            'max' => 7200,
+        ],
+    ],
+
 ];

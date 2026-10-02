@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\ApiKeyState;
 use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
+use App\Enums\ScriptPlatform;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Concerns\Auditable;
@@ -222,6 +223,18 @@ final class Device extends Model
         return $this->agent_version !== null
             && $latestVersion !== null
             && version_compare($this->agent_version, $latestVersion, '<');
+    }
+
+    /**
+     * The agent only says which OS it runs through free-text fields, and only
+     * Windows and Linux agents exist, so anything not naming Windows is Linux.
+     */
+    public function platform(): ScriptPlatform
+    {
+        $namesWindows = collect([$this->os, $this->os_name, $this->kernel_name])
+            ->contains(fn (?string $name): bool => Str::contains((string) $name, 'windows', ignoreCase: true));
+
+        return $namesWindows ? ScriptPlatform::Windows : ScriptPlatform::Linux;
     }
 
     public function statusLabel(): string

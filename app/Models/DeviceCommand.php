@@ -77,9 +77,30 @@ final class DeviceCommand extends Model
         return $this->belongsTo(User::class, 'queued_by');
     }
 
+    public function isAdHoc(): bool
+    {
+        return $this->script_id === null;
+    }
+
+    /**
+     * Ad-hoc commands have no script name, so the first line of what was typed
+     * stands in for one. A deleted script nulls script_id, so its past runs read
+     * as ad-hoc too, which is honest: the script behind them is gone.
+     */
     public function displayName(): string
     {
-        return $this->script?->name ?? Str::headline($this->script_type);
+        if (! $this->isAdHoc()) {
+            return $this->script?->name ?? Str::headline($this->script_type);
+        }
+
+        $firstLine = Str::of((string) $this->script_content)
+            ->explode("\n")
+            ->map(fn (string $line): string => trim($line))
+            ->first(fn (string $line): bool => $line !== '');
+
+        return $firstLine === null
+            ? 'Ad-hoc command'
+            : 'Ad-hoc command: '.Str::limit($firstLine, config('commands.ad_hoc.label_max_length'));
     }
 
     public function stdout(): string

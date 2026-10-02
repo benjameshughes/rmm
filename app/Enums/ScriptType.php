@@ -10,4 +10,14 @@ enum ScriptType: string
     case Bash = 'bash';
     case Cmd = 'cmd';
     case Sh = 'sh';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Powershell => 'PowerShell',
+            self::Bash => 'Bash',
+            self::Cmd => 'Command Prompt',
+            self::Sh => 'sh',
+        };
+    }
 }

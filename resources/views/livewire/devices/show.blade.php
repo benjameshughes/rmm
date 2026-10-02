@@ -61,6 +61,9 @@
             <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">
                 Run Script
             </flux:button>
+            <flux:button wire:click="$set('showCommandModal', true)" icon="command-line">
+                Run Command
+            </flux:button>
         </div>
     </flux:card>
 
@@ -86,6 +89,32 @@
                 <flux:button wire:click="runScript" variant="primary" icon="play">Execute</flux:button>
             </div>
         </div>
+    </flux:modal>
+
+    <flux:modal wire:model="showCommandModal" class="w-full md:max-w-2xl">
+        <form wire:submit="runAdHocCommand" class="space-y-6">
+            <div>
+                <flux:heading size="lg">Run Command</flux:heading>
+                <flux:text class="mt-2">Run a one-off command on {{ $device->hostname }}. Open it from the commands list to read its output.</flux:text>
+            </div>
+
+            <flux:textarea wire:model="commandText" label="Command" rows="6" class="font-mono" />
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:select wire:model="commandType" label="Shell">
+                    @foreach($this->commandTypes as $type)
+                        <flux:select.option value="{{ $type->value }}">{{ $type->label() }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <flux:input wire:model="commandTimeoutSeconds" type="number" label="Timeout (seconds)" :min="config('commands.ad_hoc.timeout_seconds.min')" :max="config('commands.ad_hoc.timeout_seconds.max')" />
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showCommandModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button type="submit" variant="primary" icon="play">Run</flux:button>
+            </div>
+        </form>
     </flux:modal>
 
     {{-- Recent Commands --}}

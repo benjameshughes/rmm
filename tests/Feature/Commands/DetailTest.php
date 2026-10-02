@@ -84,11 +84,11 @@ it('splits output into stdout and stderr', function (): void {
     expect(commandWithOutput('')->stdout())->toBe('');
 });
 
-it('names a command after its script, falling back to the script type', function (): void {
+it('names a command after its script, or after what was typed when it has none', function (): void {
     $script = Script::factory()->create(['name' => 'Get Hostname']);
 
     expect(commandWithOutput('', ['script_id' => $script->id])->displayName())->toBe('Get Hostname');
-    expect(commandWithOutput('', ['script_type' => 'powershell'])->displayName())->toBe('Powershell');
+    expect(commandWithOutput('', ['script_type' => 'powershell'])->displayName())->toBe('Ad-hoc command: hostname');
 });
 
 it('reports how long a command took', function (): void {

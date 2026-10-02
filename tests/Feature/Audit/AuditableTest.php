@@ -161,7 +161,7 @@ it('records the full text of a command queued without a script', function (): vo
     expect($queued->subject_id)->toBe($command->id)
         ->and($queued->user_id)->toBe($this->user->id)
         ->and($queued->properties['command'])->toBe('Get-Process | Where-Object CPU -gt 50 | Stop-Process -Force')
-        ->and($queued->properties['label'])->toBe('Powershell on ADHOC-BOX')
+        ->and($queued->properties['label'])->toBe('Ad-hoc command: Get-Process | Where-Object CPU -gt 50 | Stop-Process -Force on ADHOC-BOX')
         ->and($queued->properties['attributes']['device_id'])->toBe($device->id);
 });
 

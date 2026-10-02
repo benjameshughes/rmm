@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Actions\Device\AssignDeviceGroup;
+use App\Actions\Device\RunAdHocCommand;
 use App\Actions\Device\SyncDeviceTags;
 use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
+use App\Enums\ScriptType;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
@@ -17,6 +19,8 @@ use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\Rule;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -34,6 +38,14 @@ final class Show extends Component
 
     public ?int $selectedScriptId = null;
 
+    public bool $showCommandModal = false;
+
+    public string $commandText = '';
+
+    public string $commandType = '';
+
+    public int $commandTimeoutSeconds = 0;
+
     public ?string $selectedGroupId = null;
 
     public array $selectedTagIds = [];
@@ -44,6 +56,7 @@ final class Show extends Component
 
         $this->device = $device->load([...self::latestMetricRelations(), 'group', 'tags']);
         $this->syncSelectionsFromDevice();
+        $this->resetCommandForm();
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
@@ -138,6 +151,47 @@ final class Show extends Component
         $this->dispatch('command-queued');
     }
 
+    public function runAdHocCommand(RunAdHocCommand $action): void
+    {
+        $this->authorize('runAdHocCommand', $this->device);
+
+        $limits = config('commands.ad_hoc');
+
+        $this->validate([
+            'commandText' => ['required', 'string', "max:{$limits['max_length']}"],
+            'commandType' => ['required', Rule::enum(ScriptType::class)->only($this->commandTypes)],
+            'commandTimeoutSeconds' => ['required', 'integer', "min:{$limits['timeout_seconds']['min']}", "max:{$limits['timeout_seconds']['max']}"],
+        ], [
+            'commandText.required' => 'Type the command to run.',
+            'commandText.max' => 'Commands may not be longer than :max characters.',
+            'commandType.required' => 'Choose a shell this device can run.',
+            'commandType.enum' => 'Choose a shell this device can run.',
+            'commandTimeoutSeconds.required' => 'Set a timeout in seconds.',
+            'commandTimeoutSeconds.integer' => 'Set a timeout in whole seconds.',
+            'commandTimeoutSeconds.min' => 'The timeout must be at least :min seconds.',
+            'commandTimeoutSeconds.max' => 'The timeout may not be more than :max seconds.',
+        ]);
+
+        $action($this->device, auth()->user(), $this->commandText, ScriptType::from($this->commandType), $this->commandTimeoutSeconds);
+
+        $this->showCommandModal = false;
+        $this->resetCommandForm();
+        $this->dispatch('command-queued');
+
+        Flux::toast(text: 'Open it under Recent Commands to see the output once the agent picks it up.', heading: "Command queued for {$this->device->hostname}", variant: 'success');
+    }
+
+    /**
+     * Shells the device's platform can run, the first being the default.
+     *
+     * @return array<int, ScriptType>
+     */
+    #[Computed]
+    public function commandTypes(): array
+    {
+        return $this->device->platform()->adHocScriptTypes();
+    }
+
     protected function parameterScript(): ?Script
     {
         return $this->selectedScriptId === null ? null : Script::find($this->selectedScriptId);
@@ -154,6 +208,14 @@ final class Show extends Component
     private static function latestMetricRelations(): array
     {
         return ['latestMetric.diskMetrics', 'latestMetric.networkMetrics', 'latestMetric.appMetrics'];
+    }
+
+    private function resetCommandForm(): void
+    {
+        $this->resetValidation(['commandText', 'commandType', 'commandTimeoutSeconds']);
+        $this->commandText = '';
+        $this->commandType = $this->commandTypes[0]->value;
+        $this->commandTimeoutSeconds = config('commands.ad_hoc.timeout_seconds.default');
     }
 
     private function syncSelectionsFromDevice(): void
