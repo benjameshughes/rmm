@@ -122,7 +122,7 @@ return [
         ],
         'update-agent' => [
             'name' => 'Update Agent',
-            'description' => 'Install the latest RMM agent release. The agent restarts itself, so this often ends as Timed Out: the update badge disappearing is the real confirmation',
+            'description' => 'Install the latest RMM agent release. The agent restarts itself mid-run, so the command completes when the device reports its new version',
             'category' => 'updates',
             'platform' => 'windows',
             'file' => 'windows/update-agent.ps1',

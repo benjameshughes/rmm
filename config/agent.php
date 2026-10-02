@@ -20,6 +20,14 @@ return [
 
     'latest_version_cache_key' => 'agent.latest_version',
 
+    /*
+    | The built-in script that installs a new agent. Its command finishes when
+    | the device reports a new version, since the update stops the agent that
+    | ran it before it can post a result.
+    */
+
+    'update_script_slug' => 'update-agent',
+
     'release_check_timeout_seconds' => 10,
 
     /*
