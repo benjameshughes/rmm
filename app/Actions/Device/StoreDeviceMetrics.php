@@ -76,7 +76,7 @@ final class StoreDeviceMetrics
 
         $metric->recordDisks($input['disks'] ?? null);
         $metric->recordNetworkInterfaces($input['network'] ?? null);
-        $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input['agent_version'] ?? null);
+        $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
 
@@ -132,7 +132,7 @@ final class StoreDeviceMetrics
         $metric->recordDisks((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
         $metric->recordNetworkInterfaces(NetdataNetworkAdapters::fromPayload($input)->rows(config('devices.network.ignored_interfaces')));
         $metric->recordApps((new NetdataAppUsage($input['netdata_apps_cpu'] ?? [], $input['netdata_apps_mem'] ?? []))->top(config('devices.metrics.top_apps')));
-        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input['agent_version'] ?? null);
+        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
 
@@ -223,9 +223,9 @@ final class StoreDeviceMetrics
         return $metricData;
     }
 
-    private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, ?string $agentVersion): void
+    private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, array $input): void
     {
-        $updates = $this->connectionUpdates($ip, $agentVersion);
+        $updates = $this->connectionUpdates($ip, $input);
 
         if (is_array($systemInfo)) {
             $allowedFields = [
@@ -248,9 +248,9 @@ final class StoreDeviceMetrics
         $device->forceFill($updates)->save();
     }
 
-    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, ?string $agentVersion): void
+    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, array $input): void
     {
-        $updates = $this->connectionUpdates($ip, $agentVersion);
+        $updates = $this->connectionUpdates($ip, $input);
 
         if (is_array($netdataInfo)) {
             $agent = $netdataInfo['agents'][0] ?? null;
@@ -272,14 +272,36 @@ final class StoreDeviceMetrics
     }
 
     /**
-     * An agent that omits its version keeps the last one it reported.
+     * An agent that omits its version or MAC addresses keeps the last ones it reported.
      *
-     * @return array{last_seen: Carbon, last_ip: ?string, agent_version?: string}
+     * @return array{last_seen: Carbon, last_ip: ?string, agent_version?: string, mac_addresses?: array<int, string>}
      */
-    private function connectionUpdates(?string $ip, ?string $agentVersion): array
+    private function connectionUpdates(?string $ip, array $input): array
     {
-        $updates = ['last_seen' => now(), 'last_ip' => $ip];
+        $agentVersion = $input['agent_version'] ?? null;
+        $macAddresses = $input['mac_addresses'] ?? null;
 
-        return $agentVersion === null ? $updates : [...$updates, 'agent_version' => $agentVersion];
+        return [
+            'last_seen' => now(),
+            'last_ip' => $ip,
+            ...($agentVersion === null ? [] : ['agent_version' => $agentVersion]),
+            ...($macAddresses === null ? [] : ['mac_addresses' => $this->normaliseMacAddresses($macAddresses)]),
+        ];
+    }
+
+    /**
+     * Windows reports dash-separated lowercase MACs, sysinfo colon-separated; store one form.
+     *
+     * @param  array<int, string>  $macAddresses
+     * @return array<int, string>
+     */
+    private function normaliseMacAddresses(array $macAddresses): array
+    {
+        return collect($macAddresses)
+            ->map(fn (string $mac): string => strtoupper(str_replace('-', ':', $mac)))
+            ->reject(fn (string $mac): bool => in_array($mac, config('devices.network.ignored_mac_addresses'), true))
+            ->unique()
+            ->values()
+            ->all();
     }
 }

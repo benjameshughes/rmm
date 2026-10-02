@@ -70,11 +70,15 @@ return [
     |
     | Adapters matching an ignored pattern (Str::is wildcards) are not stored.
     | Windows lists virtual, tunnelling and loopback adapters alongside the
-    | real NICs; they only add noise.
+    | real NICs; they only add noise. Ignored MAC addresses are dropped from
+    | what the agent reports, so they are never sent a wake packet.
     |
     */
 
     'network' => [
+        'ignored_mac_addresses' => [
+            '00:00:00:00:00:00',
+        ],
         'ignored_interfaces' => [
             '*Loopback*',
             '*Hyper-V*',
@@ -84,6 +88,22 @@ return [
             'Teredo*',
             'isatap*',
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Wake-on-LAN
+    |--------------------------------------------------------------------------
+    |
+    | Magic packets are broadcast from this server, so it needs a leg on the
+    | devices' LAN and the broadcast address of that subnet. 255.255.255.255
+    | leaves through the default route, which is usually the wrong network.
+    |
+    */
+
+    'wake_on_lan' => [
+        'broadcast_address' => env('WAKE_ON_LAN_BROADCAST_ADDRESS', '255.255.255.255'),
+        'port' => (int) env('WAKE_ON_LAN_PORT', 9),
     ],
 
 ];

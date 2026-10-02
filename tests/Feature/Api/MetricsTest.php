@@ -422,3 +422,50 @@ it('clears raw payloads already stored', function (): void {
 
     expect($metrics->map(fn (DeviceMetric $metric) => $metric->fresh()->payload)->filter())->toBeEmpty();
 });
+
+it('stores the MAC addresses the agent reports in one normalised form', function (): void {
+    $device = Device::factory()->active()->withApiKey('MAC-KEY')->create();
+
+    $this->withHeaders(['X-Device-Key' => 'MAC-KEY'])
+        ->postJson('/api/metrics', [
+            'cpu' => 10,
+            'ram' => 20,
+            'mac_addresses' => ['bc-24-11-8d-62-14', 'BC:24:11:8D:62:14', '00:4e:01:b6:32:71', '00:00:00:00:00:00'],
+        ])
+        ->assertSuccessful();
+
+    expect($device->fresh()->mac_addresses)->toBe(['BC:24:11:8D:62:14', '00:4E:01:B6:32:71']);
+});
+
+it('keeps the last MAC addresses when an agent omits them', function (): void {
+    $device = Device::factory()->active()->withApiKey('MAC-KEY')->create(['mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
+
+    $this->withHeaders(['X-Device-Key' => 'MAC-KEY'])
+        ->postJson('/api/metrics', ['cpu' => 10, 'ram' => 20])
+        ->assertSuccessful();
+
+    expect($device->fresh()->mac_addresses)->toBe(['AA:BB:CC:DD:EE:FF']);
+});
+
+it('stores MAC addresses sent alongside raw Netdata metrics', function (): void {
+    $device = Device::factory()->active()->withApiKey('MAC-KEY')->create();
+
+    $this->withHeaders(['X-Device-Key' => 'MAC-KEY'])
+        ->postJson('/api/metrics', [
+            'agent_version' => '0.6.1',
+            'netdata_info' => ['version' => 'v2.0.0'],
+            'mac_addresses' => ['aa:bb:cc:dd:ee:ff'],
+        ])
+        ->assertSuccessful();
+
+    expect($device->fresh()->mac_addresses)->toBe(['AA:BB:CC:DD:EE:FF']);
+});
+
+it('rejects MAC addresses that are not MAC addresses', function (): void {
+    Device::factory()->active()->withApiKey('MAC-KEY')->create();
+
+    $this->withHeaders(['X-Device-Key' => 'MAC-KEY'])
+        ->postJson('/api/metrics', ['cpu' => 10, 'ram' => 20, 'mac_addresses' => ['not-a-mac']])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('mac_addresses.0');
+});

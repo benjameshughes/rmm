@@ -39,6 +39,11 @@ final class DevicePolicy
         return true;
     }
 
+    public function wake(User $user, Device $device): bool
+    {
+        return true;
+    }
+
     public function resetEnrolment(User $user, Device $device): bool
     {
         return true;

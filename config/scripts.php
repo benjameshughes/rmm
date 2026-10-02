@@ -44,6 +44,15 @@ return [
             'timeout_seconds' => 60,
             'requires_admin' => true,
         ],
+        'prepare-wake-on-lan' => [
+            'name' => 'Prepare Wake-on-LAN',
+            'description' => 'Arm wired adapters for magic packets and disable Fast Startup. Wake-on-LAN must still be enabled in the BIOS',
+            'category' => 'power',
+            'platform' => 'windows',
+            'file' => 'windows/prepare-wake-on-lan.ps1',
+            'timeout_seconds' => 120,
+            'requires_admin' => true,
+        ],
         'log-off' => [
             'name' => 'Log Off',
             'description' => 'Log off every interactive user session',

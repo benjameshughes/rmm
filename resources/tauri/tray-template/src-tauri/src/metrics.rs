@@ -164,6 +164,9 @@ pub struct RawMetricsPayload {
     pub timestamp: String,
     /// Agent version
     pub agent_version: String,
+    /// Every adapter's MAC, so the server can send Wake-on-LAN packets
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mac_addresses: Vec<String>,
     /// Raw Netdata /api/v3/info response (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub netdata_info: Option<serde_json::Value>,
@@ -224,11 +227,12 @@ pub struct MetricsCollector {
     config: Config,
     client: reqwest::Client,
     hostname: String,
+    mac_addresses: Vec<String>,
 }
 
 impl MetricsCollector {
     /// Create a new metrics collector
-    pub fn new(config: Config, hostname: String) -> Result<Self> {
+    pub fn new(config: Config, hostname: String, mac_addresses: Vec<String>) -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
@@ -238,6 +242,7 @@ impl MetricsCollector {
             config,
             client,
             hostname,
+            mac_addresses,
         })
     }
 
@@ -344,6 +349,7 @@ impl MetricsCollector {
             hostname: self.hostname.clone(),
             timestamp: Utc::now().to_rfc3339(),
             agent_version: env!("CARGO_PKG_VERSION").to_string(),
+            mac_addresses: self.mac_addresses.clone(),
             netdata_info,
             netdata_cpu,
             netdata_ram,
@@ -551,6 +557,7 @@ mod tests {
             hostname: "test-host".to_string(),
             timestamp: "2026-10-01T10:00:00Z".to_string(),
             agent_version: "0.6.0".to_string(),
+            mac_addresses: vec![],
             netdata_info: None,
             netdata_cpu: None,
             netdata_ram: None,
@@ -626,6 +633,18 @@ mod tests {
         assert!(keys.contains(&"hostname"));
         assert!(keys.contains(&"timestamp"));
         assert!(keys.contains(&"agent_version"));
+    }
+
+    #[test]
+    fn serialises_mac_addresses() {
+        let payload = RawMetricsPayload {
+            mac_addresses: vec!["bc:24:11:8d:62:14".to_string()],
+            ..empty_payload()
+        };
+
+        let json: serde_json::Value = serde_json::to_value(&payload).unwrap();
+
+        assert_eq!(json["mac_addresses"][0], "bc:24:11:8d:62:14");
     }
 
     #[test]

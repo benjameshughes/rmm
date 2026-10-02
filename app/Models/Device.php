@@ -64,6 +64,7 @@ final class Device extends Model
         return [
             'last_seen' => 'datetime',
             'disks' => 'array',
+            'mac_addresses' => 'array',
             'status' => DeviceStatus::class,
             'pending_api_key' => 'encrypted',
             'api_key_issued_at' => 'datetime',
@@ -269,5 +270,10 @@ final class Device extends Model
     protected function isOnline(): Attribute
     {
         return Attribute::get(fn (): bool => $this->last_seen !== null && $this->last_seen->greaterThan(now()->subMinutes(5)));
+    }
+
+    protected function isWakeable(): Attribute
+    {
+        return Attribute::get(fn (): bool => ! $this->isOnline && ! empty($this->mac_addresses));
     }
 }

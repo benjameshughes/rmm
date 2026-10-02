@@ -37,7 +37,7 @@ function denyAbility(string $ability): void
 it('lets an authenticated user do everything in this single-admin tool', function (): void {
     $device = Device::factory()->active()->create();
     $pending = Device::factory()->create(['status' => DeviceStatus::Pending]);
-    $abilities = ['view', 'approve', 'reject', 'runCommands', 'resetEnrolment', 'manageGroupsAndTags', 'delete'];
+    $abilities = ['view', 'approve', 'reject', 'runCommands', 'wake', 'resetEnrolment', 'manageGroupsAndTags', 'delete'];
 
     collect($abilities)->each(fn (string $ability) => expect($this->user->can($ability, $device))->toBeTrue());
     expect($this->user->can('viewAny', Device::class))->toBeTrue()

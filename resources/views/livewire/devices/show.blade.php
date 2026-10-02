@@ -38,6 +38,11 @@
     <flux:card>
         <flux:heading size="sm" class="mb-4">Quick Actions</flux:heading>
         <div class="flex flex-wrap gap-3">
+            @if($device->isWakeable)
+                <flux:button wire:click="wake" icon="sun" variant="primary">
+                    Wake
+                </flux:button>
+            @endif
             <flux:button wire:click="powerOff" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?" icon="power" variant="danger">
                 Power Off
             </flux:button>

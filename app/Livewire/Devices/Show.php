@@ -6,12 +6,14 @@ namespace App\Livewire\Devices;
 
 use App\Actions\Device\AssignDeviceGroup;
 use App\Actions\Device\SyncDeviceTags;
+use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
+use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
@@ -95,6 +97,15 @@ final class Show extends Component
     public function updateAgent(ExecuteScriptOnDevice $action): void
     {
         $this->runSystemScript($action, 'update-agent');
+    }
+
+    public function wake(WakeDevice $action): void
+    {
+        $this->authorize('wake', $this->device);
+
+        $action($this->device);
+
+        Flux::toast(text: 'It shows Online once the agent checks in, usually within a minute or two.', heading: "Wake packet sent to {$this->device->hostname}", variant: 'success');
     }
 
     public function resetEnrolment(): void

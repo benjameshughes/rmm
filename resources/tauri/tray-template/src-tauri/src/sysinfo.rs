@@ -177,6 +177,18 @@ impl SystemInfo {
         fingerprint_prefix(&self.hardware_fingerprint)
     }
 
+    /// Every distinct adapter MAC. The server drops placeholders like all-zero MACs.
+    pub fn mac_addresses(&self) -> Vec<String> {
+        let mut macs: Vec<String> = self
+            .network_interfaces
+            .iter()
+            .map(|interface| interface.mac_address.clone())
+            .collect();
+        macs.sort();
+        macs.dedup();
+        macs
+    }
+
     /// Get a summary string for display
     pub fn summary(&self) -> String {
         format!(

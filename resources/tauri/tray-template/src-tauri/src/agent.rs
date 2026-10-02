@@ -245,6 +245,7 @@ impl Agent {
         let collector = match MetricsCollector::new(
             self.config.clone(),
             self.system_info.hostname.clone(),
+            self.system_info.mac_addresses(),
         ) {
             Ok(c) => c,
             Err(e) => {
@@ -263,6 +264,7 @@ impl Agent {
         let heartbeat_collector = match MetricsCollector::new(
             self.config.clone(),
             self.system_info.hostname.clone(),
+            self.system_info.mac_addresses(),
         ) {
             Ok(c) => c,
             Err(e) => {
