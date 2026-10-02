@@ -5,7 +5,9 @@
 #
 # "Allow this device to wake the computer" is set through WMI
 # (MSPower_DeviceWakeEnable): powercfg /deviceenablewake refuses as SYSTEM
-# with "You do not have permission".
+# with "You do not have permission". Modern Standby PCs have no such switch
+# for the NIC at all (no WMI entry, nothing wake-programmable): the platform
+# keeps it listening, so only the magic packet setting counts there.
 
 $adapters = @(Get-NetAdapter -Physical | Where-Object { $_.MediaType -eq '802.3' })
 
@@ -26,19 +28,22 @@ $results = $adapters | ForEach-Object {
         Where-Object { $_.DisplayName -match 'Magic Packet' } |
         ForEach-Object { Set-NetAdapterAdvancedProperty -Name $name -DisplayName $_.DisplayName -DisplayValue 'Enabled' -ErrorAction SilentlyContinue }
 
-    $wake = $wakeSettings | Where-Object { $_.InstanceName.StartsWith($pnpId, [StringComparison]::OrdinalIgnoreCase) }
+    $wake = @($wakeSettings | Where-Object { $_.InstanceName.StartsWith($pnpId, [StringComparison]::OrdinalIgnoreCase) })
     $wake | ForEach-Object { Set-CimInstance -InputObject $_ -Property @{ Enable = $true } -ErrorAction SilentlyContinue }
 
-    $magicPacket = (Get-NetAdapterPowerManagement -Name $name -ErrorAction SilentlyContinue).WakeOnMagicPacket
-    $wakeArmed = @(Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceWakeEnable -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceName.StartsWith($pnpId, [StringComparison]::OrdinalIgnoreCase) -and $_.Enable }).Count -gt 0
+    $magicPacket = "$((Get-NetAdapterPowerManagement -Name $name -ErrorAction SilentlyContinue).WakeOnMagicPacket)"
+    $wakeArmed = 'n/a'
+    if ($wake.Count -gt 0) {
+        $wakeArmed = "$(@(Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceWakeEnable -ErrorAction SilentlyContinue |
+            Where-Object { $_.InstanceName.StartsWith($pnpId, [StringComparison]::OrdinalIgnoreCase) -and $_.Enable }).Count -gt 0)"
+    }
 
     [pscustomobject]@{
         Name = $name
         Mac = $_.MacAddress
-        MagicPacket = "$magicPacket"
+        MagicPacket = $magicPacket
         WakeArmed = $wakeArmed
-        IsReady = ("$magicPacket" -eq 'Enabled') -and $wakeArmed
+        IsReady = ($magicPacket -eq 'Enabled') -and ($wakeArmed -ne 'False')
     }
 }
 
