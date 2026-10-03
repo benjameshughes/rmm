@@ -1,6 +1,6 @@
 [package]
 name = "rmm"
-version = "0.6.2"
+version = "0.6.3"
 description = "RMM Agent - Remote Monitoring and Management Service"
 authors = ["Ben Hughes"]
 edition = "2021"
@@ -65,7 +65,7 @@ base64 = "0.21"
 
 # Windows-specific
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser", "dpapi", "wincrypt", "winbase"] }
+winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser", "dpapi", "wincrypt", "winbase", "minwinbase", "winnt", "handleapi"] }
 
 [features]
 default = []

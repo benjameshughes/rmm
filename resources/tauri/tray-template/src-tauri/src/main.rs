@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod data_dir_security;
 mod enrollment;
+mod keep_awake;
 mod metrics;
 mod runtime_config;
 mod storage;

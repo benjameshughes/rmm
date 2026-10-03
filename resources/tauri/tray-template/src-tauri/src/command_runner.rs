@@ -164,6 +164,9 @@ pub async fn run_script(
         );
     }
 
+    // Held until this function returns, so Windows cannot drop into standby mid-script.
+    let _awake = crate::keep_awake::KeepAwake::acquire(&format!("BenJH RMM is running command {}", command_id));
+
     let script_path = match write_script(script_type, content, &limits.work_dir, command_id) {
         Ok(path) => path,
         Err(e) => {
