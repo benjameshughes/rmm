@@ -198,6 +198,8 @@ describe('clearing on check-in', function (): void {
     });
 
     it('keeps powering off through a check-in that was already in flight when sleep began', function (string $endpoint, array $payload): void {
+        // Frozen so real time spent between the two requests can't eat the one second of margin.
+        $this->freezeTime();
         $device = Device::factory()->active()->withApiKey('power-key')->create(['last_seen' => now()]);
         RateLimiter::clear('api.heartbeat');
         RateLimiter::clear('api.metrics');

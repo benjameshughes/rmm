@@ -127,7 +127,7 @@ it('marks the sorted column header and hides minor columns on small screens', fu
         ->assertSeeInOrder(['Device', 'Status', 'Group', 'CPU', 'RAM', 'Disk', 'Agent', 'Last seen'])
         ->assertSeeHtml('hidden lg:table-cell')
         ->assertSeeHtml('hidden xl:table-cell')
-        ->assertSeeHtml('hidden md:table-cell');
+        ->assertSeeHtml('hidden 2xl:table-cell');
 });
 
 it('shows small coloured figures at the configured thresholds', function (): void {
