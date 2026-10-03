@@ -15,13 +15,13 @@
         <x-device.list.summary-card label="Monitor only" :value="$summary['monitorOnly']" icon="eye" :href="route('devices.index')" />
     </div>
 
-    <x-dashboard.section title="Needs attention" description="Full disks, open alerts, devices that went quiet and old agents, worst first.">
+    <x-dashboard.section title="Needs attention" description="Full disks and inodes, failed services, open alerts, devices that went quiet and old agents, worst first.">
         @if($needsAttention->isEmpty())
             <div class="flex items-center gap-3 rounded-lg bg-green-50 px-4 py-6 dark:bg-green-500/10" data-all-clear>
                 <flux:icon name="check-circle" class="size-8 shrink-0 text-green-500" />
                 <div>
                     <flux:heading>All clear</flux:heading>
-                    <flux:text size="sm">No full disks, open alerts, silent devices or old agents.</flux:text>
+                    <flux:text size="sm">No full disks, failed services, open alerts, silent devices or old agents.</flux:text>
                 </div>
             </div>
         @else
@@ -29,6 +29,17 @@
                 @foreach($needsAttention as $attention)
                     <x-dashboard.attention-row :attention="$attention" :latest-version="$latestAgentVersion" wire:key="attention-{{ $attention->device->id }}" />
                 @endforeach
+            </div>
+        @endif
+
+        @if($worthKnowing->isNotEmpty())
+            <div class="space-y-1 border-t border-zinc-100 pt-3 dark:border-zinc-700/60" data-worth-knowing>
+                <flux:text size="sm" class="font-medium">Worth knowing</flux:text>
+                <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                    @foreach($worthKnowing as $attention)
+                        <x-dashboard.attention-row :attention="$attention" :latest-version="$latestAgentVersion" wire:key="worth-knowing-{{ $attention->device->id }}" />
+                    @endforeach
+                </div>
             </div>
         @endif
     </x-dashboard.section>

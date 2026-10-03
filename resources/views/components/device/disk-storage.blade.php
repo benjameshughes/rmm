@@ -21,6 +21,9 @@
                         <x-device.usage-bar :percent="$disk['usedPercent']" :color="$disk['barColor']" />
                         <flux:text size="xs" class="mt-1 text-zinc-500 dark:text-zinc-400">{{ $disk['usedForHumans'] }} used</flux:text>
                     @endif
+                    @if($disk['inodeForHumans'])
+                        <flux:text size="xs" class="{{ $disk['inodeColor'] }}" data-inode-usage>{{ $disk['inodeForHumans'] }}</flux:text>
+                    @endif
                 </div>
             @endforeach
         </div>

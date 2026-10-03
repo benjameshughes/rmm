@@ -114,5 +114,5 @@
         </flux:card>
     </div>
 
-    <x-device.network-adapters :adapters="$device->latestMetric?->networkMetrics" />
+    <x-device.network-adapters :adapters="$device->latestMetric?->networkMetrics" :cumulative="$cumulativeNetworkCounters" />
 </x-device.shell>

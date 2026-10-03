@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\Enums\MetricRange;
 use App\Models\Device;
+use App\Models\DeviceDiskMetric;
 use App\Models\DeviceMetric;
 use App\Models\DeviceNetworkMetric;
 use Illuminate\Database\Eloquent\Builder;
@@ -62,6 +63,28 @@ final class DeviceMetricQueries
                 'time' => $this->bucketTime($startsAt, $range, (int) $bucket->bucket),
                 'received' => $this->rounded($bucket->received),
                 'sent' => $this->rounded($bucket->sent),
+            ]);
+    }
+
+    /**
+     * Throughput summed across the device's disks, averaged per report within each bucket.
+     *
+     * @return Collection<int, array{time: string, read: ?float, write: ?float}>
+     */
+    public function diskThroughput(Device $device, MetricRange $range): Collection
+    {
+        $startsAt = $this->alignedStart($range);
+
+        return $this->bucketed(DeviceDiskMetric::query()->join('device_metrics', 'device_metrics.id', '=', 'device_disk_metrics.device_metric_id'), $startsAt, $range)
+            ->where('device_metrics.device_id', $device->id)
+            ->selectRaw('SUM(device_disk_metrics.read_kbps) / COUNT(DISTINCT device_metrics.id) as disk_read')
+            ->selectRaw('SUM(device_disk_metrics.write_kbps) / COUNT(DISTINCT device_metrics.id) as disk_write')
+            ->toBase()
+            ->get()
+            ->map(fn (object $bucket): array => [
+                'time' => $this->bucketTime($startsAt, $range, (int) $bucket->bucket),
+                'read' => $this->rounded($bucket->disk_read),
+                'write' => $this->rounded($bucket->disk_write),
             ]);
     }
 

@@ -79,6 +79,7 @@ final class Details extends Component
             'apiKeyStateDetail' => $this->device->apiKeyStateDetail(),
             'operatingSystem' => $this->device->operatingSystem(),
             'totalRam' => $this->device->totalRamForHumans(),
+            'cumulativeNetworkCounters' => $this->device->platform()->hasCumulativeNetworkCounters(),
             'allGroups' => DeviceGroup::query()->orderBy('name')->get(),
             'allTags' => Tag::query()->orderBy('name')->get(),
         ])->title(DeviceTab::Details->pageTitle($this->device));

@@ -23,6 +23,7 @@ final class MetricChart
         public readonly array $format,
         public readonly Collection $rows,
         public readonly array $series,
+        public readonly ?string $emptyMessage = null,
     ) {}
 
     /**
@@ -30,7 +31,7 @@ final class MetricChart
      * @param  Collection<int, array<string, mixed>>  $rows
      * @param  array<int, array{field: string, label: string, color: string, swatch: string}>  $series
      */
-    public static function make(string $title, array $format, Collection $rows, array $series): self
+    public static function make(string $title, array $format, Collection $rows, array $series, ?string $emptyMessage = null): self
     {
         $reportedSeries = collect($series)
             ->filter(fn (array $line): bool => $rows->contains(fn (array $row): bool => $row[$line['field']] !== null))
@@ -43,7 +44,7 @@ final class MetricChart
             ->map(fn (array $row): array => ['time' => $row['time'], ...collect($row)->only($fields)->all()])
             ->values();
 
-        return new self($title, $format, $reportedRows, $reportedSeries->all());
+        return new self($title, $format, $reportedRows, $reportedSeries->all(), $emptyMessage);
     }
 
     /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
@@ -56,12 +57,21 @@ final class MetricChart
     }
 
     /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
-    public static function diskAndPageFile(Collection $rows): self
+    public static function diskAndPageFile(Collection $rows, string $swapLabel = 'Page File'): self
     {
-        return self::make('Disk busy & page file', self::percentFormat(), $rows, [
+        return self::make("Disk busy & {$swapLabel}", self::percentFormat(), $rows, [
             ['field' => 'diskBusy', 'label' => 'Disk busy', 'color' => 'text-amber-500 dark:text-amber-400', 'swatch' => 'bg-amber-500'],
-            ['field' => 'pageFile', 'label' => 'Page file', 'color' => 'text-rose-500 dark:text-rose-400', 'swatch' => 'bg-rose-500'],
+            ['field' => 'pageFile', 'label' => $swapLabel, 'color' => 'text-rose-500 dark:text-rose-400', 'swatch' => 'bg-rose-500'],
         ]);
+    }
+
+    /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::diskThroughput */
+    public static function diskThroughput(Collection $rows): self
+    {
+        return self::make('Disk read & write', ['style' => 'unit', 'unit' => 'kilobyte-per-second', 'maximumFractionDigits' => 1], $rows, [
+            ['field' => 'read', 'label' => 'Read', 'color' => 'text-cyan-500 dark:text-cyan-400', 'swatch' => 'bg-cyan-500'],
+            ['field' => 'write', 'label' => 'Write', 'color' => 'text-fuchsia-500 dark:text-fuchsia-400', 'swatch' => 'bg-fuchsia-500'],
+        ], 'No disk I/O figures in this range. Containers on ZFS never expose them, so only space and inodes are shown.');
     }
 
     /**

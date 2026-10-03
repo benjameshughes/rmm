@@ -1,4 +1,6 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Overview">
+    <x-device.commands.in-flight :in-flight="$inFlight" />
+
     <x-device.stats.summary :metric="$metric" :disk="$fullestDisk" />
 
     @if($openAlerts->isNotEmpty())
@@ -21,6 +23,10 @@
             </x-slot>
         </flux:callout>
     @endif
+
+    <x-device.stats.performance :metric="$metric" :swap-label="$swapLabel" :missing-swap="$missingSwap" />
+
+    <x-device.linux-health :metric="$metric" />
 
     <flux:card>
         <x-device.metrics.chart :chart="$trend" :time-format="$trendTimeFormat" title="CPU & RAM, last 24 hours" />

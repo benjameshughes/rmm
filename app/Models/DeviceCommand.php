@@ -148,6 +148,14 @@ final class DeviceCommand extends Model
         return $startedAt->diffForHumans($this->completed_at, CarbonInterface::DIFF_ABSOLUTE, short: true, parts: 2);
     }
 
+    /**
+     * When the agent started on it, or failing that when it fetched it.
+     */
+    public function startedForHumans(): ?string
+    {
+        return ($this->started_at ?? $this->sent_at)?->diffForHumans();
+    }
+
     public function isPending(): bool
     {
         return $this->status === CommandStatus::Pending;

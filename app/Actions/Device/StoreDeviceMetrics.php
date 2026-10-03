@@ -9,6 +9,7 @@ use App\DTOs\NetdataCpuMetric;
 use App\DTOs\NetdataNetworkAdapters;
 use App\DTOs\NetdataRamMetric;
 use App\DTOs\NetdataV3Metrics;
+use App\DTOs\TopApps;
 use App\Events\DeviceUpdated;
 use App\Events\MetricsReceived;
 use App\Models\Device;
@@ -74,11 +75,20 @@ final class StoreDeviceMetrics
             'blocked' => 'processes_blocked',
             'total' => 'processes_total',
         ]);
+        $metricData = $this->mergeArrayFields($metricData, $input['swap'] ?? null, [
+            'used_mib' => 'swap_used_mib',
+            'total_mib' => 'swap_total_mib',
+        ]);
+        $metricData = [...$metricData, ...$this->linuxHealth($input['linux_health'] ?? null)];
+
+        $volumes = $this->reportedVolumes($input['disks'] ?? null);
+        $metricData['disk_busy_percent'] = $this->busiestVolumePercent($volumes);
 
         $metric = DeviceMetric::create($metricData);
 
-        $metric->recordDisks($this->reportedVolumes($input['disks'] ?? null));
-        $metric->recordNetworkInterfaces($input['network'] ?? null);
+        $metric->recordDisks($volumes);
+        $metric->recordNetworkInterfaces($this->reportedAdapters($input['network'] ?? null));
+        $metric->recordApps(is_array($input['apps'] ?? null) ? TopApps::fromReport($input['apps'], config('devices.metrics.top_apps')) : []);
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
@@ -243,6 +253,63 @@ final class StoreDeviceMetrics
             ))
             ->values()
             ->all();
+    }
+
+    /**
+     * The busiest disk's utilisation, the same figure Windows agents report as disk busy.
+     */
+    private function busiestVolumePercent(mixed $volumes): ?float
+    {
+        if (! is_array($volumes)) {
+            return null;
+        }
+
+        $busiest = collect($volumes)->pluck('utilization_percent')->filter(fn (mixed $percent): bool => $percent !== null)->max();
+
+        return $busiest === null ? null : (float) $busiest;
+    }
+
+    /**
+     * Linux agents name adapter health the way they read it from the kernel; store it in the
+     * columns the Windows adapters fill, dropping virtual adapters on the ignore list.
+     */
+    private function reportedAdapters(mixed $adapters): mixed
+    {
+        if (! is_array($adapters)) {
+            return $adapters;
+        }
+
+        return collect($adapters)
+            ->filter(fn (mixed $adapter): bool => is_array($adapter))
+            ->reject(fn (array $adapter): bool => Str::is(config('devices.network.ignored_interfaces'), (string) ($adapter['interface'] ?? '')))
+            ->map(fn (array $adapter): array => [
+                ...$adapter,
+                'errors_inbound' => $adapter['errors_inbound'] ?? $adapter['received_errors'] ?? null,
+                'errors_outbound' => $adapter['errors_outbound'] ?? $adapter['sent_errors'] ?? null,
+                'drops_inbound' => $adapter['drops_inbound'] ?? $adapter['received_drops'] ?? null,
+                'drops_outbound' => $adapter['drops_outbound'] ?? $adapter['sent_drops'] ?? null,
+                'link_speed_kbps' => $adapter['link_speed_kbps'] ?? (isset($adapter['link_speed_mbps']) ? (int) round($adapter['link_speed_mbps'] * 1000) : null),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{failed_units?: array<int, string>, reboot_required?: ?bool, pending_updates?: ?int, pending_security_updates?: ?int, updates_checked_at?: ?Carbon}
+     */
+    private function linuxHealth(mixed $health): array
+    {
+        if (! is_array($health)) {
+            return [];
+        }
+
+        return [
+            'failed_units' => array_key_exists('failed_units', $health) && is_array($health['failed_units']) ? array_values($health['failed_units']) : null,
+            'reboot_required' => isset($health['reboot_required']) ? (bool) $health['reboot_required'] : null,
+            'pending_updates' => isset($health['pending_updates']) ? (int) $health['pending_updates'] : null,
+            'pending_security_updates' => isset($health['pending_security_updates']) ? (int) $health['pending_security_updates'] : null,
+            'updates_checked_at' => isset($health['checked_updates_at']) ? Carbon::parse($health['checked_updates_at']) : null,
+        ];
     }
 
     private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, array $input): void

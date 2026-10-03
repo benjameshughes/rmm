@@ -27,7 +27,7 @@ final class Metrics extends Component
     {
         $this->authorize('view', $device);
 
-        $this->device = $device->load('latestMetric');
+        $this->device = $device;
     }
 
     /**
@@ -47,7 +47,8 @@ final class Metrics extends Component
             'charts' => [
                 MetricChart::cpuAndMemory($performance),
                 MetricChart::processorLoad($performance),
-                MetricChart::diskAndPageFile($performance),
+                MetricChart::diskAndPageFile($performance, $this->device->swapLabel()),
+                MetricChart::diskThroughput($metrics->diskThroughput($this->device, $this->metricRange)),
                 MetricChart::network($metrics->network($this->device, $this->metricRange)),
             ],
             'ranges' => MetricRange::cases(),

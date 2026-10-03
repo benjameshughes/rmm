@@ -9,8 +9,6 @@
         </flux:radio.group>
     </div>
 
-    <x-device.stats.performance :metric="$device->latestMetric" />
-
     <div class="grid gap-6 xl:grid-cols-2">
         @foreach($charts as $chart)
             <flux:card wire:key="chart-{{ $loop->index }}-{{ $range }}">

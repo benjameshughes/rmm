@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Livewire\Devices\Apps;
 use App\Livewire\Devices\Details;
-use App\Livewire\Devices\Metrics;
 use App\Livewire\Devices\Overview;
 use App\Models\Device;
 use App\Models\DeviceAppMetric;
@@ -26,7 +25,7 @@ function reportFromWindowsAgent(string $apiKey): void
 }
 
 it('spreads performance, network adapters and top apps across the tabs for a windows device', function (): void {
-    $device = Device::factory()->withApiKey('KEY-PAGE')->create(['hostname' => 'DESKTOP-5ULJ14E']);
+    $device = Device::factory()->windows()->withApiKey('KEY-PAGE')->create(['hostname' => 'DESKTOP-5ULJ14E']);
     reportFromWindowsAgent('KEY-PAGE');
     $user = User::factory()->create();
 
@@ -36,7 +35,7 @@ it('spreads performance, network adapters and top apps across the tabs for a win
         ->assertSee('CPU Queue 0.27 threads waiting');
 
     Livewire::actingAs($user)
-        ->test(Metrics::class, ['device' => $device])
+        ->test(Overview::class, ['device' => $device])
         ->assertSee('Performance right now')
         ->assertSee('Page File')
         ->assertSee('32.0%')
@@ -69,7 +68,7 @@ it('keeps load average and hides the windows sections for a linux device', funct
         ->assertSee('Load Average 1.50 · 1.25 / 1.00')
         ->assertDontSee('CPU Queue');
 
-    Livewire::actingAs($user)->test(Metrics::class, ['device' => $device])->assertDontSee('Performance right now');
+    Livewire::actingAs($user)->test(Overview::class, ['device' => $device])->assertDontSee('Performance right now');
     Livewire::actingAs($user)->test(Details::class, ['device' => $device])->assertDontSee('Network Adapters');
     Livewire::actingAs($user)->test(Apps::class, ['device' => $device])->assertDontSee('Top Apps');
 });

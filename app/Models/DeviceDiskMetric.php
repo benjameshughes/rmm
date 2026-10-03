@@ -20,6 +20,7 @@ final class DeviceDiskMetric extends Model
         'read_kbps',
         'write_kbps',
         'utilization_percent',
+        'inode_usage_percent',
     ];
 
     public function deviceMetric(): BelongsTo

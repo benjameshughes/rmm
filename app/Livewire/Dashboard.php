@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
+use App\DTOs\DeviceAttention;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Queries\AgentVersionQueries;
@@ -57,10 +58,13 @@ final class Dashboard extends Component
     {
         $fleet = $dashboard->fleet();
         $latestAgentVersion = $agentVersions->latest();
+        [$needsAttention, $worthKnowing] = $dashboard->needsAttention($fleet, $latestAgentVersion)
+            ->partition(fn (DeviceAttention $attention): bool => $attention->severity()->isActionable());
 
         return view('livewire.dashboard', [
             'summary' => $dashboard->summary(),
-            'needsAttention' => $dashboard->needsAttention($fleet, $latestAgentVersion),
+            'needsAttention' => $needsAttention->values(),
+            'worthKnowing' => $worthKnowing->values(),
             'fullestDisks' => $dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),
             'diskCount' => $fleet->count(),
             'busiest' => $dashboard->busiest($fleet, config('dashboard.busiest_devices')),

@@ -104,12 +104,16 @@ return [
     | sit 70-90% full by design, as do Linux boot and runtime mounts. Linux
     | hosts also report Docker and container storage layers, pseudo
     | filesystems and RAM-backed tmpfs, matched by mount point or filesystem.
+    | A Linux disk can also run out of inodes long before it runs out of
+    | space; the inode thresholds colour and flag that separately.
     |
     */
 
     'disk' => [
         'warning_percent' => 75,
         'critical_percent' => 90,
+        'inode_warning_percent' => 80,
+        'inode_critical_percent' => 90,
         'ignored_volumes' => [
             'HarddiskVolume*',
             '/boot*',
@@ -198,7 +202,8 @@ return [
     |
     | Adapters matching an ignored pattern (Str::is wildcards) are not stored.
     | Windows lists virtual, tunnelling and loopback adapters alongside the
-    | real NICs; they only add noise. Ignored MAC addresses are dropped from
+    | real NICs, and Linux its loopback and container veth pairs; they only
+    | add noise. Ignored MAC addresses are dropped from
     | what the agent reports, so they are never sent a wake packet.
     |
     */
@@ -215,6 +220,8 @@ return [
             '*Bluetooth*',
             'Teredo*',
             'isatap*',
+            'lo',
+            'veth*',
         ],
     ],
 

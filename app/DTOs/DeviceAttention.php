@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTOs;
 
 use App\Enums\AlertSeverity;
+use App\Enums\AttentionLevel;
 use App\Models\Alert;
 use App\Models\Device;
 use Illuminate\Support\Collection;
@@ -15,8 +16,10 @@ use Illuminate\Support\Collection;
 final class DeviceAttention
 {
     /**
-     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}>  $disks  Disks at or over the warning threshold, fullest first
+     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $disks  Disks at or over the warning threshold, fullest first
      * @param  Collection<int, Alert>  $alerts  Open alerts, newest first
+     * @param  Collection<int, string>  $failedUnits  systemd units in a failed state
+     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $inodeDisks  Disks with inode usage at or over the inode warning threshold, fullest first
      */
     public function __construct(
         public readonly Device $device,
@@ -24,6 +27,9 @@ final class DeviceAttention
         public readonly Collection $alerts,
         public readonly bool $isOfflineUnexpectedly,
         public readonly bool $isAgentBehind,
+        public readonly Collection $failedUnits = new Collection,
+        public readonly Collection $inodeDisks = new Collection,
+        public readonly bool $isRebootRequired = false,
     ) {}
 
     public function needsAttention(): bool
@@ -31,28 +37,44 @@ final class DeviceAttention
         return $this->disks->isNotEmpty()
             || $this->alerts->isNotEmpty()
             || $this->isOfflineUnexpectedly
-            || $this->isAgentBehind;
+            || $this->isAgentBehind
+            || $this->failedUnits->isNotEmpty()
+            || $this->inodeDisks->isNotEmpty()
+            || $this->isRebootRequired;
     }
 
     /**
-     * A disk past the critical threshold or a critical alert makes the whole device critical.
+     * A disk or inodes past the critical threshold, a failed service or a critical alert make the
+     * device critical; a reboot on its own is only worth knowing.
      */
-    public function severity(): AlertSeverity
+    public function severity(): AttentionLevel
     {
         $isCritical = $this->worstDiskPercent() >= config('devices.disk.critical_percent')
+            || $this->worstInodePercent() >= config('devices.disk.inode_critical_percent')
+            || $this->failedUnits->isNotEmpty()
             || $this->alerts->contains(fn (Alert $alert): bool => $alert->severity === AlertSeverity::Critical);
 
-        return $isCritical ? AlertSeverity::Critical : AlertSeverity::Warning;
-    }
+        $isWarning = $this->disks->isNotEmpty()
+            || $this->inodeDisks->isNotEmpty()
+            || $this->alerts->isNotEmpty()
+            || $this->isOfflineUnexpectedly
+            || $this->isAgentBehind;
 
-    public function severityIconColor(): string
-    {
-        return $this->severity() === AlertSeverity::Critical ? 'text-red-500' : 'text-amber-500';
+        return match (true) {
+            $isCritical => AttentionLevel::Critical,
+            $isWarning => AttentionLevel::Warning,
+            default => AttentionLevel::Info,
+        };
     }
 
     public function worstDiskPercent(): float
     {
         return (float) ($this->disks->max('usedPercent') ?? 0);
+    }
+
+    public function worstInodePercent(): float
+    {
+        return (float) ($this->inodeDisks->max('inodePercent') ?? 0);
     }
 
     /**
@@ -62,6 +84,6 @@ final class DeviceAttention
      */
     public function sortKey(): array
     {
-        return [$this->severity() === AlertSeverity::Critical ? 0 : 1, -$this->worstDiskPercent(), $this->device->hostname];
+        return [$this->severity()->rank(), -max($this->worstDiskPercent(), $this->worstInodePercent()), $this->device->hostname];
     }
 }

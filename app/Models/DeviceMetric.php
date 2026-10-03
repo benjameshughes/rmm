@@ -54,6 +54,11 @@ final class DeviceMetric extends Model
         'swap_used_mib',
         'swap_total_mib',
         'disk_busy_percent',
+        'failed_units',
+        'reboot_required',
+        'pending_updates',
+        'pending_security_updates',
+        'updates_checked_at',
         'payload',
         'recorded_at',
     ];
@@ -72,6 +77,11 @@ final class DeviceMetric extends Model
             'swap_used_mib' => 'float',
             'swap_total_mib' => 'float',
             'disk_busy_percent' => 'float',
+            'failed_units' => 'array',
+            'reboot_required' => 'boolean',
+            'pending_updates' => 'integer',
+            'pending_security_updates' => 'integer',
+            'updates_checked_at' => 'datetime',
             'payload' => 'array',
             'recorded_at' => 'datetime',
         ];
@@ -118,6 +128,7 @@ final class DeviceMetric extends Model
                 'read_kbps' => $disk['read_kbps'] ?? null,
                 'write_kbps' => $disk['write_kbps'] ?? null,
                 'utilization_percent' => $disk['utilization_percent'] ?? null,
+                'inode_usage_percent' => $disk['inode_usage_percent'] ?? null,
             ]));
     }
 
@@ -212,6 +223,20 @@ final class DeviceMetric extends Model
         return $this->mebibytesForHumans($this->swap_used_mib).' / '.$this->mebibytesForHumans($this->swap_total_mib);
     }
 
+    public function pendingUpdatesForHumans(): ?string
+    {
+        if ($this->pending_updates === null) {
+            return null;
+        }
+
+        return $this->pending_updates === 0 ? 'No updates waiting' : $this->pending_updates.' '.str('update')->plural($this->pending_updates).' waiting';
+    }
+
+    public function pendingSecurityUpdatesForHumans(): ?string
+    {
+        return $this->pending_security_updates ? $this->pending_security_updates.' security' : null;
+    }
+
     /**
      * Whole percentages for the device list, where a decimal is noise.
      */
@@ -261,6 +286,21 @@ final class DeviceMetric extends Model
     protected function hasLoadAverage(): Attribute
     {
         return Attribute::get(fn (): bool => $this->load1 !== null);
+    }
+
+    /**
+     * Linux agents from 0.7.1 report failed services, a pending reboot and pending updates.
+     */
+    protected function hasHealthReport(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->failed_units !== null
+            || $this->reboot_required !== null
+            || $this->pending_updates !== null);
+    }
+
+    protected function hasFailedUnits(): Attribute
+    {
+        return Attribute::get(fn (): bool => filled($this->failed_units));
     }
 
     protected function hasAlertCounts(): Attribute

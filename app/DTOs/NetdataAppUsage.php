@@ -25,20 +25,11 @@ final class NetdataAppUsage
     }
 
     /**
-     * The busiest apps by CPU plus the biggest by memory, so an idle app
-     * hogging RAM is kept alongside the ones burning CPU.
-     *
      * @return array<int, array{name: string, cpu_percent: float|null, memory_mib: float|null}>
      */
     public function top(int $limit): array
     {
-        $apps = $this->apps();
-
-        return $this->largest($apps, 'cpu_percent', $limit)
-            ->union($this->largest($apps, 'memory_mib', $limit))
-            ->sortBy([['cpu_percent', 'desc'], ['memory_mib', 'desc']])
-            ->values()
-            ->all();
+        return TopApps::pick($this->apps(), $limit);
     }
 
     /** @return Collection<string, array{name: string, cpu_percent: float|null, memory_mib: float|null}> */
@@ -62,17 +53,5 @@ final class NetdataAppUsage
                 'cpu_percent' => $cpu->get($app),
                 'memory_mib' => $memory->get($app),
             ]]);
-    }
-
-    /**
-     * @param  Collection<string, array{name: string, cpu_percent: float|null, memory_mib: float|null}>  $apps
-     * @return Collection<string, array{name: string, cpu_percent: float|null, memory_mib: float|null}>
-     */
-    private function largest(Collection $apps, string $field, int $limit): Collection
-    {
-        return $apps
-            ->filter(fn (array $app): bool => $app[$field] !== null)
-            ->sortByDesc($field)
-            ->take($limit);
     }
 }

@@ -193,6 +193,14 @@ final class Device extends Model
         return $this->hasMany(DeviceCommand::class)->where('status', CommandStatus::Pending);
     }
 
+    /**
+     * Commands queued, handed to the agent or running: everything not yet finished.
+     */
+    public function inFlightCommands(): HasMany
+    {
+        return $this->hasMany(DeviceCommand::class)->whereNotIn('status', collect(CommandStatus::cases())->filter->isTerminal()->all());
+    }
+
     public function group(): BelongsTo
     {
         return $this->belongsTo(DeviceGroup::class, 'device_group_id');
@@ -406,7 +414,7 @@ final class Device extends Model
     /**
      * The volume closest to full, which is the one worth a headline.
      *
-     * @return array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}|null
+     * @return array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}|null
      */
     public function fullestDisk(): ?array
     {
@@ -414,17 +422,18 @@ final class Device extends Model
     }
 
     /**
-     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}>
+     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>
      */
     public function diskUsage(): Collection
     {
         $reportedVolumes = $this->latestMetric?->diskMetrics
-            ->map(fn (DeviceDiskMetric $volume): array => $volume->only(['mount_point', 'total_gb', 'available_gb']));
+            ->map(fn (DeviceDiskMetric $volume): array => $volume->only(['mount_point', 'total_gb', 'available_gb', 'inode_usage_percent']));
 
         return collect($reportedVolumes?->isNotEmpty() ? $reportedVolumes : ($this->disks ?? []))->map(function (array $disk): array {
             $totalGb = isset($disk['total_gb']) ? (float) $disk['total_gb'] : null;
             $availableGb = isset($disk['available_gb']) ? (float) $disk['available_gb'] : null;
             $usedPercent = $totalGb > 0 ? (($totalGb - (float) $availableGb) / $totalGb) * 100 : null;
+            $inodePercent = isset($disk['inode_usage_percent']) ? (float) $disk['inode_usage_percent'] : null;
 
             return [
                 'name' => $disk['name'] ?? $disk['mount_point'] ?? '—',
@@ -439,8 +448,20 @@ final class Device extends Model
                     $usedPercent >= config('devices.disk.warning_percent') => 'bg-amber-500',
                     default => 'bg-blue-500',
                 },
+                'inodePercent' => $inodePercent,
+                'inodeForHumans' => $inodePercent === null ? null : number_format($inodePercent, 1).'% of inodes used',
+                'inodeColor' => match (true) {
+                    $inodePercent >= config('devices.disk.inode_critical_percent') => 'text-red-600 dark:text-red-400',
+                    $inodePercent >= config('devices.disk.inode_warning_percent') => 'text-amber-600 dark:text-amber-400',
+                    default => 'text-zinc-500 dark:text-zinc-400',
+                },
             ];
         });
+    }
+
+    public function swapLabel(): string
+    {
+        return $this->platform()->swapLabel();
     }
 
     /**

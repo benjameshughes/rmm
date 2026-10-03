@@ -43,8 +43,8 @@ final class DashboardQueries
     }
 
     /**
-     * Devices with a disk at or over the warning threshold, an open alert, a silence they never
-     * announced or an old agent, worst first.
+     * Devices with a disk or inodes at or over the warning threshold, an open alert, a failed
+     * service, a silence they never announced, an old agent or a pending reboot, worst first.
      *
      * @param  EloquentCollection<int, Device>  $fleet
      * @return Collection<int, DeviceAttention>
@@ -60,26 +60,42 @@ final class DashboardQueries
             ->groupBy('device_id');
 
         return $fleet
-            ->map(fn (Device $device): DeviceAttention => new DeviceAttention(
-                device: $device,
-                disks: $device->diskUsage()
-                    ->filter(fn (array $disk): bool => $disk['usedPercent'] !== null && $disk['usedPercent'] >= config('devices.disk.warning_percent'))
-                    ->sortByDesc('usedPercent')
-                    ->values(),
-                alerts: $openAlerts->get($device->id, collect()),
-                isOfflineUnexpectedly: ! $device->isOnline && ! $device->isPoweringOff,
-                isAgentBehind: $device->isAgentOutdated($latestAgentVersion),
-            ))
+            ->map(fn (Device $device): DeviceAttention => $this->attentionFor($device, $openAlerts->get($device->id, collect()), $latestAgentVersion))
             ->filter(fn (DeviceAttention $attention): bool => $attention->needsAttention())
             ->sort(fn (DeviceAttention $first, DeviceAttention $second): int => $first->sortKey() <=> $second->sortKey())
             ->values();
     }
 
     /**
+     * @param  Collection<int, Alert>  $openAlerts
+     */
+    private function attentionFor(Device $device, Collection $openAlerts, ?string $latestAgentVersion): DeviceAttention
+    {
+        $disks = $device->diskUsage();
+
+        return new DeviceAttention(
+            device: $device,
+            disks: $disks
+                ->filter(fn (array $disk): bool => $disk['usedPercent'] !== null && $disk['usedPercent'] >= config('devices.disk.warning_percent'))
+                ->sortByDesc('usedPercent')
+                ->values(),
+            alerts: $openAlerts,
+            isOfflineUnexpectedly: ! $device->isOnline && ! $device->isPoweringOff,
+            isAgentBehind: $device->isAgentOutdated($latestAgentVersion),
+            failedUnits: collect($device->latestMetric?->failed_units ?? []),
+            inodeDisks: $disks
+                ->filter(fn (array $disk): bool => $disk['inodePercent'] !== null && $disk['inodePercent'] >= config('devices.disk.inode_warning_percent'))
+                ->sortByDesc('inodePercent')
+                ->values(),
+            isRebootRequired: (bool) $device->latestMetric?->reboot_required,
+        );
+    }
+
+    /**
      * Each device's fullest disk, fullest first.
      *
      * @param  EloquentCollection<int, Device>  $fleet
-     * @return Collection<int, array{device: Device, disk: array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}}>
+     * @return Collection<int, array{device: Device, disk: array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}}>
      */
     public function fullestDisks(EloquentCollection $fleet, int $limit): Collection
     {

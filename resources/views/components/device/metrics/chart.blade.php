@@ -45,7 +45,7 @@
         </flux:chart>
     @else
         <div class="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700">
-            <flux:text size="sm">{{ $empty }}</flux:text>
+            <flux:text size="sm" class="max-w-md text-center">{{ $chart->emptyMessage ?? $empty }}</flux:text>
         </div>
     @endif
 </div>
