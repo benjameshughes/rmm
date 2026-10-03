@@ -139,8 +139,9 @@ jobs:
           chmod 755 dist-linux/rmm-linux-x86_64
           cd dist-linux
           file rmm-linux-x86_64
-          if ldd rmm-linux-x86_64 >/dev/null 2>&1; then
-            echo "rmm-linux-x86_64 is dynamically linked" >&2
+          # ldd exits 0 on static-pie binaries too, so trust file's verdict instead.
+          if ! file rmm-linux-x86_64 | grep -Eq 'statically linked|static-pie linked'; then
+            echo "rmm-linux-x86_64 is not statically linked" >&2
             exit 1
           fi
           ./rmm-linux-x86_64 --version
