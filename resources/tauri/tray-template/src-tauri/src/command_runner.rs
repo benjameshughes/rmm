@@ -415,8 +415,10 @@ fn kill_process_tree(pid: Option<u32>) {
         return;
     };
 
+    // "--" ends the options so "-<pgid>" is read as a process group, not a
+    // malformed signal: macOS accepted it without, Linux silently did not.
     let _ = std::process::Command::new("/bin/kill")
-        .args(["-KILL", &format!("-{}", pid)])
+        .args(["-KILL", "--", &format!("-{}", pid)])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
