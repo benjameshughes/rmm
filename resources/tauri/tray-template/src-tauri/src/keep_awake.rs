@@ -1,4 +1,5 @@
-//! Holds the machine awake while a command runs.
+//! Holds the machine awake while queued commands run (one guard per queue
+//! drain, owned by `commands::drain_queue`).
 //!
 //! Modern Standby PCs wake for a few minutes of maintenance, the agent picks
 //! up pending work, then Windows drops back into standby and the script stalls

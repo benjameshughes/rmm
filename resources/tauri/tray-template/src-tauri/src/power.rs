@@ -23,29 +23,21 @@ pub struct PowerController {
     machine: Mutex<PowerMachine>,
     state: watch::Sender<PowerState>,
     notices: mpsc::UnboundedSender<PowerNotice>,
-    #[cfg_attr(not(windows), allow(dead_code))]
-    modern_standby: bool,
 }
 
 impl PowerController {
     /// The receiver yields the notices to send to the server, in order.
-    pub fn new(modern_standby: bool) -> (Arc<Self>, mpsc::UnboundedReceiver<PowerNotice>) {
+    pub fn new() -> (Arc<Self>, mpsc::UnboundedReceiver<PowerNotice>) {
         let (notices, notice_rx) = mpsc::unbounded_channel();
         let (state, _) = watch::channel(PowerState::Awake);
 
         let controller = Arc::new(Self {
-            machine: Mutex::new(PowerMachine::new(modern_standby)),
+            machine: Mutex::new(PowerMachine::new()),
             state,
             notices,
-            modern_standby,
         });
 
         (controller, notice_rx)
-    }
-
-    #[cfg_attr(not(windows), allow(dead_code))]
-    pub fn modern_standby(&self) -> bool {
-        self.modern_standby
     }
 
     pub fn state(&self) -> PowerState {
@@ -294,14 +286,14 @@ impl PowerNotifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::power_state::{PowerReason, SleepKind};
+    use crate::power_state::PowerReason;
     use reqwest::StatusCode;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
     #[test]
     fn signals_queue_notices_in_order() {
-        let (controller, mut notices) = PowerController::new(false);
+        let (controller, mut notices) = PowerController::new();
 
         controller.signal(PowerSignal::Suspend);
         controller.signal(PowerSignal::Resume);
@@ -325,29 +317,26 @@ mod tests {
 
     #[test]
     fn dropping_the_command_slot_completes_a_pending_sleep() {
-        let (controller, mut notices) = PowerController::new(true);
+        let (controller, mut notices) = PowerController::new();
 
         let slot = controller.try_begin_command().expect("awake");
-        controller.signal(PowerSignal::DisplayOff);
-        assert_eq!(
-            controller.state(),
-            PowerState::GoingToSleep(SleepKind::Standby)
-        );
+        controller.signal(PowerSignal::Suspend);
+        assert_eq!(controller.state(), PowerState::GoingToSleep);
         assert!(notices.try_recv().is_err());
         assert!(controller.try_begin_command().is_none());
 
         drop(slot);
 
-        assert_eq!(controller.state(), PowerState::Asleep(SleepKind::Standby));
+        assert_eq!(controller.state(), PowerState::Asleep);
         assert_eq!(
             notices.try_recv().unwrap(),
-            PowerNotice::powering_off(PowerReason::Standby)
+            PowerNotice::powering_off(PowerReason::Sleep)
         );
     }
 
     #[test]
     fn boot_announcement_leaves_state_alone() {
-        let (controller, mut notices) = PowerController::new(false);
+        let (controller, mut notices) = PowerController::new();
 
         controller.announce(PowerNotice::powering_on(PowerReason::Boot));
 
@@ -360,7 +349,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn gate_pauses_while_asleep_and_wakes_immediately() {
-        let (controller, _notices) = PowerController::new(false);
+        let (controller, _notices) = PowerController::new();
         let mut gate = controller.gate(GatePolicy::Reporting);
         let token = CancellationToken::new();
 
@@ -385,7 +374,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn gate_ticks_on_the_interval_while_awake() {
-        let (controller, _notices) = PowerController::new(false);
+        let (controller, _notices) = PowerController::new();
         let mut gate = controller.gate(GatePolicy::Commands);
         let token = CancellationToken::new();
         let started = tokio::time::Instant::now();
@@ -396,7 +385,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn reporting_continues_while_a_command_drains_but_commands_stop() {
-        let (controller, _notices) = PowerController::new(false);
+        let (controller, _notices) = PowerController::new();
         let token = CancellationToken::new();
         let _slot = controller.try_begin_command().unwrap();
         controller.signal(PowerSignal::Suspend);
@@ -413,7 +402,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn gate_stops_on_cancellation_while_asleep() {
-        let (controller, _notices) = PowerController::new(false);
+        let (controller, _notices) = PowerController::new();
         let mut gate = controller.gate(GatePolicy::Reporting);
         let token = CancellationToken::new();
         controller.signal(PowerSignal::Suspend);
@@ -521,7 +510,7 @@ mod tests {
         let delivery = notifier_for(address)
             .send(
                 "device-key-123",
-                PowerNotice::powering_off(PowerReason::Standby),
+                PowerNotice::powering_off(PowerReason::Sleep),
             )
             .await;
         let request = server.await.unwrap();
@@ -531,7 +520,7 @@ mod tests {
         assert!(request
             .to_ascii_lowercase()
             .contains("x-agent-key: device-key-123"));
-        assert!(request.ends_with(r#"{"event":"powering_off","reason":"standby"}"#));
+        assert!(request.ends_with(r#"{"event":"powering_off","reason":"sleep"}"#));
     }
 
     #[tokio::test]

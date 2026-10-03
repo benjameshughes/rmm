@@ -10,7 +10,6 @@ use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
 use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::power::{GatePolicy, PowerController, PowerNotifier};
-use crate::power_events;
 use crate::power_state::{PowerNotice, PowerReason};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
@@ -115,12 +114,7 @@ impl Agent {
             AgentState::NotEnrolled
         };
 
-        let modern_standby = power_events::modern_standby_supported();
-        info!(
-            "Power model: {}",
-            if modern_standby { "Modern Standby" } else { "classic sleep" }
-        );
-        let (power, power_notices) = PowerController::new(modern_standby);
+        let (power, power_notices) = PowerController::new();
 
         Ok(Self {
             config,

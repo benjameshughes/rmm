@@ -10,6 +10,7 @@ mod enrollment;
 mod keep_awake;
 mod metrics;
 mod power;
+#[cfg(windows)]
 mod power_events;
 mod power_state;
 mod runtime_config;
@@ -46,7 +47,7 @@ use windows_service::{
     service_dispatcher,
 };
 #[cfg(windows)]
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 #[cfg(windows)]
 const SERVICE_NAME: &str = "BenJHRMM";
@@ -71,22 +72,14 @@ enum ServiceExitCodes {
 #[derive(Default)]
 struct StopContext {
     status_handle: OnceLock<ServiceStatusHandle>,
-    display_registration: Mutex<Option<power_events::DisplayStateRegistration>>,
 }
 
 #[cfg(windows)]
 impl StopContext {
-    /// Stop listening for display changes and report StopPending with no
-    /// controls accepted. windows-service frees the handler closure after
-    /// Stop/Shutdown/Preshutdown, so no further power events may reach it.
+    /// Report StopPending with no controls accepted. windows-service frees
+    /// the handler closure after Stop/Shutdown/Preshutdown, so no further
+    /// power events may reach it.
     fn begin_stopping(&self) {
-        drop(
-            self.display_registration
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .take(),
-        );
-
         if let Some(status_handle) = self.status_handle.get() {
             let _ = status_handle.set_service_status(ServiceStatus {
                 service_type: ServiceType::OWN_PROCESS,
@@ -403,16 +396,6 @@ fn run_service() -> Result<()> {
     let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
     let _ = stop_context.status_handle.set(status_handle);
 
-    // Modern Standby never sends PBT_APMSUSPEND; display off is the signal.
-    if agent.power().modern_standby() {
-        use std::os::windows::io::AsRawHandle;
-        *stop_context
-            .display_registration
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-            power_events::DisplayStateRegistration::register(status_handle.as_raw_handle());
-    }
-
     // Report running status. PRESHUTDOWN replaces SHUTDOWN (windows-service
     // documents them as mutually exclusive) and comes early enough to tell
     // the server before the network goes.
@@ -430,15 +413,6 @@ fn run_service() -> Result<()> {
 
     // Run the agent
     let result = rt.block_on(agent.run());
-
-    // Unregister display notifications if the agent stopped on its own.
-    drop(
-        stop_context
-            .display_registration
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take(),
-    );
 
     let exit_code = match &result {
         Ok(_) => {
