@@ -21,6 +21,10 @@ use Illuminate\Support\Carbon;
  * something worth showing changed, or the device came back online; deliberate
  * announcements (new metrics, tags, key claimed, gone offline) pass $alwaysBroadcast,
  * positionally: Dispatchable::dispatch() drops named arguments.
+ *
+ * A routine metrics report is broadcast so open pages see fresh numbers, but it only
+ * counts as a state change when it moved something worth showing at once (back online,
+ * a new power state). Busy lists throttle the rest.
  */
 final class DeviceUpdated implements ShouldBroadcast, ShouldDispatchAfterCommit, ShouldRescue
 {
@@ -31,15 +35,18 @@ final class DeviceUpdated implements ShouldBroadcast, ShouldDispatchAfterCommit,
 
     public readonly string $status;
 
+    public readonly bool $isStateChange;
+
     private readonly bool $isWorthBroadcasting;
 
-    public function __construct(Device $device, bool $alwaysBroadcast = false)
+    public function __construct(Device $device, bool $alwaysBroadcast = false, bool $isRoutineReport = false)
     {
+        $hasStateChanged = $device->wasChanged(config('devices.broadcast.attributes')) || $this->cameBackOnline($device);
+
         $this->deviceId = $device->id;
         $this->status = $device->status->value;
-        $this->isWorthBroadcasting = $alwaysBroadcast
-            || $device->wasChanged(config('devices.broadcast.attributes'))
-            || $this->cameBackOnline($device);
+        $this->isStateChange = ! $isRoutineReport || $hasStateChanged;
+        $this->isWorthBroadcasting = $alwaysBroadcast || $hasStateChanged;
     }
 
     public function broadcastWhen(): bool
@@ -67,12 +74,13 @@ final class DeviceUpdated implements ShouldBroadcast, ShouldDispatchAfterCommit,
             && ($previousLastSeen === null || Carbon::parse($previousLastSeen)->lessThanOrEqualTo(Device::onlineCutoff()));
     }
 
-    /** @return array{deviceId: int, status: string} */
+    /** @return array{deviceId: int, status: string, isStateChange: bool} */
     public function broadcastWith(): array
     {
         return [
             'deviceId' => $this->deviceId,
             'status' => $this->status,
+            'isStateChange' => $this->isStateChange,
         ];
     }
 }

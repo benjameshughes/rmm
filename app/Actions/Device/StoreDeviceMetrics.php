@@ -92,7 +92,7 @@ final class StoreDeviceMetrics
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
-        DeviceUpdated::dispatch($device, true);
+        DeviceUpdated::dispatch($device, true, true);
 
         return $metric;
     }
@@ -147,7 +147,7 @@ final class StoreDeviceMetrics
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
-        DeviceUpdated::dispatch($device, true);
+        DeviceUpdated::dispatch($device, true, true);
 
         return $metric;
     }

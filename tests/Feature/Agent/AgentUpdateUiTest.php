@@ -29,7 +29,7 @@ it('shows the update badge and banner for outdated agents', function (): void {
     Livewire::actingAs($this->user)->test(Index::class)
         ->assertSee('1 device running an old agent (latest 0.5.1)')
         ->assertSee('Update available 0.5.0')
-        ->assertSee('Agent 0.5.1')
+        ->assertSeeHtml('>0.5.1<')
         ->assertSee('Update all');
 });
 

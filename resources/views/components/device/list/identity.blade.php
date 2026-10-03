@@ -1,4 +1,4 @@
-@props(['device'])
+@props(['device', 'showGroup' => true])
 
 <div {{ $attributes->class('min-w-0 space-y-1') }}>
     <a href="{{ route('devices.show', $device) }}" wire:navigate class="block truncate font-semibold text-zinc-800 hover:underline dark:text-white">{{ $device->hostname }}</a>
@@ -8,9 +8,9 @@
             &middot; <span class="font-mono">{{ $device->last_ip }}</span>
         @endif
     </flux:text>
-    @if($device->group || $device->tags->isNotEmpty())
+    @if(($showGroup && $device->group) || $device->tags->isNotEmpty())
         <div class="flex flex-wrap gap-1">
-            @if($device->group)
+            @if($showGroup && $device->group)
                 <flux:badge size="sm" :color="$device->group->color ?? 'zinc'">{{ $device->group->name }}</flux:badge>
             @endif
             @foreach($device->tags as $tag)

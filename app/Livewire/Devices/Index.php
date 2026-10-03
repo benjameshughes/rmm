@@ -9,6 +9,7 @@ use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceListFilter;
+use App\Enums\DeviceListSort;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
@@ -24,6 +25,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -40,6 +42,15 @@ final class Index extends Component
 
     #[Url]
     public string $statusFilter = '';
+
+    #[Url(as: 'sort')]
+    public string $sortBy = DeviceListSort::Hostname->value;
+
+    #[Url(as: 'direction')]
+    public string $sortDirection = 'asc';
+
+    #[Locked]
+    public int $renderedAt = 0;
 
     public string $groupFilter = '';
 
@@ -58,11 +69,65 @@ final class Index extends Component
         $this->authorize('viewAny', Device::class);
     }
 
-    #[On('echo-private:devices,DeviceEnrolled')]
+    /**
+     * Every redraw, whatever caused it, restarts the quiet period for routine reports.
+     */
+    public function rendering(): void
+    {
+        $this->renderedAt = now()->getTimestamp();
+    }
+
+    /**
+     * Every metrics report broadcasts, so routine ones only redraw a list that has
+     * gone stale; a real state change (status, power, online or offline) redraws at once.
+     *
+     * @param  array{deviceId?: int, status?: string, isStateChange?: bool}  $event
+     */
     #[On('echo-private:devices,DeviceUpdated')]
+    public function refreshFromDeviceUpdate(array $event = []): void
+    {
+        $isStale = now()->getTimestamp() - $this->renderedAt >= config('devices.list.refresh_seconds');
+
+        if (! ($event['isStateChange'] ?? true) && ! $isStale) {
+            $this->skipRender();
+        }
+    }
+
+    #[On('echo-private:devices,DeviceEnrolled')]
     #[On('echo-private:devices,LatestAgentVersionChanged')]
     #[On('echo-private:devices,AlertChanged')]
     public function refreshDevices(): void {}
+
+    /**
+     * A hand-edited sort falls back to hostname, A to Z.
+     */
+    #[Computed]
+    public function listSort(): DeviceListSort
+    {
+        return DeviceListSort::tryFrom($this->sortBy) ?? DeviceListSort::Hostname;
+    }
+
+    #[Computed]
+    public function listSortDirection(): string
+    {
+        return in_array($this->sortDirection, ['asc', 'desc'], true) ? $this->sortDirection : 'asc';
+    }
+
+    /**
+     * Clicking the sorted column flips it; a new column starts in its natural direction.
+     */
+    public function sort(string $column): void
+    {
+        $sort = DeviceListSort::tryFrom($column) ?? DeviceListSort::Hostname;
+
+        $this->sortDirection = $this->listSort === $sort
+            ? ($this->listSortDirection === 'asc' ? 'desc' : 'asc')
+            : $sort->defaultDirection();
+        $this->sortBy = $sort->value;
+
+        unset($this->listSort, $this->listSortDirection);
+        $this->resetPage();
+    }
 
     /**
      * A hand-edited query string shows the whole fleet rather than erroring.
@@ -272,6 +337,6 @@ final class Index extends Component
             }))
             ->when($this->groupFilter !== '', fn (Builder $q) => $q->where('device_group_id', $this->groupFilter))
             ->when($this->tagFilter !== '', fn (Builder $q) => $q->whereHas('tags', fn (Builder $tq) => $tq->where('tags.id', $this->tagFilter)))
-            ->latest('last_seen');
+            ->tap(fn (Builder $q) => $deviceList->sort($q, $this->listSort, $this->listSortDirection));
     }
 }

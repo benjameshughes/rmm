@@ -142,12 +142,16 @@ return [
     | Device List
     |--------------------------------------------------------------------------
     |
-    | Devices shown per page on the device list.
+    | Devices shown per page on the device list. Every metrics report
+    | broadcasts, so routine reports only redraw the list once it is
+    | refresh_seconds old; state changes (status, power, online or offline,
+    | enrolment) redraw it at once.
     |
     */
 
     'list' => [
-        'per_page' => 12,
+        'per_page' => 25,
+        'refresh_seconds' => 15,
     ],
 
     /*

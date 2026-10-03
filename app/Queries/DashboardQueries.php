@@ -95,7 +95,7 @@ final class DashboardQueries
      * Each device's fullest disk, fullest first.
      *
      * @param  EloquentCollection<int, Device>  $fleet
-     * @return Collection<int, array{device: Device, disk: array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}}>
+     * @return Collection<int, array{device: Device, disk: array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}}>
      */
     public function fullestDisks(EloquentCollection $fleet, int $limit): Collection
     {

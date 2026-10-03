@@ -1,4 +1,5 @@
 @use('App\Enums\DeviceListFilter')
+@use('App\Enums\DeviceListSort')
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
@@ -9,13 +10,13 @@
     </div>
     <flux:separator variant="subtle" />
 
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <x-device.list.summary-card label="Devices" :value="$summary['total']" icon="server" :active="$this->listFilter === null" wire:click="filterByStatus('')" />
-        <x-device.list.summary-card :label="DeviceListFilter::Online->label()" :value="$summary['online']" icon="signal" tone="text-green-500" :active="$this->listFilter === DeviceListFilter::Online" wire:click="filterByStatus('{{ DeviceListFilter::Online->value }}')" />
-        <x-device.list.summary-card :label="DeviceListFilter::PoweringOff->label()" :value="$summary['poweringOff']" icon="moon" tone="text-amber-500" :active="$this->listFilter === DeviceListFilter::PoweringOff" wire:click="filterByStatus('{{ DeviceListFilter::PoweringOff->value }}')" />
-        <x-device.list.summary-card :label="DeviceListFilter::Offline->label()" :value="$summary['offline']" icon="signal-slash" tone="text-red-500" :active="$this->listFilter === DeviceListFilter::Offline" wire:click="filterByStatus('{{ DeviceListFilter::Offline->value }}')" />
-        <x-device.list.summary-card label="Open alerts" :value="$summary['openAlerts']" icon="bell-alert" tone="text-red-500" :href="route('alerts.index')" />
-        <x-device.list.summary-card :label="DeviceListFilter::Outdated->label()" :value="$summary['outdated']" icon="arrow-up-circle" tone="text-amber-500" :active="$this->listFilter === DeviceListFilter::Outdated" wire:click="filterByStatus('{{ DeviceListFilter::Outdated->value }}')" />
+    <div class="flex flex-wrap items-center gap-2" data-summary-strip>
+        <x-device.list.summary-chip label="All" :value="$summary['total']" :active="$this->listFilter === null" wire:click="filterByStatus('')" />
+        <x-device.list.summary-chip :label="DeviceListFilter::Online->label()" :value="$summary['online']" dot="bg-green-500" :active="$this->listFilter === DeviceListFilter::Online" wire:click="filterByStatus('{{ DeviceListFilter::Online->value }}')" />
+        <x-device.list.summary-chip :label="DeviceListFilter::PoweringOff->label()" :value="$summary['poweringOff']" dot="bg-amber-500" :active="$this->listFilter === DeviceListFilter::PoweringOff" wire:click="filterByStatus('{{ DeviceListFilter::PoweringOff->value }}')" />
+        <x-device.list.summary-chip :label="DeviceListFilter::Offline->label()" :value="$summary['offline']" dot="bg-red-500" :active="$this->listFilter === DeviceListFilter::Offline" wire:click="filterByStatus('{{ DeviceListFilter::Offline->value }}')" />
+        <x-device.list.summary-chip :label="DeviceListFilter::Outdated->label()" :value="$summary['outdated']" dot="bg-sky-500" :active="$this->listFilter === DeviceListFilter::Outdated" wire:click="filterByStatus('{{ DeviceListFilter::Outdated->value }}')" />
+        <x-device.list.summary-chip label="Open alerts" :value="$summary['openAlerts']" dot="bg-rose-500" :href="route('alerts.index')" />
     </div>
 
     @if($outdatedAgentCount > 0)
@@ -71,7 +72,7 @@
         </flux:card>
     @endif
 
-    <flux:card class="p-0! sm:p-0!">
+    <flux:card class="p-0! sm:p-0! overflow-x-auto">
         @if($devices->isEmpty())
             <div class="flex flex-col items-center gap-3 px-6 py-16 text-center">
                 <flux:icon name="server-stack" class="size-10 text-zinc-300 dark:text-zinc-600" />
@@ -91,43 +92,19 @@
                     <flux:table.column class="w-8">
                         <flux:checkbox wire:model.live="selectAll" />
                     </flux:table.column>
-                    <flux:table.column>Device</flux:table.column>
-                    <flux:table.column>Status</flux:table.column>
-                    <flux:table.column class="hidden lg:table-cell">Resources</flux:table.column>
-                    <flux:table.column class="hidden md:table-cell">Agent</flux:table.column>
+                    <x-device.list.sortable-column :sort="DeviceListSort::Hostname" :current="$this->listSort" :direction="$this->listSortDirection" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Status" :current="$this->listSort" :direction="$this->listSortDirection" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Group" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden xl:table-cell" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Cpu" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden lg:table-cell" align="end" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Ram" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden lg:table-cell" align="end" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Disk" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden lg:table-cell" align="end" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::Agent" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden 2xl:table-cell" />
+                    <x-device.list.sortable-column :sort="DeviceListSort::LastSeen" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden sm:table-cell" />
                     <flux:table.column></flux:table.column>
                 </flux:table.columns>
                 <flux:table.rows>
                     @foreach ($devices as $device)
-                        <flux:table.row wire:key="device-{{ $device->id }}">
-                            <flux:table.cell>
-                                <flux:checkbox wire:model.live="selectedDevices" value="{{ $device->id }}" />
-                            </flux:table.cell>
-                            <flux:table.cell>
-                                <x-device.list.identity :device="$device" />
-                            </flux:table.cell>
-                            <flux:table.cell>
-                                <div class="space-y-1">
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
-                                        <x-device.monitor-only-badge :device="$device" />
-                                    </div>
-                                    <flux:text size="xs">{{ $device->lastSeenForHumans() }}</flux:text>
-                                </div>
-                            </flux:table.cell>
-                            <flux:table.cell class="hidden lg:table-cell">
-                                <x-device.list.resources :metric="$device->latestMetric" :disk="$device->fullestDisk()" />
-                            </flux:table.cell>
-                            <flux:table.cell class="hidden md:table-cell">
-                                <div class="flex flex-col items-start gap-1">
-                                    <flux:text size="sm">{{ $device->agent_version ? 'Agent '.$device->agent_version : '—' }}</flux:text>
-                                    <x-device.agent-update-badge :device="$device" :latest-version="$latestAgentVersion" />
-                                </div>
-                            </flux:table.cell>
-                            <flux:table.cell>
-                                <x-device.list.actions :device="$device" />
-                            </flux:table.cell>
-                        </flux:table.row>
+                        <x-device.list.row :device="$device" :latest-version="$latestAgentVersion" wire:key="device-{{ $device->id }}" />
                     @endforeach
                 </flux:table.rows>
             </flux:table>

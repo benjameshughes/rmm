@@ -250,6 +250,16 @@ final class DeviceMetric extends Model
         return $this->ram === null ? null : number_format($this->ram).'%';
     }
 
+    public function cpuTextColor(): string
+    {
+        return $this->loadTextColor($this->cpu);
+    }
+
+    public function ramTextColor(): string
+    {
+        return $this->loadTextColor($this->ram);
+    }
+
     public function cpuBarColor(): string
     {
         return $this->loadBarColor($this->cpu);
@@ -313,6 +323,15 @@ final class DeviceMetric extends Model
         return Attribute::get(fn (): bool => $this->cpu_queue_length !== null
             || $this->swap_total_mib !== null
             || $this->disk_busy_percent !== null);
+    }
+
+    private function loadTextColor(?float $percent): string
+    {
+        return match (true) {
+            $percent > config('devices.load.critical_percent') => 'text-red-600 dark:text-red-400',
+            $percent > config('devices.load.warning_percent') => 'text-amber-600 dark:text-amber-400',
+            default => 'text-zinc-600 dark:text-zinc-300',
+        };
     }
 
     private function loadBarColor(?float $percent): string

@@ -149,6 +149,18 @@ final class Device extends Model
     }
 
     /**
+     * Adds a sortable rank matching statusLabel: online (and powering on) first, then
+     * powering off, offline, and devices not approved last.
+     */
+    public function scopeAddStatusRank(Builder $query, string $alias): Builder
+    {
+        return $query->selectRaw(
+            "CASE WHEN devices.status != ? THEN 3 WHEN devices.power_state = ? AND devices.power_state_changed_at > ? THEN 1 WHEN devices.last_seen > ? THEN 0 ELSE 2 END as {$alias}",
+            [DeviceStatus::Active->value, DevicePowerState::PoweringOff->value, self::powerStateLapsesBefore(DevicePowerState::PoweringOff), self::onlineCutoff()],
+        );
+    }
+
+    /**
      * Devices the server will queue commands for: monitor-only devices never take one.
      * Devices that have not reported yet have no flag, so null counts as not monitor only.
      */
@@ -397,6 +409,24 @@ final class Device extends Model
         };
     }
 
+    /**
+     * A last-seen value that holds still on a live list: an online device was simply
+     * seen now, older ones to the nearest unit.
+     */
+    public function lastSeenCoarse(): string
+    {
+        return match (true) {
+            $this->last_seen === null => 'Never',
+            $this->isOnline => 'Now',
+            default => $this->last_seen->diffForHumans(),
+        };
+    }
+
+    public function lastSeenAt(): ?string
+    {
+        return $this->last_seen?->format('j M Y, H:i');
+    }
+
     public function lastSeenForHumans(): string
     {
         return $this->last_seen === null ? 'Never seen' : 'Seen '.$this->last_seen->diffForHumans();
@@ -420,7 +450,7 @@ final class Device extends Model
     /**
      * The volume closest to full, which is the one worth a headline.
      *
-     * @return array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}|null
+     * @return array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}|null
      */
     public function fullestDisk(): ?array
     {
@@ -428,7 +458,7 @@ final class Device extends Model
     }
 
     /**
-     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>
+     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>
      */
     public function diskUsage(): Collection
     {
@@ -453,6 +483,12 @@ final class Device extends Model
                     $usedPercent >= config('devices.disk.critical_percent') => 'bg-red-500',
                     $usedPercent >= config('devices.disk.warning_percent') => 'bg-amber-500',
                     default => 'bg-blue-500',
+                },
+                'usedRoundedForHumans' => $usedPercent === null ? null : number_format($usedPercent).'%',
+                'usedTextColor' => match (true) {
+                    $usedPercent >= config('devices.disk.critical_percent') => 'text-red-600 dark:text-red-400',
+                    $usedPercent >= config('devices.disk.warning_percent') => 'text-amber-600 dark:text-amber-400',
+                    default => 'text-zinc-600 dark:text-zinc-300',
                 },
                 'inodePercent' => $inodePercent,
                 'inodeForHumans' => $inodePercent === null ? null : number_format($inodePercent, 1).'% of inodes used',

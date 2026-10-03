@@ -16,10 +16,10 @@ use Illuminate\Support\Collection;
 final class DeviceAttention
 {
     /**
-     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $disks  Disks at or over the warning threshold, fullest first
+     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $disks  Disks at or over the warning threshold, fullest first
      * @param  Collection<int, Alert>  $alerts  Open alerts, newest first
      * @param  Collection<int, string>  $failedUnits  systemd units in a failed state
-     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $inodeDisks  Disks with inode usage at or over the inode warning threshold, fullest first
+     * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $inodeDisks  Disks with inode usage at or over the inode warning threshold, fullest first
      */
     public function __construct(
         public readonly Device $device,

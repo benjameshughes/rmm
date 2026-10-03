@@ -125,7 +125,7 @@ it('combines the status filter with search, group and tag filters and clears the
         ->assertSee('OFFICE-GONE');
 });
 
-it('shows each row with its link, OS and IP, status pill, usage bars, agent and group and tags', function (): void {
+it('shows each row with its link, OS and IP, status pill, CPU, RAM and disk figures, agent, last seen and group and tags', function (): void {
     $group = DeviceGroup::factory()->create(['name' => 'Tills']);
     $tag = Tag::factory()->create(['name' => 'front-desk']);
     $device = Device::factory()->active()->create([
@@ -145,10 +145,11 @@ it('shows each row with its link, OS and IP, status pill, usage bars, agent and 
         ->assertSee('Windows 11 Pro')
         ->assertSee('10.0.30.21')
         ->assertSeeHtml('data-device-status="Offline"')
-        ->assertSee('Seen 2 minutes ago')
-        ->assertSeeInOrder(['CPU', '93%', 'RAM', '41%', 'C:', '92.0%'])
-        ->assertSeeHtml('bg-red-500')
-        ->assertSee('Agent 0.6.5')
+        ->assertSee('2 minutes ago')
+        ->assertSeeInOrder(['CPU', 'RAM', 'Disk', '93%', '41%', '92%'])
+        ->assertSeeHtml('title="C: · 8.0 GB free of 100.0 GB"')
+        ->assertSeeHtml('text-red-600')
+        ->assertSeeHtml('>0.6.5<')
         ->assertSee('Tills')
         ->assertSee('front-desk');
 });

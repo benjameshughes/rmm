@@ -51,7 +51,7 @@ it('announces device updates on the fleet and device channels', function (): voi
 
     Event::assertDispatchedTimes(DeviceUpdated::class, 1);
     Event::assertDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => channelNames($event) === ['private-devices', "private-devices.{$device->id}"]
-        && $event->broadcastWith() === ['deviceId' => $device->id, 'status' => DeviceStatus::Active->value]);
+        && $event->broadcastWith() === ['deviceId' => $device->id, 'status' => DeviceStatus::Active->value, 'isStateChange' => true]);
 });
 
 it('announces a device update once per heartbeat', function (): void {
