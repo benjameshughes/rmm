@@ -285,7 +285,7 @@ final class Device extends Model
 
     protected function isOnline(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->last_seen !== null && $this->last_seen->greaterThan(now()->subMinutes(5)));
+        return Attribute::get(fn (): bool => $this->last_seen !== null && $this->last_seen->greaterThan(now()->subMinutes(config('devices.online.threshold_minutes'))));
     }
 
     protected function isWakeable(): Attribute

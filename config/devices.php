@@ -20,6 +20,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Online Status
+    |--------------------------------------------------------------------------
+    |
+    | A device is online while it has reported within threshold_minutes.
+    | devices:check-offline runs every minute and announces devices that went
+    | quiet within the last announce_window_seconds past the threshold, so
+    | open pages flip to Offline over Reverb without a refresh.
+    |
+    */
+
+    'online' => [
+        'threshold_minutes' => 5,
+        'announce_window_seconds' => 120,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Disk Usage Thresholds
     |--------------------------------------------------------------------------
     |
