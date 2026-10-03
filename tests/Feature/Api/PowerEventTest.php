@@ -5,10 +5,12 @@ declare(strict_types=1);
 use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
 use App\Enums\DeviceStatus;
+use App\Events\CommandUpdated;
 use App\Events\DeviceUpdated;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\DeviceCommand;
+use App\Models\Script;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
@@ -251,4 +253,81 @@ describe('clearing on check-in', function (): void {
 
         expect($device->refresh()->power_state)->toBeNull();
     });
+});
+
+describe('interrupted commands', function (): void {
+    beforeEach(function (): void {
+        $this->device = Device::factory()->active()->withApiKey('power-key')->create();
+        $this->commandIn = fn (CommandStatus $status, ?Device $device = null): DeviceCommand => DeviceCommand::factory()->create([
+            'device_id' => ($device ?? $this->device)->id,
+            'status' => $status,
+        ]);
+    });
+
+    it('fails the commands a shutdown cut off and broadcasts each', function (): void {
+        $sent = ($this->commandIn)(CommandStatus::Sent);
+        $running = ($this->commandIn)(CommandStatus::Running);
+        Event::fake([CommandUpdated::class]);
+
+        postPowerEvent('powering_off', 'shutdown')->assertSuccessful();
+
+        collect([$sent, $running])->each(fn (DeviceCommand $command) => expect($command->fresh())
+            ->status->toBe(CommandStatus::Failed)
+            ->error_message->toBe('Interrupted: the device shut down or restarted while this was running')
+            ->completed_at->not->toBeNull());
+
+        Event::assertDispatchedTimes(CommandUpdated::class, 2);
+        Event::assertDispatched(CommandUpdated::class, fn (CommandUpdated $event): bool => $event->commandId === $running->id
+            && $event->status === CommandStatus::Failed->value);
+    });
+
+    it('completes a built-in restart or shutdown that caused the shutdown', function (string $slug): void {
+        $command = DeviceCommand::factory()->create([
+            'device_id' => $this->device->id,
+            'script_id' => Script::factory()->system()->create(['slug' => $slug])->id,
+            'status' => CommandStatus::Running,
+        ]);
+
+        postPowerEvent('powering_off', 'shutdown')->assertSuccessful();
+
+        expect($command->fresh())
+            ->status->toBe(CommandStatus::Completed)
+            ->exit_code->toBe(0)
+            ->output->toBe('The device is shutting down or restarting as requested.');
+    })->with(['restart', 'shutdown']);
+
+    it('still fails a user script that happens to share a restart slug', function (): void {
+        $command = DeviceCommand::factory()->create([
+            'device_id' => $this->device->id,
+            'script_id' => Script::factory()->create(['slug' => 'restart', 'is_system' => false])->id,
+            'status' => CommandStatus::Running,
+        ]);
+
+        postPowerEvent('powering_off', 'shutdown')->assertSuccessful();
+
+        expect($command->fresh()->status)->toBe(CommandStatus::Failed);
+    });
+
+    it('leaves queued, finished and other devices\' commands alone on shutdown', function (): void {
+        $pending = ($this->commandIn)(CommandStatus::Pending);
+        $completed = ($this->commandIn)(CommandStatus::Completed);
+        $elsewhere = ($this->commandIn)(CommandStatus::Running, Device::factory()->active()->create());
+
+        postPowerEvent('powering_off', 'shutdown')->assertSuccessful();
+
+        expect($pending->fresh()->status)->toBe(CommandStatus::Pending)
+            ->and($completed->fresh()->status)->toBe(CommandStatus::Completed)
+            ->and($elsewhere->fresh()->status)->toBe(CommandStatus::Running);
+    });
+
+    it('lets commands carry on through sleep', function (string $reason): void {
+        $sent = ($this->commandIn)(CommandStatus::Sent);
+        $running = ($this->commandIn)(CommandStatus::Running);
+
+        postPowerEvent('powering_off', $reason)->assertSuccessful();
+
+        expect($sent->fresh()->status)->toBe(CommandStatus::Sent)
+            ->and($running->fresh()->status)->toBe(CommandStatus::Running)
+            ->and($running->fresh()->error_message)->toBeNull();
+    })->with(['sleep', 'standby']);
 });

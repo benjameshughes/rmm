@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Commands;
 
+use App\Livewire\Concerns\CancelsCommands;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use Illuminate\Contracts\View\View;
@@ -13,6 +14,8 @@ use Livewire\Component;
 
 final class Detail extends Component
 {
+    use CancelsCommands;
+
     public ?int $commandId = null;
 
     public bool $showModal = false;

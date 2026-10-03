@@ -11,6 +11,7 @@ use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\ScriptType;
+use App\Livewire\Concerns\CancelsCommands;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
@@ -29,6 +30,7 @@ use Livewire\WithPagination;
 #[Layout('components.layouts.app')]
 final class Show extends Component
 {
+    use CancelsCommands;
     use EntersScriptParameterValues;
     use WithPagination;
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Audit;
 
 use App\Enums\AuditAction;
+use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
 use App\Models\Alert;
 use App\Models\AlertRule;
@@ -70,7 +71,11 @@ final class RecordModelChange
                 'updated' => $this->deviceUpdateAction($model),
                 'deleted' => AuditAction::DeviceDeleted,
             },
-            $model instanceof DeviceCommand => $event === 'created' ? AuditAction::CommandQueued : null,
+            $model instanceof DeviceCommand => match (true) {
+                $event === 'created' => AuditAction::CommandQueued,
+                $event === 'updated' && $model->wasChanged('status') && $model->status === CommandStatus::Cancelled => AuditAction::CommandCancelled,
+                default => null,
+            },
             $model instanceof AlertRule => match ($event) {
                 'created' => AuditAction::AlertRuleCreated,
                 'updated' => AuditAction::AlertRuleUpdated,

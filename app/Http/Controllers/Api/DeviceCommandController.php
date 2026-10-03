@@ -24,11 +24,9 @@ final class DeviceCommandController
             ->orderBy('queued_at', 'asc')
             ->first();
 
-        if ($command === null) {
+        if ($command === null || ! $command->markAsSent()) {
             return response()->json(['command' => null]);
         }
-
-        $command->markAsSent();
 
         Log::info('api.command.sent', [
             'device_id' => $device->id,

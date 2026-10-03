@@ -7,6 +7,7 @@ namespace App\Livewire\Scripts;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceStatus;
+use App\Livewire\Concerns\CancelsCommands;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\Script;
@@ -18,6 +19,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 final class Show extends Component
 {
+    use CancelsCommands;
     use EntersScriptParameterValues;
 
     public Script $script;

@@ -60,6 +60,7 @@ return [
 
     'power' => [
         'powering_on_hold_seconds' => 15,
+        'shutdown_script_slugs' => ['restart', 'shutdown'],
         'powering_off_max_hours' => 72,
         'powering_off_check_in_grace_seconds' => 10,
     ],

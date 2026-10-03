@@ -126,9 +126,14 @@
                                 </flux:button>
                             </flux:table.cell>
                             <flux:table.cell>
-                                <flux:badge size="sm" :color="$command->status->color()">
-                                    {{ $command->status->label() }}
-                                </flux:badge>
+                                <div class="flex items-center gap-2">
+                                    <flux:badge size="sm" :color="$command->status->color()">
+                                        {{ $command->status->label() }}
+                                    </flux:badge>
+                                    @can('cancel', $command)
+                                        <flux:button size="sm" variant="ghost" icon="x-circle" wire:click.stop="cancelCommand({{ $command->id }})" wire:confirm="Cancel this command before it runs?">Cancel</flux:button>
+                                    @endcan
+                                </div>
                             </flux:table.cell>
                             <flux:table.cell>
                                 <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $command->queued_at->diffForHumans() }}</flux:text>

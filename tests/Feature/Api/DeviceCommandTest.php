@@ -7,6 +7,7 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 
 pest()->use(RefreshDatabase::class);
 
@@ -311,4 +312,33 @@ it('rejects a non-boolean timed_out flag', function (): void {
         ->assertJsonValidationErrors('timed_out');
 
     expect($command->refresh()->status)->toBe(CommandStatus::Running);
+});
+
+it('hands out nothing when the command is cancelled between the read and the write', function (): void {
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
+    $command = DeviceCommand::factory()->pending()->create(['device_id' => $device->id]);
+
+    Event::listen('eloquent.retrieved: '.DeviceCommand::class, function (DeviceCommand $retrieved) use ($command): void {
+        if ($retrieved->is($command)) {
+            DeviceCommand::query()->whereKey($command->id)->update(['status' => CommandStatus::Cancelled]);
+        }
+    });
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])
+        ->getJson('/api/commands/pending')
+        ->assertSuccessful()
+        ->assertJson(['command' => null]);
+
+    expect($command->fresh())
+        ->status->toBe(CommandStatus::Cancelled)
+        ->sent_at->toBeNull();
+});
+
+it('only marks a still pending command as sent', function (): void {
+    $stale = DeviceCommand::factory()->pending()->create();
+    DeviceCommand::query()->findOrFail($stale->id)->cancel();
+
+    expect($stale->markAsSent())->toBeFalse()
+        ->and($stale->status)->toBe(CommandStatus::Cancelled)
+        ->and($stale->fresh()->status)->toBe(CommandStatus::Cancelled);
 });

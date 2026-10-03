@@ -58,7 +58,7 @@ return [
         Script::class => ['name', 'description', 'category', 'platform', 'script_type', 'script_content', 'is_system', 'timeout_seconds', 'requires_admin', 'parameters'],
         ScheduledTask::class => ['name', 'action', 'script_id', 'cron_expression', 'target_type', 'target_id', 'is_active', 'parameters'],
         Device::class => ['hostname', 'status', 'device_group_id', 'api_key_hash'],
-        DeviceCommand::class => ['device_id', 'script_id', 'scheduled_task_id', 'script_type', 'timeout_seconds', 'parameters'],
+        DeviceCommand::class => ['device_id', 'script_id', 'scheduled_task_id', 'script_type', 'timeout_seconds', 'parameters', 'status'],
         AlertRule::class => ['name', 'metric', 'operator', 'threshold', 'duration_minutes', 'severity', 'is_active'],
         Alert::class => ['status'],
         User::class => ['name', 'email', 'password'],

@@ -32,6 +32,7 @@ enum AuditAction: string
     case DeviceDeleted = 'device.deleted';
     case DeviceWakeRequested = 'device.wake_requested';
     case CommandQueued = 'command.queued';
+    case CommandCancelled = 'command.cancelled';
     case AlertRuleCreated = 'alert_rule.created';
     case AlertRuleUpdated = 'alert_rule.updated';
     case AlertRuleDeleted = 'alert_rule.deleted';
@@ -67,6 +68,7 @@ enum AuditAction: string
             self::DeviceDeleted => 'Device deleted',
             self::DeviceWakeRequested => 'Wake requested',
             self::CommandQueued => 'Command queued',
+            self::CommandCancelled => 'Command cancelled',
             self::AlertRuleCreated => 'Alert rule created',
             self::AlertRuleUpdated => 'Alert rule updated',
             self::AlertRuleDeleted => 'Alert rule deleted',

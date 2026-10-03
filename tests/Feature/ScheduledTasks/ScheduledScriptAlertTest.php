@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Actions\Device\RecordDevicePowerEvent;
 use App\Actions\Schedule\RunScheduledTask;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Enums\AlertMetric;
 use App\Enums\AlertStatus;
+use App\Enums\DevicePowerState;
+use App\Enums\PowerEventReason;
 use App\Livewire\AlertRules\Index as AlertRulesIndex;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Models\Alert;
@@ -139,6 +142,14 @@ it('raises nothing when a scheduled script succeeds', function (): void {
     queueScheduledCommand($this->task)->markAsCompleted('Up to date', 0);
 
     expect(scheduledScriptAlerts())->toBeEmpty();
+});
+
+it('raises an alert for a scheduled script a shutdown interrupted', function (): void {
+    queueScheduledCommand($this->task)->markAsRunning();
+
+    app(RecordDevicePowerEvent::class)($this->device, DevicePowerState::PoweringOff, PowerEventReason::Shutdown);
+
+    expect(scheduledScriptAlerts()->sole()->message)->toBe('PC-1: Patch status: Interrupted: the device shut down or restarted while this was running');
 });
 
 it('ignores cancelled scheduled commands', function (): void {

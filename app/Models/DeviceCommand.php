@@ -163,11 +163,15 @@ final class DeviceCommand extends Model
         return $this->status === CommandStatus::Completed && $this->exit_code === 0;
     }
 
-    public function markAsSent(): void
+    /**
+     * Hands the command to the agent only if it is still pending, so a cancel that
+     * lands between the agent's read and this write is never undone.
+     */
+    public function markAsSent(): bool
     {
-        $this->update([
+        return $this->transitionFromPending([
             'status' => CommandStatus::Sent,
-            'sent_at' => now(),
+            'sent_at' => $this->freshTimestamp(),
         ]);
     }
 
@@ -222,14 +226,43 @@ final class DeviceCommand extends Model
         ]);
     }
 
-    public function cancel(): void
+    /**
+     * Cancels only while the agent has not fetched it, so a fetch landing between
+     * page render and click wins and is never overwritten.
+     */
+    public function cancel(): bool
     {
-        if (! $this->isCompleted()) {
-            $this->update([
-                'status' => CommandStatus::Cancelled,
-                'completed_at' => now(),
-            ]);
+        return $this->transitionFromPending([
+            'status' => CommandStatus::Cancelled,
+            'completed_at' => $this->freshTimestamp(),
+        ]);
+    }
+
+    /**
+     * Fetching and cancelling race each other, so the pending check rides in the
+     * UPDATE itself and only one of them wins. A query update skips model events,
+     * so they are fired here by hand: the CommandUpdated broadcast and the audit
+     * row hang off them. The loser is refreshed to whatever the winner wrote.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function transitionFromPending(array $attributes): bool
+    {
+        $attributes = [...$attributes, 'updated_at' => $this->freshTimestamp()];
+
+        $transitioned = self::query()->whereKey($this->getKey())->pending()->update($attributes) === 1;
+
+        if (! $transitioned) {
+            $this->refresh();
+
+            return false;
         }
+
+        $this->forceFill($attributes)->syncChanges();
+        $this->fireModelEvent('updated', false);
+        $this->syncOriginal();
+
+        return true;
     }
 
     public function scopePending($query)

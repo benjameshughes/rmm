@@ -6,6 +6,9 @@
                     <flux:heading size="lg">{{ $command->displayName() }}</flux:heading>
                     <flux:badge size="sm" :color="$command->status->color()">{{ $command->status->label() }}</flux:badge>
                     <flux:badge size="sm" color="zinc">{{ $command->script_type }}</flux:badge>
+                    @can('cancel', $command)
+                        <flux:button size="sm" variant="ghost" icon="x-circle" wire:click="cancelCommand({{ $command->id }})" wire:confirm="Cancel this command before it runs?">Cancel</flux:button>
+                    @endcan
                 </div>
 
                 <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm md:grid-cols-3">
