@@ -185,6 +185,10 @@ return [
     | bucket_seconds, so a week is ~170 points rather than ~40,000 reports.
     | recent_commands is how many commands the Overview tab lists.
     |
+    | The agent reads its metrics from Netdata, which the installer leaves
+    | out to keep enrolment quick: the install script is queued on every
+    | Windows device when it is approved.
+    |
     */
 
     'metrics' => [
@@ -192,6 +196,7 @@ return [
         'top_apps' => 10,
         'app_history_hours' => 24,
         'recent_commands' => 5,
+        'netdata_install_script_slug' => 'install-netdata',
         'chart_ranges' => [
             '1h' => ['minutes' => 60, 'bucket_seconds' => 60],
             '24h' => ['minutes' => 1440, 'bucket_seconds' => 600],

@@ -1,7 +1,8 @@
 # ===================================================================
 #  BenJH RMM Agent Installer
-#  - Installs Netdata (metrics collector)
 #  - Installs the BenJH RMM agent as a Windows service
+#  - Netdata (metrics collector) is queued by the server once the device
+#    is approved, so enrolment is not held up by a 100MB download
 #  Served by {BASE_URL}/agent/install.ps1
 # ===================================================================
 
@@ -11,7 +12,6 @@ $ServerUrl    = "{BASE_URL}"
 $GitHubRepo   = "benjameshughes/rmm"
 $ServiceName  = "BenJHRMM"
 $ProductName  = "BenJH RMM"
-$NetdataVersion = "v2.12.0"
 $LogFile      = Join-Path $env:TEMP "benjh-rmm-install.log"
 
 function Enable-Tls12 {
@@ -82,47 +82,7 @@ Log "Existing agent cleanup complete."
 
 
 # ===================================================================
-# STEP 2 — REINSTALL NETDATA
-# ===================================================================
-
-$netdataService = Get-Service -Name "netdata" -ErrorAction SilentlyContinue
-if ($netdataService) {
-    Log "Stopping Netdata..."
-    Stop-Service -Name "netdata" -Force -ErrorAction SilentlyContinue
-}
-
-Get-InstalledMsi -DisplayNamePattern "Netdata*" | ForEach-Object { Uninstall-Msi $_ }
-
-@("$env:ProgramFiles\Netdata", "$env:ProgramData\Netdata") | Where-Object { Test-Path $_ } | ForEach-Object {
-    Log "Removing $_"
-    Remove-Item -Path $_ -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-if (Get-Service -Name "netdata" -ErrorAction SilentlyContinue) {
-    sc.exe delete netdata | Out-Null
-}
-
-# One pinned Netdata version for the whole fleet, so every PC reports the same
-# metric shapes. A failed download stops the install: the agent is useless
-# without Netdata.
-Log "Installing Netdata $NetdataVersion..."
-$netdataMsi = Join-Path $env:TEMP "netdata.msi"
-Invoke-WebRequest -Uri "https://github.com/netdata/netdata/releases/download/$NetdataVersion/netdata-x64.msi" -OutFile $netdataMsi -UseBasicParsing
-Start-Process "msiexec.exe" -ArgumentList "/i `"$netdataMsi`" /qn /norestart" -Wait
-Remove-Item $netdataMsi -Force -ErrorAction SilentlyContinue
-Set-Service -Name "netdata" -StartupType Automatic -ErrorAction SilentlyContinue
-Start-Service -Name "netdata" -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 3
-
-if (Test-NetConnection -ComputerName 127.0.0.1 -Port 19999 -InformationLevel Quiet -WarningAction SilentlyContinue) {
-    Log "Netdata installed and listening."
-} else {
-    Log "WARNING: Netdata is installed but not listening yet. The agent will retry."
-}
-
-
-# ===================================================================
-# STEP 3 — INSTALL THE AGENT
+# STEP 2 — INSTALL THE AGENT
 # ===================================================================
 
 Log "Looking up the latest agent release..."
@@ -177,6 +137,7 @@ Log "===== BenJH RMM agent install complete ====="
 Write-Host ""
 Write-Host "Installation finished." -ForegroundColor Green
 Write-Host "Approve this device at $ServerUrl/devices/pending" -ForegroundColor Yellow
+Write-Host "Netdata installs itself once approved; metrics appear a few minutes later."
 Write-Host ""
 Write-Host "Useful commands (from an elevated prompt, new window):" -ForegroundColor Cyan
 Write-Host "  rmm status      - Show agent status"

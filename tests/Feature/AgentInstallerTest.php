@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 pest()->use(RefreshDatabase::class);
 
-it('serves the agent installer script with correct base url', function (): void {
+it('serves the agent installer script with correct base url and leaves Netdata to approval', function (): void {
     $response = $this->get('/agent/install.ps1');
 
     $response->assertSuccessful()
@@ -17,7 +17,7 @@ it('serves the agent installer script with correct base url', function (): void 
         ->assertSee('benjameshughes/rmm')
         ->assertSee('$ServiceName  = "BenJHRMM"', false)
         ->assertSee('& $agentExe --url $ServerUrl', false)
-        ->assertSee('netdata-x64.msi');
+        ->assertDontSee('netdata-x64.msi');
 });
 
 it('never queries Win32_Product, adds antivirus exclusions or matches other RMM products', function (): void {

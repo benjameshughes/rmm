@@ -74,6 +74,15 @@ return [
             'timeout_seconds' => 120,
             'requires_admin' => true,
         ],
+        'install-netdata' => [
+            'name' => 'Install Netdata',
+            'description' => 'Install the pinned Netdata release the agent reads its metrics from. Skips a PC that already has it running',
+            'category' => 'services',
+            'platform' => 'windows',
+            'file' => 'windows/install-netdata.ps1',
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
         'log-off' => [
             'name' => 'Log Off',
             'description' => 'Log off every interactive user session',
