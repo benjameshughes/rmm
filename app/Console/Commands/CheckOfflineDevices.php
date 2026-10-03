@@ -6,7 +6,7 @@ namespace App\Console\Commands;
 
 use App\Actions\Alert\EvaluateAlertRules;
 use App\Actions\Device\AnnounceDevicesGoneOffline;
-use App\Actions\Device\SettleExpiredPowerOn;
+use App\Actions\Device\SettleExpiredPowerStates;
 use App\Enums\AlertMetric;
 use App\Enums\DeviceStatus;
 use App\Models\AlertRule;
@@ -20,9 +20,9 @@ final class CheckOfflineDevices extends Command
 
     protected $description = 'Check for devices that have gone offline and evaluate alert rules';
 
-    public function handle(EvaluateAlertRules $evaluator, AnnounceDevicesGoneOffline $announceDevicesGoneOffline, SettleExpiredPowerOn $settleExpiredPowerOn): int
+    public function handle(EvaluateAlertRules $evaluator, AnnounceDevicesGoneOffline $announceDevicesGoneOffline, SettleExpiredPowerStates $settleExpiredPowerStates): int
     {
-        $settleExpiredPowerOn();
+        $settleExpiredPowerStates();
         $announceDevicesGoneOffline();
 
         $offlineRules = AlertRule::query()

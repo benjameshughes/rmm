@@ -167,3 +167,87 @@ it('settles an expired Powering on every minute and broadcasts it', function ():
         ->and($asleep->fresh()->power_state)->toBe(DevicePowerState::PoweringOff);
     Event::assertDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => $event->deviceId === $expired->id);
 });
+
+describe('a powering off notice that never ends in a wake', function (): void {
+    it('lapses after the max window and falls back to Offline', function (): void {
+        $device = Device::factory()->active()->create([
+            'last_seen' => now()->subHours(config('devices.power.powering_off_max_hours') + 1),
+            'power_state' => DevicePowerState::PoweringOff,
+            'power_state_changed_at' => now()->subHours(config('devices.power.powering_off_max_hours') + 1),
+        ]);
+
+        expect($device->isPoweringOff)->toBeFalse()
+            ->and($device->statusLabel())->toBe('Offline')
+            ->and($device->statusColor())->toBe('red');
+    });
+
+    it('holds for a whole weekend', function (): void {
+        $device = Device::factory()->active()->create([
+            'last_seen' => now()->subHours(60),
+            'power_state' => DevicePowerState::PoweringOff,
+            'power_state_changed_at' => now()->subHours(60),
+        ]);
+
+        expect($device->isPoweringOff)->toBeTrue()
+            ->and($device->statusLabel())->toStartWith('Powering off since');
+    });
+
+    it('is settled by the every-minute job and broadcast', function (): void {
+        $lapsed = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->subHours(config('devices.power.powering_off_max_hours'))->subMinute()]);
+        $asleep = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->subHours(config('devices.power.powering_off_max_hours'))->addMinute()]);
+        Event::fake([DeviceUpdated::class]);
+
+        $this->artisan('devices:check-offline')->assertSuccessful();
+
+        expect($lapsed->fresh()->power_state)->toBeNull()
+            ->and($lapsed->fresh()->power_state_changed_at)->toBeNull()
+            ->and($asleep->fresh()->power_state)->toBe(DevicePowerState::PoweringOff);
+        Event::assertDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => $event->deviceId === $lapsed->id);
+        Event::assertNotDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => $event->deviceId === $asleep->id);
+    });
+
+    it('raises an offline alert again once lapsed', function (): void {
+        AlertRule::factory()->offline()->create(['operator' => AlertOperator::GreaterThan, 'threshold' => 10]);
+        Device::factory()->active()->create([
+            'last_seen' => now()->subHours(config('devices.power.powering_off_max_hours') + 1),
+            'power_state' => DevicePowerState::PoweringOff,
+            'power_state_changed_at' => now()->subHours(config('devices.power.powering_off_max_hours') + 1),
+        ]);
+
+        $this->artisan('devices:check-offline')->assertSuccessful();
+
+        expect(Alert::count())->toBe(1);
+    });
+
+    it('takes the window from config', function (): void {
+        config(['devices.power.powering_off_max_hours' => 1]);
+        $device = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->subHours(2)]);
+
+        expect($device->isPoweringOff)->toBeFalse();
+    });
+});
+
+it('agrees between the model and the query on which devices are powering off', function (array $attributes, bool $isPoweringOff): void {
+    $device = Device::factory()->active()->create($attributes);
+
+    expect($device->isPoweringOff)->toBe($isPoweringOff)
+        ->and(Device::query()->notPoweringOff()->whereKey($device->id)->exists())->toBe(! $isPoweringOff)
+        ->and(Device::query()->withLapsedPowerState()->whereKey($device->id)->exists())->toBe($attributes['power_state'] !== null && ! $isPoweringOff);
+})->with([
+    'no power state' => [['power_state' => null, 'power_state_changed_at' => null], false],
+    'just powered off' => [['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()], true],
+    'powered off past the window' => [['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->subDays(4)], false],
+    'powered off with no time' => [['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => null], false],
+]);
+
+it('agrees between the model and the query on which devices are holding powering on', function (array $attributes, bool $isHolding): void {
+    $device = Device::factory()->active()->create(['last_seen' => now(), ...$attributes]);
+
+    expect($device->hasPowerStateInForce(DevicePowerState::PoweringOn))->toBe($isHolding)
+        ->and($device->isPoweringOn)->toBe($isHolding)
+        ->and(Device::query()->withLapsedPowerState()->whereKey($device->id)->exists())->toBe(! $isHolding);
+})->with([
+    'within the hold' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], true],
+    'past the hold' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subMinute()], false],
+    'powered on with no time' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => null], false],
+]);

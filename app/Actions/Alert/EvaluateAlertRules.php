@@ -61,7 +61,8 @@ final class EvaluateAlertRules
     }
 
     /**
-     * A device that announced it was sleeping or shutting down is off on purpose, so it is not evaluated at all.
+     * A device that announced it was sleeping or shutting down is off on purpose, so it is not evaluated
+     * at all until that notice lapses.
      */
     private function getOfflineMinutes(Device $device): ?float
     {

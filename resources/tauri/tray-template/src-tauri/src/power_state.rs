@@ -8,35 +8,36 @@
 //! Only classic sleep (PBT_APMSUSPEND) pauses the agent. Modern Standby PCs
 //! never send it and are treated as awake throughout: Wake-on-LAN wakes them
 //! "dark" (display off) and commands must still run then.
+//!
+//! Windows does not wait for services on suspend, so the sleep notice goes
+//! out at once; a running command simply freezes with the machine and carries
+//! on after resume.
 
 // Only Windows feeds the machine power events.
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use serde::Serialize;
+use std::time::Duration;
+
+/// Consecutive watchdog ticks seen while "asleep" that prove the resume
+/// event was missed: a sleeping machine runs no code, so the agent cannot
+/// keep ticking.
+pub const MISSED_RESUME_TICKS: u32 = 2;
 
 /// Where the agent stands with the machine's power.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerState {
     /// Normal operation.
     Awake,
-    /// Sleep requested while a command is still running: take no new
-    /// commands, tell the server once the command finishes.
-    GoingToSleep,
-    /// Server told; no traffic until the machine wakes.
+    /// Server told; no traffic and no new commands until the machine wakes.
     Asleep,
     /// The machine is shutting down; the agent is about to stop.
     ShuttingDown,
 }
 
 impl PowerState {
-    /// Heartbeats and metrics keep flowing while a command drains, so the
-    /// device does not look offline mid-command.
-    pub fn allows_reporting(self) -> bool {
-        matches!(self, PowerState::Awake | PowerState::GoingToSleep)
-    }
-
-    /// New commands are only picked up when fully awake.
-    pub fn allows_new_commands(self) -> bool {
+    /// Heartbeats, metrics and command polling only run while awake.
+    pub fn is_awake(self) -> bool {
         self == PowerState::Awake
     }
 }
@@ -97,11 +98,19 @@ impl PowerNotice {
     }
 }
 
+/// Whether a starting agent should tell the server the machine booted: only
+/// when the machine itself started recently, not on every service restart
+/// (self-update, manual restart) of an always-on PC.
+pub fn is_fresh_boot(uptime: Duration, max_uptime: Duration) -> bool {
+    uptime < max_uptime
+}
+
 /// The power state machine. One per agent process.
 #[derive(Debug, Clone)]
 pub struct PowerMachine {
     state: PowerState,
     command_running: bool,
+    asleep_ticks: u32,
 }
 
 impl Default for PowerMachine {
@@ -115,6 +124,7 @@ impl PowerMachine {
         Self {
             state: PowerState::Awake,
             command_running: false,
+            asleep_ticks: 0,
         }
     }
 
@@ -124,25 +134,44 @@ impl PowerMachine {
 
     /// Apply an OS power event. Returns the notice to send, if any.
     pub fn on_signal(&mut self, signal: PowerSignal) -> Option<PowerNotice> {
-        if self.state == PowerState::ShuttingDown {
-            return None;
-        }
-
-        match signal {
-            PowerSignal::Shutdown => {
+        match (self.state, signal) {
+            (PowerState::ShuttingDown, _) => None,
+            (_, PowerSignal::Shutdown) => {
                 self.state = PowerState::ShuttingDown;
                 Some(PowerNotice::powering_off(PowerReason::Shutdown))
             }
-            PowerSignal::Suspend => self.go_to_sleep(),
-            PowerSignal::Resume => self.wake(),
+            (PowerState::Awake, PowerSignal::Suspend) => {
+                self.state = PowerState::Asleep;
+                self.asleep_ticks = 0;
+                Some(PowerNotice::powering_off(PowerReason::Sleep))
+            }
+            (PowerState::Asleep, PowerSignal::Resume) => self.wake(),
+            (PowerState::Asleep, PowerSignal::Suspend)
+            | (PowerState::Awake, PowerSignal::Resume) => None,
         }
     }
 
-    /// Claim the right to fetch and run a command. False when not fully
-    /// awake or a command is already running; the caller must not start one
-    /// then.
+    /// The asleep watchdog ticked. While asleep, `MISSED_RESUME_TICKS` ticks
+    /// in a row mean the agent is plainly running, so the resume event was
+    /// missed: wake as if it had arrived.
+    pub fn on_watchdog_tick(&mut self) -> Option<PowerNotice> {
+        if self.state != PowerState::Asleep {
+            self.asleep_ticks = 0;
+            return None;
+        }
+
+        self.asleep_ticks += 1;
+        if self.asleep_ticks < MISSED_RESUME_TICKS {
+            return None;
+        }
+
+        self.wake()
+    }
+
+    /// Claim the right to fetch and run a command. False when not awake or a
+    /// command is already running; the caller must not start one then.
     pub fn try_begin_command(&mut self) -> bool {
-        if !self.state.allows_new_commands() || self.command_running {
+        if !self.state.is_awake() || self.command_running {
             return false;
         }
 
@@ -150,48 +179,15 @@ impl PowerMachine {
         true
     }
 
-    /// A command finished. If sleep was waiting on it, the machine is now
-    /// asleep and the server should be told.
-    pub fn end_command(&mut self) -> Option<PowerNotice> {
+    /// A command finished (possibly after the machine slept and woke).
+    pub fn end_command(&mut self) {
         self.command_running = false;
-
-        match self.state {
-            PowerState::GoingToSleep => {
-                self.state = PowerState::Asleep;
-                Some(PowerNotice::powering_off(PowerReason::Sleep))
-            }
-            _ => None,
-        }
-    }
-
-    fn go_to_sleep(&mut self) -> Option<PowerNotice> {
-        if self.state != PowerState::Awake {
-            return None;
-        }
-
-        if self.command_running {
-            self.state = PowerState::GoingToSleep;
-            return None;
-        }
-
-        self.state = PowerState::Asleep;
-        Some(PowerNotice::powering_off(PowerReason::Sleep))
     }
 
     fn wake(&mut self) -> Option<PowerNotice> {
-        match self.state {
-            PowerState::Asleep => {
-                self.state = PowerState::Awake;
-                Some(PowerNotice::powering_on(PowerReason::Resume))
-            }
-            // The server was never told we were going, so there is nothing
-            // to take back.
-            PowerState::GoingToSleep => {
-                self.state = PowerState::Awake;
-                None
-            }
-            PowerState::Awake | PowerState::ShuttingDown => None,
-        }
+        self.state = PowerState::Awake;
+        self.asleep_ticks = 0;
+        Some(PowerNotice::powering_on(PowerReason::Resume))
     }
 }
 
@@ -199,15 +195,21 @@ impl PowerMachine {
 mod tests {
     use super::*;
 
-    #[test]
-    fn starts_awake() {
-        assert_eq!(PowerMachine::new().state(), PowerState::Awake);
-        assert!(PowerState::Awake.allows_reporting());
-        assert!(PowerState::Awake.allows_new_commands());
+    fn asleep() -> PowerMachine {
+        let mut machine = PowerMachine::new();
+        machine.on_signal(PowerSignal::Suspend);
+        machine
     }
 
     #[test]
-    fn suspend_with_nothing_running_sleeps_at_once() {
+    fn starts_awake() {
+        let machine = PowerMachine::new();
+        assert_eq!(machine.state(), PowerState::Awake);
+        assert!(machine.state().is_awake());
+    }
+
+    #[test]
+    fn suspend_announces_at_once_and_stops_new_commands() {
         let mut machine = PowerMachine::new();
 
         assert_eq!(
@@ -215,14 +217,46 @@ mod tests {
             Some(PowerNotice::powering_off(PowerReason::Sleep))
         );
         assert_eq!(machine.state(), PowerState::Asleep);
-        assert!(!machine.state().allows_reporting());
+        assert!(!machine.state().is_awake());
         assert!(!machine.try_begin_command());
     }
 
     #[test]
-    fn resume_wakes_and_announces() {
+    fn suspend_mid_command_still_announces_at_once() {
         let mut machine = PowerMachine::new();
+        assert!(machine.try_begin_command());
+
+        assert_eq!(
+            machine.on_signal(PowerSignal::Suspend),
+            Some(PowerNotice::powering_off(PowerReason::Sleep))
+        );
+        assert_eq!(machine.state(), PowerState::Asleep);
+
+        // The frozen command finishing later sends nothing more.
+        machine.end_command();
+        assert_eq!(machine.state(), PowerState::Asleep);
+        assert!(!machine.try_begin_command());
+    }
+
+    #[test]
+    fn command_running_across_sleep_finishes_after_resume() {
+        let mut machine = PowerMachine::new();
+        assert!(machine.try_begin_command());
         machine.on_signal(PowerSignal::Suspend);
+
+        assert_eq!(
+            machine.on_signal(PowerSignal::Resume),
+            Some(PowerNotice::powering_on(PowerReason::Resume))
+        );
+        // Still the same command; no second one until it ends.
+        assert!(!machine.try_begin_command());
+        machine.end_command();
+        assert!(machine.try_begin_command());
+    }
+
+    #[test]
+    fn resume_wakes_and_announces() {
+        let mut machine = asleep();
 
         assert_eq!(
             machine.on_signal(PowerSignal::Resume),
@@ -234,8 +268,7 @@ mod tests {
 
     #[test]
     fn second_resume_event_is_ignored() {
-        let mut machine = PowerMachine::new();
-        machine.on_signal(PowerSignal::Suspend);
+        let mut machine = asleep();
         machine.on_signal(PowerSignal::Resume);
 
         // ResumeAutomatic is followed by ResumeSuspend when a user is present.
@@ -244,50 +277,11 @@ mod tests {
     }
 
     #[test]
-    fn resume_while_awake_does_nothing() {
-        let mut machine = PowerMachine::new();
-
-        assert_eq!(machine.on_signal(PowerSignal::Resume), None);
-        assert_eq!(machine.state(), PowerState::Awake);
-    }
-
-    #[test]
-    fn going_to_sleep_waits_for_the_running_command() {
-        let mut machine = PowerMachine::new();
-        assert!(machine.try_begin_command());
+    fn repeated_suspend_is_ignored() {
+        let mut machine = asleep();
 
         assert_eq!(machine.on_signal(PowerSignal::Suspend), None);
-        assert_eq!(machine.state(), PowerState::GoingToSleep);
-        assert!(machine.state().allows_reporting());
-        assert!(!machine.state().allows_new_commands());
-
-        assert_eq!(
-            machine.end_command(),
-            Some(PowerNotice::powering_off(PowerReason::Sleep))
-        );
         assert_eq!(machine.state(), PowerState::Asleep);
-    }
-
-    #[test]
-    fn no_new_command_while_draining() {
-        let mut machine = PowerMachine::new();
-        assert!(machine.try_begin_command());
-        machine.on_signal(PowerSignal::Suspend);
-        machine.end_command();
-
-        assert!(!machine.try_begin_command());
-    }
-
-    #[test]
-    fn waking_while_draining_cancels_sleep_silently() {
-        let mut machine = PowerMachine::new();
-        assert!(machine.try_begin_command());
-        machine.on_signal(PowerSignal::Suspend);
-
-        assert_eq!(machine.on_signal(PowerSignal::Resume), None);
-        assert_eq!(machine.state(), PowerState::Awake);
-        assert_eq!(machine.end_command(), None);
-        assert_eq!(machine.state(), PowerState::Awake);
     }
 
     #[test]
@@ -296,17 +290,64 @@ mod tests {
 
         assert!(machine.try_begin_command());
         assert!(!machine.try_begin_command());
-        assert_eq!(machine.end_command(), None);
+        machine.end_command();
         assert!(machine.try_begin_command());
     }
 
     #[test]
-    fn repeated_suspend_is_ignored() {
+    fn watchdog_wakes_after_two_ticks_asleep() {
+        let mut machine = asleep();
+
+        assert_eq!(machine.on_watchdog_tick(), None);
+        assert_eq!(machine.state(), PowerState::Asleep);
+        assert_eq!(
+            machine.on_watchdog_tick(),
+            Some(PowerNotice::powering_on(PowerReason::Resume))
+        );
+        assert_eq!(machine.state(), PowerState::Awake);
+    }
+
+    #[test]
+    fn watchdog_does_nothing_while_awake() {
         let mut machine = PowerMachine::new();
+
+        for _ in 0..5 {
+            assert_eq!(machine.on_watchdog_tick(), None);
+        }
+        assert_eq!(machine.state(), PowerState::Awake);
+    }
+
+    #[test]
+    fn ticks_from_before_sleeping_do_not_count() {
+        let mut machine = PowerMachine::new();
+        machine.on_watchdog_tick();
         machine.on_signal(PowerSignal::Suspend);
 
-        assert_eq!(machine.on_signal(PowerSignal::Suspend), None);
+        assert_eq!(machine.on_watchdog_tick(), None);
         assert_eq!(machine.state(), PowerState::Asleep);
+    }
+
+    #[test]
+    fn a_real_resume_resets_the_watchdog() {
+        let mut machine = asleep();
+        machine.on_watchdog_tick();
+        machine.on_signal(PowerSignal::Resume);
+        machine.on_signal(PowerSignal::Suspend);
+
+        // One tick into the new sleep is not enough.
+        assert_eq!(machine.on_watchdog_tick(), None);
+        assert_eq!(machine.state(), PowerState::Asleep);
+    }
+
+    #[test]
+    fn watchdog_never_wakes_a_shutting_down_agent() {
+        let mut machine = asleep();
+        machine.on_signal(PowerSignal::Shutdown);
+
+        for _ in 0..5 {
+            assert_eq!(machine.on_watchdog_tick(), None);
+        }
+        assert_eq!(machine.state(), PowerState::ShuttingDown);
     }
 
     #[test]
@@ -318,26 +359,11 @@ mod tests {
         );
         assert_eq!(awake.state(), PowerState::ShuttingDown);
 
-        let mut asleep = PowerMachine::new();
-        asleep.on_signal(PowerSignal::Suspend);
+        let mut sleeping = asleep();
         assert_eq!(
-            asleep.on_signal(PowerSignal::Shutdown),
+            sleeping.on_signal(PowerSignal::Shutdown),
             Some(PowerNotice::powering_off(PowerReason::Shutdown))
         );
-    }
-
-    #[test]
-    fn shutdown_does_not_wait_for_a_running_command() {
-        let mut machine = PowerMachine::new();
-        assert!(machine.try_begin_command());
-        machine.on_signal(PowerSignal::Suspend);
-
-        assert_eq!(
-            machine.on_signal(PowerSignal::Shutdown),
-            Some(PowerNotice::powering_off(PowerReason::Shutdown))
-        );
-        assert_eq!(machine.end_command(), None);
-        assert_eq!(machine.state(), PowerState::ShuttingDown);
     }
 
     #[test]
@@ -354,7 +380,17 @@ mod tests {
             assert_eq!(machine.state(), PowerState::ShuttingDown);
         }
         assert!(!machine.try_begin_command());
-        assert!(!machine.state().allows_reporting());
+    }
+
+    #[test]
+    fn boot_is_announced_only_shortly_after_the_machine_started() {
+        let max = Duration::from_secs(300);
+
+        assert!(is_fresh_boot(Duration::from_secs(45), max));
+        assert!(is_fresh_boot(Duration::from_secs(299), max));
+        assert!(!is_fresh_boot(Duration::from_secs(300), max));
+        // An always-on PC whose agent restarted after a self-update.
+        assert!(!is_fresh_boot(Duration::from_secs(9 * 24 * 3600), max));
     }
 
     #[test]

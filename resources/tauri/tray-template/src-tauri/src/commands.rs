@@ -8,7 +8,7 @@ use crate::command_runner::{self, ExecutionResult, RunLimits, ScriptType};
 use crate::config::Config;
 use crate::keep_awake::KeepAwake;
 use crate::metrics::{KeyHealth, RequestOutcome};
-use crate::power::{GatePolicy, PowerController};
+use crate::power::PowerController;
 use crate::startup_grace::{Milestone, StartupProgress};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -84,8 +84,8 @@ struct Drained {
 /// first command arrives and only released once the server has nothing more
 /// (or sleep, shutdown or cancellation stops the drain). Releasing it between
 /// commands let Windows drop back into standby before the next one was
-/// fetched. Each round holds the power command slot, so a sleep request waits
-/// for the running command and no further one starts.
+/// fetched. Each round holds the power command slot; once sleep is announced
+/// the running command freezes with the machine and no further one starts.
 async fn drain_queue<Q: CommandQueue>(queue: &mut Q, power: &Arc<PowerController>) -> Drained {
     let mut awake: Option<Q::Awake> = None;
     let mut ran = 0;
@@ -106,7 +106,7 @@ async fn drain_queue<Q: CommandQueue>(queue: &mut Q, power: &Arc<PowerController
         };
 
         // Sleep started while asking: leave the command queued on the server.
-        if !power.state().allows_new_commands() {
+        if !power.state().is_awake() {
             info!("Not starting a queued command: the machine is going to sleep");
             break;
         }
@@ -168,7 +168,7 @@ impl CommandClient {
 
     /// Poll for commands until the session token is cancelled. Each poll
     /// drains the whole queue. Stops taking new commands as soon as the
-    /// machine starts going to sleep and polls at once when it wakes.
+    /// machine announces sleep and polls at once when it wakes.
     pub async fn start_command_loop(
         &self,
         api_key: String,
@@ -182,7 +182,7 @@ impl CommandClient {
             self.config.command_poll_interval
         );
 
-        let mut power_gate = power.gate(GatePolicy::Commands);
+        let mut power_gate = power.gate();
         let interval = Duration::from_secs(self.config.command_poll_interval);
 
         // Poll straight away at start, then on the interval.

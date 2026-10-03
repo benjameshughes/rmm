@@ -42,7 +42,11 @@ return [
     |
     | The agent posts to /api/power the moment Windows starts sleeping or
     | shutting down, and again when it wakes or boots. A device powering off
-    | shows as such until it checks in again. Powering on is held for
+    | shows as such until it checks in again, for at most
+    | powering_off_max_hours: one that never wakes (a crash, a dead PSU) then
+    | falls back to Offline and offline alerting. A check-in landing within
+    | powering_off_check_in_grace_seconds of the notice was already in flight
+    | when sleep began, so it does not clear it. Powering on is held for
     | powering_on_hold_seconds so the badge is seen before regular check-ins
     | settle it back to Online.
     |
@@ -50,6 +54,8 @@ return [
 
     'power' => [
         'powering_on_hold_seconds' => 15,
+        'powering_off_max_hours' => 72,
+        'powering_off_check_in_grace_seconds' => 10,
     ],
 
     /*

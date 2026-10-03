@@ -142,7 +142,7 @@ describe('recording', function (): void {
 });
 
 describe('pending commands', function (): void {
-    it('hands out no command while the device is powering off', function (): void {
+    it('still hands out a command while the device is powering off, leaving the agent to refuse it', function (): void {
         $device = Device::factory()->active()->withApiKey('power-key')->create();
         $command = DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => CommandStatus::Pending]);
 
@@ -150,9 +150,9 @@ describe('pending commands', function (): void {
 
         $this->getJson('/api/commands/pending', ['X-Agent-Key' => 'power-key'])
             ->assertSuccessful()
-            ->assertJson(['command' => null]);
+            ->assertJsonPath('command.id', $command->id);
 
-        expect($command->fresh()->status)->toBe(CommandStatus::Pending);
+        expect($command->fresh()->status)->toBe(CommandStatus::Sent);
     });
 
     it('hands the command out again once the device has powered on', function (): void {
@@ -174,6 +174,7 @@ describe('clearing on check-in', function (): void {
         RateLimiter::clear('api.heartbeat');
 
         postPowerEvent('powering_off', 'sleep')->assertSuccessful();
+        $this->travel(config('devices.power.powering_off_check_in_grace_seconds') + 1)->seconds();
         $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'power-key'])->assertSuccessful();
 
         $device->refresh();
@@ -187,10 +188,39 @@ describe('clearing on check-in', function (): void {
         RateLimiter::clear('api.metrics');
 
         postPowerEvent('powering_off', 'shutdown')->assertSuccessful();
+        $this->travel(config('devices.power.powering_off_check_in_grace_seconds') + 1)->seconds();
         $this->postJson('/api/metrics', ['cpu' => ['usage_percent' => 10], 'memory' => ['usage_percent' => 20]], ['X-Agent-Key' => 'power-key'])
             ->assertSuccessful();
 
         expect($device->refresh()->power_state)->toBeNull();
+    });
+
+    it('keeps powering off through a check-in that was already in flight when sleep began', function (string $endpoint, array $payload): void {
+        $device = Device::factory()->active()->withApiKey('power-key')->create(['last_seen' => now()]);
+        RateLimiter::clear('api.heartbeat');
+        RateLimiter::clear('api.metrics');
+
+        postPowerEvent('powering_off', 'sleep')->assertSuccessful();
+        $this->travel(config('devices.power.powering_off_check_in_grace_seconds') - 1)->seconds();
+        $this->postJson($endpoint, $payload, ['X-Agent-Key' => 'power-key'])->assertSuccessful();
+
+        $device->refresh();
+        expect($device->power_state)->toBe(DevicePowerState::PoweringOff)
+            ->and($device->isOnline)->toBeFalse()
+            ->and($device->statusLabel())->toStartWith('Powering off');
+    })->with([
+        'heartbeat' => ['/api/heartbeat', []],
+        'metrics' => ['/api/metrics', ['cpu' => ['usage_percent' => 10]]],
+    ]);
+
+    it('lets a wake inside the grace override powering off', function (): void {
+        $device = Device::factory()->active()->withApiKey('power-key')->create();
+
+        postPowerEvent('powering_off', 'sleep')->assertSuccessful();
+        postPowerEvent('powering_on', 'resume')->assertSuccessful();
+
+        expect($device->refresh()->power_state)->toBe(DevicePowerState::PoweringOn)
+            ->and($device->statusLabel())->toBe('Powering on');
     });
 
     it('holds powering on through an early check-in, then settles to Online', function (): void {

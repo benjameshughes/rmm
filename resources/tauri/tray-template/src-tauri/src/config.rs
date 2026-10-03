@@ -47,6 +47,13 @@ pub const DEFAULT_STARTUP_KEEP_AWAKE_MAX_SECS: u64 = 120;
 /// restarting the service, so the new agent can take over
 pub const DEFAULT_RESTART_HANDOVER_GRACE_SECS: u64 = 30;
 
+/// How often the agent checks it is really asleep; two ticks while marked
+/// asleep mean the resume event was missed
+pub const DEFAULT_ASLEEP_WATCHDOG_INTERVAL_SECS: u64 = 60;
+
+/// Only announce a boot when the machine has been up for less than this
+pub const DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS: u64 = 300;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
@@ -103,6 +110,10 @@ pub struct Config {
     pub startup_keep_awake_max: u64,
     /// Seconds the restart script stays awake after restarting the service
     pub restart_handover_grace: u64,
+    /// Seconds between asleep watchdog ticks
+    pub asleep_watchdog_interval: u64,
+    /// Most system uptime in seconds at which a starting agent announces a boot
+    pub boot_notice_max_uptime: u64,
     /// Skip automatic updates
     pub skip_updates: bool,
     /// Netdata API base URL
@@ -148,6 +159,8 @@ impl Default for Config {
             power_shutdown_timeout: DEFAULT_POWER_SHUTDOWN_TIMEOUT_SECS,
             startup_keep_awake_max: DEFAULT_STARTUP_KEEP_AWAKE_MAX_SECS,
             restart_handover_grace: DEFAULT_RESTART_HANDOVER_GRACE_SECS,
+            asleep_watchdog_interval: DEFAULT_ASLEEP_WATCHDOG_INTERVAL_SECS,
+            boot_notice_max_uptime: DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS,
             skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }

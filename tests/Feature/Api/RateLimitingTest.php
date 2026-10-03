@@ -15,6 +15,50 @@ beforeEach(function (): void {
     RateLimiter::clear('api.metrics');
 });
 
+describe('pending command rate limiting', function (): void {
+    it('lets an agent drain a queue back to back', function (): void {
+        Device::factory()->active()->withApiKey('DRAIN-KEY')->create();
+
+        collect(range(1, 15))->each(fn () => $this->withHeaders(['X-Device-Key' => 'DRAIN-KEY'])
+            ->getJson('/api/commands/pending')
+            ->assertSuccessful());
+    });
+
+    it('allows up to 60 pending polls per minute per device', function (): void {
+        Device::factory()->active()->withApiKey('POLL-KEY')->create();
+
+        collect(range(1, 60))->each(fn () => $this->withHeaders(['X-Device-Key' => 'POLL-KEY'])
+            ->getJson('/api/commands/pending')
+            ->assertSuccessful());
+
+        $this->withHeaders(['X-Device-Key' => 'POLL-KEY'])
+            ->getJson('/api/commands/pending')
+            ->assertTooManyRequests()
+            ->assertJson(['message' => 'Too many command requests. Please try again later.']);
+    });
+
+    it('keeps pending polls and heartbeats in separate buckets', function (): void {
+        Device::factory()->active()->withApiKey('BUCKET-KEY')->create();
+
+        collect(range(1, 15))->each(fn () => $this->withHeaders(['X-Device-Key' => 'BUCKET-KEY'])
+            ->getJson('/api/commands/pending')
+            ->assertSuccessful());
+
+        collect(range(1, 10))->each(fn () => $this->withHeaders(['X-Device-Key' => 'BUCKET-KEY'])
+            ->postJson('/api/heartbeat')
+            ->assertSuccessful());
+
+        $this->withHeaders(['X-Device-Key' => 'BUCKET-KEY'])
+            ->postJson('/api/heartbeat')
+            ->assertTooManyRequests()
+            ->assertJson(['message' => 'Too many heartbeat requests. Please try again later.']);
+
+        $this->withHeaders(['X-Device-Key' => 'BUCKET-KEY'])
+            ->getJson('/api/commands/pending')
+            ->assertSuccessful();
+    });
+});
+
 describe('enrollment rate limiting', function (): void {
     it('allows up to 5 enrollment requests per minute per IP', function (): void {
         $payload = [

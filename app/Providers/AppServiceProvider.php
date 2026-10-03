@@ -65,6 +65,15 @@ class AppServiceProvider extends ServiceProvider
                 ], 429, $headers));
         });
 
+        RateLimiter::for('api.commands', function (Request $request): Limit {
+
+            return Limit::perMinute(60)
+                ->by($this->deviceThrottleKey($request))
+                ->response(fn (Request $request, array $headers) => response()->json([
+                    'message' => 'Too many command requests. Please try again later.',
+                ], 429, $headers));
+        });
+
         RateLimiter::for('api.power', function (Request $request): Limit {
 
             return Limit::perMinute(10)

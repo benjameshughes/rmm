@@ -8,6 +8,10 @@
 //! Loops wait on a `PowerGate`: it pauses them while the machine sleeps and
 //! releases them at once when it wakes, so a resumed machine heartbeats and
 //! polls for commands without waiting out the interval.
+//!
+//! A watchdog ticks while the agent believes the machine is asleep. A
+//! sleeping machine runs no code, so repeated ticks mean the resume event was
+//! missed; the watchdog then wakes the agent as a resume would.
 
 use crate::config::Config;
 use crate::metrics::RequestOutcome;
@@ -16,6 +20,7 @@ use anyhow::{Context, Result};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
+use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -64,31 +69,35 @@ impl PowerController {
         let _ = self.notices.send(notice);
     }
 
-    /// Claim the command slot. None while the machine is going to sleep,
-    /// asleep or shutting down; no new command may start then. Dropping the
-    /// slot releases it (and lets a pending sleep complete).
+    /// The asleep watchdog ticked; wakes the agent if the resume event was
+    /// evidently missed.
+    pub fn watchdog_tick(&self) {
+        let mut machine = self.lock();
+        let notice = machine.on_watchdog_tick();
+
+        if notice.is_some() {
+            warn!("Still running while marked asleep: the resume event was missed, waking up");
+        }
+
+        self.publish(&machine, notice);
+    }
+
+    /// Claim the command slot. None while the machine is asleep or shutting
+    /// down; no new command may start then. Dropping the slot releases it.
     pub fn try_begin_command(self: &Arc<Self>) -> Option<CommandSlot> {
         self.lock().try_begin_command().then(|| CommandSlot {
             controller: self.clone(),
         })
     }
 
-    pub fn gate(&self, policy: GatePolicy) -> PowerGate {
+    pub fn gate(&self) -> PowerGate {
         PowerGate {
             state: self.state.subscribe(),
-            policy,
         }
     }
 
     fn end_command(&self) {
-        let mut machine = self.lock();
-        let notice = machine.end_command();
-
-        if notice.is_some() {
-            info!("Power: command finished, now {:?}", machine.state());
-        }
-
-        self.publish(&machine, notice);
+        self.lock().end_command();
     }
 
     /// Runs with the machine locked, so states and notices go out in the
@@ -124,27 +133,27 @@ impl Drop for CommandSlot {
     }
 }
 
-/// Which work a loop does, and so when it must pause.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GatePolicy {
-    /// Heartbeats and metrics: keep going while a command drains.
-    Reporting,
-    /// Command polling: only when fully awake.
-    Commands,
-}
+/// Tick the controller's asleep watchdog every `interval` until cancelled.
+/// Late ticks after a real sleep are delayed, never bunched, so a single
+/// resume can't count twice.
+pub async fn run_asleep_watchdog(
+    controller: Arc<PowerController>,
+    interval: Duration,
+    cancellation_token: CancellationToken,
+) {
+    let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-impl GatePolicy {
-    fn allows(self, state: PowerState) -> bool {
-        match self {
-            GatePolicy::Reporting => state.allows_reporting(),
-            GatePolicy::Commands => state.allows_new_commands(),
+    loop {
+        tokio::select! {
+            _ = cancellation_token.cancelled() => break,
+            _ = ticker.tick() => controller.watchdog_tick(),
         }
     }
 }
 
 pub struct PowerGate {
     state: watch::Receiver<PowerState>,
-    policy: GatePolicy,
 }
 
 impl PowerGate {
@@ -168,16 +177,14 @@ impl PowerGate {
     /// Return at once when the work is allowed, otherwise wait for the
     /// machine to wake. False once cancelled.
     pub async fn wait_until_allowed(&mut self, cancellation_token: &CancellationToken) -> bool {
-        let policy = self.policy;
-
-        if !policy.allows(*self.state.borrow()) {
-            debug!("{:?} loop paused while the machine sleeps", policy);
+        if !self.state.borrow().is_awake() {
+            debug!("Loop paused while the machine sleeps");
         }
 
         tokio::select! {
             _ = cancellation_token.cancelled() => false,
             // Err only if the controller is gone; carry on rather than stall.
-            _ = self.state.wait_for(|state| policy.allows(*state)) => true,
+            _ = self.state.wait_for(|state| state.is_awake()) => true,
         }
     }
 
@@ -316,22 +323,22 @@ mod tests {
     }
 
     #[test]
-    fn dropping_the_command_slot_completes_a_pending_sleep() {
+    fn suspend_mid_command_announces_at_once() {
         let (controller, mut notices) = PowerController::new();
 
         let slot = controller.try_begin_command().expect("awake");
         controller.signal(PowerSignal::Suspend);
-        assert_eq!(controller.state(), PowerState::GoingToSleep);
-        assert!(notices.try_recv().is_err());
-        assert!(controller.try_begin_command().is_none());
-
-        drop(slot);
-
         assert_eq!(controller.state(), PowerState::Asleep);
         assert_eq!(
             notices.try_recv().unwrap(),
             PowerNotice::powering_off(PowerReason::Sleep)
         );
+        assert!(controller.try_begin_command().is_none());
+
+        drop(slot);
+
+        assert_eq!(controller.state(), PowerState::Asleep);
+        assert!(notices.try_recv().is_err());
     }
 
     #[test]
@@ -350,7 +357,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn gate_pauses_while_asleep_and_wakes_immediately() {
         let (controller, _notices) = PowerController::new();
-        let mut gate = controller.gate(GatePolicy::Reporting);
+        let mut gate = controller.gate();
         let token = CancellationToken::new();
 
         let ticker = tokio::spawn(async move {
@@ -375,7 +382,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn gate_ticks_on_the_interval_while_awake() {
         let (controller, _notices) = PowerController::new();
-        let mut gate = controller.gate(GatePolicy::Commands);
+        let mut gate = controller.gate();
         let token = CancellationToken::new();
         let started = tokio::time::Instant::now();
 
@@ -384,26 +391,81 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn reporting_continues_while_a_command_drains_but_commands_stop() {
-        let (controller, _notices) = PowerController::new();
+    async fn watchdog_wakes_after_a_missed_resume() {
+        let (controller, mut notices) = PowerController::new();
         let token = CancellationToken::new();
-        let _slot = controller.try_begin_command().unwrap();
+        let interval = Duration::from_secs(60);
+        tokio::spawn(run_asleep_watchdog(
+            controller.clone(),
+            interval,
+            token.clone(),
+        ));
+
+        let mut gate = controller.gate();
+        let started = tokio::time::Instant::now();
+        let ticker = tokio::spawn(async move {
+            assert!(
+                gate.tick(Duration::from_secs(30), &CancellationToken::new())
+                    .await
+            );
+            started.elapsed()
+        });
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
         controller.signal(PowerSignal::Suspend);
+        assert_eq!(
+            notices.try_recv().unwrap(),
+            PowerNotice::powering_off(PowerReason::Sleep)
+        );
 
-        let mut reporting = controller.gate(GatePolicy::Reporting);
-        assert!(reporting.wait_until_allowed(&token).await);
+        // First tick (60s) while asleep is not enough.
+        tokio::time::sleep(Duration::from_secs(100)).await;
+        assert_eq!(controller.state(), PowerState::Asleep);
+        assert!(!ticker.is_finished());
 
-        let mut commands = controller.gate(GatePolicy::Commands);
-        let waiting =
-            tokio::time::timeout(Duration::from_secs(60), commands.wait_until_allowed(&token))
-                .await;
-        assert!(waiting.is_err());
+        // Second tick (120s): missed resume, wake and poll at once.
+        let waited = ticker.await.unwrap();
+        assert_eq!(waited, Duration::from_secs(120));
+        assert_eq!(controller.state(), PowerState::Awake);
+        assert_eq!(
+            notices.try_recv().unwrap(),
+            PowerNotice::powering_on(PowerReason::Resume)
+        );
+        token.cancel();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn watchdog_leaves_a_real_resume_alone() {
+        let (controller, mut notices) = PowerController::new();
+        let token = CancellationToken::new();
+        tokio::spawn(run_asleep_watchdog(
+            controller.clone(),
+            Duration::from_secs(60),
+            token.clone(),
+        ));
+
+        controller.signal(PowerSignal::Suspend);
+        tokio::time::sleep(Duration::from_secs(70)).await;
+        controller.signal(PowerSignal::Resume);
+        tokio::time::sleep(Duration::from_secs(600)).await;
+
+        assert_eq!(controller.state(), PowerState::Awake);
+        assert_eq!(
+            notices.try_recv().unwrap(),
+            PowerNotice::powering_off(PowerReason::Sleep)
+        );
+        assert_eq!(
+            notices.try_recv().unwrap(),
+            PowerNotice::powering_on(PowerReason::Resume)
+        );
+        assert!(notices.try_recv().is_err());
+        token.cancel();
     }
 
     #[tokio::test(start_paused = true)]
     async fn gate_stops_on_cancellation_while_asleep() {
         let (controller, _notices) = PowerController::new();
-        let mut gate = controller.gate(GatePolicy::Reporting);
+        let mut gate = controller.gate();
         let token = CancellationToken::new();
         controller.signal(PowerSignal::Suspend);
 

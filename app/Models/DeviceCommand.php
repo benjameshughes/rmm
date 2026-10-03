@@ -171,6 +171,17 @@ final class DeviceCommand extends Model
         ]);
     }
 
+    /**
+     * Put a command the agent fetched but never started back in the queue.
+     */
+    public function requeue(): void
+    {
+        $this->update([
+            'status' => CommandStatus::Pending,
+            'sent_at' => null,
+        ]);
+    }
+
     public function markAsRunning(): void
     {
         $this->update([

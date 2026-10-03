@@ -31,6 +31,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Unstarted Command Requeue
+    |--------------------------------------------------------------------------
+    |
+    | Fetching a command marks it sent, and the agent reports it started
+    | before running it. A sent command that has not started within this many
+    | seconds was dropped by the agent (sleep began mid-fetch, a crash, the
+    | network went), so it is put back in the queue to be offered again.
+    |
+    */
+
+    'unstarted_requeue_seconds' => 60,
+
+    /*
+    |--------------------------------------------------------------------------
     | Ad-hoc Commands
     |--------------------------------------------------------------------------
     |

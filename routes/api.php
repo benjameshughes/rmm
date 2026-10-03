@@ -24,7 +24,7 @@ Route::middleware(['device.auth'])->group(function (): void {
         ->middleware('throttle:api.power');
 
     Route::get('/commands/pending', [DeviceCommandController::class, 'pending'])
-        ->middleware('throttle:api.heartbeat');
+        ->middleware('throttle:api.commands');
 
     Route::post('/commands/{commandId}/started', [DeviceCommandController::class, 'started'])
         ->middleware('throttle:api.metrics');

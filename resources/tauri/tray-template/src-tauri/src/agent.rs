@@ -9,8 +9,8 @@ use crate::config::Config;
 use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
 use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
-use crate::power::{GatePolicy, PowerController, PowerNotifier};
-use crate::power_state::{PowerNotice, PowerReason};
+use crate::power::{self, PowerController, PowerNotifier};
+use crate::power_state::{self, PowerNotice, PowerReason};
 use crate::startup_grace::{self, Milestone, StartupProgress};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
@@ -173,10 +173,16 @@ impl Agent {
         info!("Server URL: {}", self.config.base_url);
 
         let power_task = self.spawn_power_task();
+        let watchdog = tokio::spawn(power::run_asleep_watchdog(
+            self.power.clone(),
+            std::time::Duration::from_secs(self.config.asleep_watchdog_interval),
+            self.cancellation_token.clone(),
+        ));
         let result = self.clone().run_sessions().await;
         if let Some(task) = power_task {
             task.abort();
         }
+        watchdog.abort();
 
         result
     }
@@ -330,15 +336,14 @@ impl Agent {
                     std::time::Duration::from_secs(self.config.startup_keep_awake_max),
                     self.cancellation_token.clone(),
                 );
-            self.power
-                .announce(PowerNotice::powering_on(PowerReason::Boot));
+            self.announce_boot_if_fresh();
         }
 
         // Spawn heartbeat loop as a separate task
         let heartbeat_api_key = api_key.clone();
         let heartbeat_token = session_token.clone();
         let heartbeat_health = key_health.clone();
-        let heartbeat_gate = self.power.gate(GatePolicy::Reporting);
+        let heartbeat_gate = self.power.gate();
         let heartbeat_handle = tokio::spawn(async move {
             heartbeat_collector
                 .start_heartbeat_loop(
@@ -394,7 +399,7 @@ impl Agent {
                 api_key,
                 session_token.clone(),
                 key_health.clone(),
-                self.power.gate(GatePolicy::Reporting),
+                self.power.gate(),
                 self.startup_progress(),
             )
             .await;
@@ -417,6 +422,25 @@ impl Agent {
             .session_auth
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = auth;
+    }
+
+    /// Tell the server the machine booted, but only if it really did start
+    /// recently: a service restart (self-update) on an always-on PC is not a
+    /// power-on. Skipping still counts as the startup milestone.
+    fn announce_boot_if_fresh(&self) {
+        let uptime = std::time::Duration::from_secs(::sysinfo::System::uptime());
+        let max_uptime = std::time::Duration::from_secs(self.config.boot_notice_max_uptime);
+
+        if power_state::is_fresh_boot(uptime, max_uptime) {
+            self.power
+                .announce(PowerNotice::powering_on(PowerReason::Boot));
+        } else {
+            info!(
+                "Machine up for {}s; agent restart, not announcing a boot",
+                uptime.as_secs()
+            );
+            self.startup_progress().mark(Milestone::BootAnnounced);
+        }
     }
 
     fn startup_progress(&self) -> StartupProgress {

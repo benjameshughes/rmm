@@ -95,14 +95,31 @@ final class Device extends Model
     }
 
     /**
-     * Devices that have not announced they are powering off. Null power states
-     * fail a plain inequality in SQL, so they are matched explicitly.
+     * Devices that have not announced they are powering off, or whose notice has
+     * lapsed. Null columns fail a plain comparison in SQL, so they are matched explicitly.
      */
     public function scopeNotPoweringOff(Builder $query): Builder
     {
         return $query->where(fn (Builder $powerQuery): Builder => $powerQuery
             ->whereNull('power_state')
-            ->orWhere('power_state', '!=', DevicePowerState::PoweringOff));
+            ->orWhere('power_state', '!=', DevicePowerState::PoweringOff)
+            ->orWhereNull('power_state_changed_at')
+            ->orWhere('power_state_changed_at', '<=', self::powerStateLapsesBefore(DevicePowerState::PoweringOff)));
+    }
+
+    /**
+     * Devices still carrying a power state that has outlived its window.
+     */
+    public function scopeWithLapsedPowerState(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $lapsedQuery): Builder => collect(DevicePowerState::cases())->reduce(
+            fn (Builder $statesQuery, DevicePowerState $powerState): Builder => $statesQuery->orWhere(fn (Builder $stateQuery): Builder => $stateQuery
+                ->where('power_state', $powerState)
+                ->where(fn (Builder $changedQuery): Builder => $changedQuery
+                    ->whereNull('power_state_changed_at')
+                    ->orWhere('power_state_changed_at', '<=', self::powerStateLapsesBefore($powerState)))),
+            $lapsedQuery,
+        ));
     }
 
     public function metrics(): HasMany
@@ -255,21 +272,43 @@ final class Device extends Model
 
     /**
      * Every check-in proves the device is awake, so it clears a powering off
-     * state at once and a powering on state once it has been held long enough
-     * to be seen.
+     * state and a powering on state once it has been held long enough to be seen.
+     * A check-in right after a powering off notice was already in flight when
+     * sleep began, so it leaves that notice standing.
      *
      * @return array{last_seen: Carbon, last_ip: ?string, power_state?: null, power_state_changed_at?: null}
      */
     public function checkInAttributes(?string $ip): array
     {
-        $isHoldingPoweringOn = $this->power_state === DevicePowerState::PoweringOn
-            && $this->power_state_changed_at?->greaterThan(now()->subSeconds(config('devices.power.powering_on_hold_seconds')));
+        $keepsPowerState = match ($this->power_state) {
+            DevicePowerState::PoweringOn => $this->hasPowerStateInForce(DevicePowerState::PoweringOn),
+            DevicePowerState::PoweringOff => $this->power_state_changed_at?->greaterThan(now()->subSeconds(config('devices.power.powering_off_check_in_grace_seconds'))) ?? false,
+            null => false,
+        };
 
         return [
             'last_seen' => now(),
             'last_ip' => $ip,
-            ...($isHoldingPoweringOn ? [] : ['power_state' => null, 'power_state_changed_at' => null]),
+            ...($keepsPowerState ? [] : ['power_state' => null, 'power_state_changed_at' => null]),
         ];
+    }
+
+    /**
+     * A power state only holds for its window: powering on long enough for the
+     * badge to be seen, powering off long enough to cover a weekend.
+     */
+    public function hasPowerStateInForce(DevicePowerState $powerState): bool
+    {
+        return $this->power_state === $powerState
+            && $this->power_state_changed_at?->greaterThan(self::powerStateLapsesBefore($powerState)) === true;
+    }
+
+    private static function powerStateLapsesBefore(DevicePowerState $powerState): Carbon
+    {
+        return match ($powerState) {
+            DevicePowerState::PoweringOn => now()->subSeconds(config('devices.power.powering_on_hold_seconds')),
+            DevicePowerState::PoweringOff => now()->subHours(config('devices.power.powering_off_max_hours')),
+        };
     }
 
     public function statusLabel(): string
@@ -333,7 +372,7 @@ final class Device extends Model
 
     protected function isPoweringOff(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOff);
+        return Attribute::get(fn (): bool => $this->hasPowerStateInForce(DevicePowerState::PoweringOff));
     }
 
     /**
@@ -342,9 +381,7 @@ final class Device extends Model
      */
     protected function isPoweringOn(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOn
-            && $this->power_state_changed_at?->greaterThan(now()->subSeconds(config('devices.power.powering_on_hold_seconds')))
-            && $this->isOnline);
+        return Attribute::get(fn (): bool => $this->hasPowerStateInForce(DevicePowerState::PoweringOn) && $this->isOnline);
     }
 
     protected function isWakeable(): Attribute

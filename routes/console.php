@@ -12,6 +12,6 @@ Artisan::command('inspire', function () {
 
 Schedule::command('devices:check-offline')->everyMinute();
 Schedule::command('schedule:run-tasks')->everyMinute();
-Schedule::command('commands:expire-stale')->everyFiveMinutes();
+Schedule::command('commands:expire-stale')->everyMinute();
 Schedule::command('agent:check-version')->hourly();
 Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class, AuditLog::class]])->hourly();
