@@ -291,6 +291,9 @@ pub struct MetricsCollector {
     /// Monitor-only builds read metrics themselves (no Netdata).
     #[cfg(not(windows))]
     native: Arc<Mutex<crate::native_metrics::NativeCollector>>,
+    /// Linux health checks (keeps the apt result between submissions).
+    #[cfg(not(windows))]
+    health: tokio::sync::Mutex<crate::linux_health::HealthCollector>,
 }
 
 /// Longest a native collection may take (a stuck mount must not stall the
@@ -313,6 +316,8 @@ impl MetricsCollector {
             mac_addresses,
             #[cfg(not(windows))]
             native: Arc::new(Mutex::new(crate::native_metrics::NativeCollector::new())),
+            #[cfg(not(windows))]
+            health: tokio::sync::Mutex::new(Default::default()),
         })
     }
 
@@ -490,14 +495,15 @@ impl MetricsCollector {
         let native = self.native.clone();
         let hostname = self.hostname.clone();
         let mac_addresses = self.mac_addresses.clone();
+        let apps_limit = self.config.apps_top_count;
         let collection = tokio::task::spawn_blocking(move || {
             native
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .collect(&hostname, &mac_addresses)
+                .collect(&hostname, &mac_addresses, apps_limit)
         });
 
-        let metrics = match tokio::time::timeout(NATIVE_COLLECTION_TIMEOUT, collection).await {
+        let mut metrics = match tokio::time::timeout(NATIVE_COLLECTION_TIMEOUT, collection).await {
             Ok(Ok(metrics)) => metrics,
             Ok(Err(e)) => {
                 error!("Metrics collection failed: {}", e);
@@ -511,6 +517,19 @@ impl MetricsCollector {
                 return RequestOutcome::Inconclusive;
             }
         };
+
+        if cfg!(target_os = "linux") {
+            metrics.linux_health = Some(
+                self.health
+                    .lock()
+                    .await
+                    .collect(
+                        Duration::from_secs(self.config.health_command_timeout),
+                        Duration::from_secs(self.config.apt_check_interval),
+                    )
+                    .await,
+            );
+        }
 
         let outcome = self.submit_metrics(&metrics, api_key).await;
         if outcome == RequestOutcome::Success {
