@@ -43,6 +43,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Broadcast Device Changes
+    |--------------------------------------------------------------------------
+    |
+    | A saved device only broadcasts DeviceUpdated over Reverb when one of
+    | these attributes changed or it came back online. Heartbeats alone only
+    | move last_seen, and broadcasting each one re-rendered every open page
+    | several times a second.
+    |
+    */
+
+    'broadcast' => [
+        'attributes' => [
+            'status',
+            'hostname',
+            'power_state',
+            'agent_version',
+            'is_monitor_only',
+            'device_group_id',
+            'os_name',
+            'os_version',
+            'mac_addresses',
+            'api_key_hash',
+            'api_key_claimed_at',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Power State
     |--------------------------------------------------------------------------
     |

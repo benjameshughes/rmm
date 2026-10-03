@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentTrayController;
 use App\Livewire\AlertRules\Index as AlertRulesIndex;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Audit\Index as AuditIndex;
+use App\Livewire\Dashboard;
 use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
 use App\Livewire\Devices\Apps as DeviceApps;
@@ -31,7 +32,7 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::view('dashboard', 'dashboard')
+Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 

@@ -35,18 +35,19 @@ it('announces it even when no offline alert rule exists', function (): void {
     Event::assertDispatchedTimes(DeviceUpdated::class, 1);
 });
 
-it('leaves online, long-offline and pending devices alone', function (array $attributes): void {
+it('leaves online, long-offline and pending devices alone', function (Closure $attributes): void {
     Event::fake([DeviceUpdated::class]);
-    Device::factory()->create($attributes);
+    Device::factory()->create($attributes());
 
     $this->artisan('devices:check-offline')->assertSuccessful();
 
     Event::assertNotDispatched(DeviceUpdated::class);
 })->with([
-    'online' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subSeconds(20)]],
-    'offline for hours' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subHours(3)]],
-    'never seen' => [['status' => DeviceStatus::Active, 'last_seen' => null]],
-    'pending approval' => [['status' => DeviceStatus::Pending, 'last_seen' => now()->subSeconds(90)]],
+    // Closures so the timestamps are taken when each case runs, not when the suite loads.
+    'online' => [fn (): array => ['status' => DeviceStatus::Active, 'last_seen' => now()->subSeconds(20)]],
+    'offline for hours' => [fn (): array => ['status' => DeviceStatus::Active, 'last_seen' => now()->subHours(3)]],
+    'never seen' => [fn (): array => ['status' => DeviceStatus::Active, 'last_seen' => null]],
+    'pending approval' => [fn (): array => ['status' => DeviceStatus::Pending, 'last_seen' => now()->subSeconds(90)]],
 ]);
 
 it('follows the configured threshold', function (): void {

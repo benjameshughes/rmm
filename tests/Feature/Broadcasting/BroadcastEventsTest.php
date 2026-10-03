@@ -206,3 +206,46 @@ it('announces audit entries on the audit channel with scalars only', function ()
         && $event->broadcastWith() === ['auditLogId' => $auditLog->id, 'action' => $auditLog->action->value]
         && ! str_contains(serialize($event), 'SECRET-'));
 });
+
+it('does not broadcast a heartbeat from a device that was already online', function (): void {
+    $device = Device::factory()->active()->create(['last_seen' => now()->subSeconds(10)]);
+
+    $device->forceFill(['last_seen' => now()])->save();
+
+    expect((new App\Events\DeviceUpdated($device))->broadcastWhen())->toBeFalse();
+});
+
+it('broadcasts when a device that was offline checks in again', function (): void {
+    $device = Device::factory()->active()->create(['last_seen' => now()->subHour()]);
+
+    $device->forceFill(['last_seen' => now()])->save();
+
+    expect((new App\Events\DeviceUpdated($device))->broadcastWhen())->toBeTrue();
+});
+
+it('broadcasts when something worth showing changes', function (string $attribute, mixed $value): void {
+    $device = Device::factory()->active()->create(['last_seen' => now()]);
+
+    $device->forceFill([$attribute => $value])->save();
+
+    expect((new App\Events\DeviceUpdated($device))->broadcastWhen())->toBeTrue();
+})->with([
+    'agent version' => ['agent_version', '9.9.9'],
+    'hostname' => ['hostname', 'RENAMED-PC'],
+    'power state' => ['power_state', App\Enums\DevicePowerState::PoweringOff],
+]);
+
+it('always broadcasts deliberate announcements', function (): void {
+    $device = Device::factory()->active()->create(['last_seen' => now()]);
+
+    expect((new App\Events\DeviceUpdated($device, alwaysBroadcast: true))->broadcastWhen())->toBeTrue();
+});
+
+it('announces new metrics so open pages show them', function (): void {
+    Event::fake([App\Events\DeviceUpdated::class]);
+    $device = Device::factory()->active()->withApiKey('BCAST-KEY')->create(['last_seen' => now()]);
+
+    $this->withHeaders(['X-Device-Key' => 'BCAST-KEY'])->postJson('/api/metrics', ['cpu' => 10, 'ram' => 20])->assertSuccessful();
+
+    Event::assertDispatched(App\Events\DeviceUpdated::class, fn (App\Events\DeviceUpdated $event): bool => $event->deviceId === $device->id && $event->broadcastWhen());
+});

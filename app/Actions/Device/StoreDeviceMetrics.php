@@ -9,6 +9,7 @@ use App\DTOs\NetdataCpuMetric;
 use App\DTOs\NetdataNetworkAdapters;
 use App\DTOs\NetdataRamMetric;
 use App\DTOs\NetdataV3Metrics;
+use App\Events\DeviceUpdated;
 use App\Events\MetricsReceived;
 use App\Models\Device;
 use App\Models\DeviceMetric;
@@ -81,6 +82,7 @@ final class StoreDeviceMetrics
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
+        DeviceUpdated::dispatch($device, true);
 
         return $metric;
     }
@@ -135,6 +137,7 @@ final class StoreDeviceMetrics
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input);
 
         MetricsReceived::dispatch($device, $metric);
+        DeviceUpdated::dispatch($device, true);
 
         return $metric;
     }

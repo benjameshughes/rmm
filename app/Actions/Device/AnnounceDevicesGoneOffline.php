@@ -29,7 +29,7 @@ final class AnnounceDevicesGoneOffline
             ->notPoweringOff()
             ->whereBetween('last_seen', [$threshold->copy()->subSeconds(config('devices.online.announce_window_seconds')), $threshold])
             ->get()
-            ->each(fn (Device $device) => DeviceUpdated::dispatch($device))
+            ->each(fn (Device $device) => DeviceUpdated::dispatch($device, true))
             ->count();
     }
 }

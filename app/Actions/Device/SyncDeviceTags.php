@@ -18,6 +18,6 @@ final class SyncDeviceTags
             return;
         }
 
-        DeviceUpdated::dispatch($device);
+        DeviceUpdated::dispatch($device, true);
     }
 }

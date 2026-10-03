@@ -265,7 +265,7 @@ final class Device extends Model
             'pending_api_key' => null,
         ])->syncOriginal();
 
-        DeviceUpdated::dispatch($this);
+        DeviceUpdated::dispatch($this, true);
 
         return $apiKey;
     }
@@ -435,8 +435,8 @@ final class Device extends Model
                 'usedForHumans' => $usedPercent === null ? null : number_format($usedPercent, 1).'%',
                 'freeForHumans' => $totalGb !== null && $availableGb !== null ? number_format($availableGb, 1).' GB free of '.number_format($totalGb, 1).' GB' : null,
                 'barColor' => match (true) {
-                    $usedPercent > config('devices.disk.critical_percent') => 'bg-red-500',
-                    $usedPercent > config('devices.disk.warning_percent') => 'bg-amber-500',
+                    $usedPercent >= config('devices.disk.critical_percent') => 'bg-red-500',
+                    $usedPercent >= config('devices.disk.warning_percent') => 'bg-amber-500',
                     default => 'bg-blue-500',
                 },
             ];
