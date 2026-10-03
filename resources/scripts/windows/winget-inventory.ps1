@@ -36,7 +36,10 @@ if ($PSVersionTable.PSEdition -eq 'Desktop') {
         }
 
         Push-Location (Split-Path $winget)
-        $installLog = & $winget install --id Microsoft.PowerShell --exact --scope machine --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+        # Ask for the classic MSI: left to choose, winget installs the MSIX
+        # package into WindowsApps, which SYSTEM cannot run. --force because a
+        # PowerShell MSIX may already be present under the same package id.
+        $installLog = & $winget install --id Microsoft.PowerShell --exact --scope machine --installer-type wix --force --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
         Pop-Location
     }
 
