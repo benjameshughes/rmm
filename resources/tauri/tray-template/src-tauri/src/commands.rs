@@ -7,6 +7,7 @@
 use crate::command_runner::{self, ExecutionResult, RunLimits, ScriptType};
 use crate::config::Config;
 use crate::metrics::{KeyHealth, RequestOutcome};
+use crate::power::{GatePolicy, PowerController};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -54,37 +55,52 @@ impl CommandClient {
         Ok(Self { config, client })
     }
 
-    /// Poll for commands until the session token is cancelled.
+    /// Poll for commands until the session token is cancelled. Stops taking
+    /// new commands as soon as the machine starts going to sleep and polls at
+    /// once when it wakes.
     pub async fn start_command_loop(
         &self,
         api_key: String,
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
+        power: Arc<PowerController>,
     ) {
         info!(
             "Starting command loop (interval: {}s)",
             self.config.command_poll_interval
         );
 
-        loop {
+        let mut power_gate = power.gate(GatePolicy::Commands);
+        let interval = Duration::from_secs(self.config.command_poll_interval);
+
+        while power_gate.tick(interval, &cancellation_token).await {
             tokio::select! {
                 _ = cancellation_token.cancelled() => break,
-                _ = tokio::time::sleep(Duration::from_secs(self.config.command_poll_interval)) => {
-                    tokio::select! {
-                        _ = cancellation_token.cancelled() => break,
-                        _ = self.poll_once(&api_key, &key_health) => {}
-                    }
-                }
+                _ = self.poll_once(&api_key, &key_health, &power) => {}
             }
         }
 
         info!("Command loop stopped");
     }
 
-    async fn poll_once(&self, api_key: &str, key_health: &KeyHealth) {
+    async fn poll_once(&self, api_key: &str, key_health: &KeyHealth, power: &Arc<PowerController>) {
+        // Held until the command is reported; sleep waits for it to drop.
+        let Some(_slot) = power.try_begin_command() else {
+            return;
+        };
+
         let Some(command) = self.fetch_pending(api_key, key_health).await else {
             return;
         };
+
+        // Sleep started while asking: leave the command queued on the server.
+        if !power.state().allows_new_commands() {
+            info!(
+                "Not starting command {}: the machine is going to sleep",
+                command.id
+            );
+            return;
+        }
 
         let script_type = ScriptType::parse(&command.script_type);
         info!("Received command {} ({})", command.id, script_type.name());

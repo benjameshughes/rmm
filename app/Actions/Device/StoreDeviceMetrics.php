@@ -225,7 +225,7 @@ final class StoreDeviceMetrics
 
     private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, array $input): void
     {
-        $updates = $this->connectionUpdates($ip, $input);
+        $updates = $this->connectionUpdates($device, $ip, $input);
 
         if (is_array($systemInfo)) {
             $allowedFields = [
@@ -250,7 +250,7 @@ final class StoreDeviceMetrics
 
     private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, array $input): void
     {
-        $updates = $this->connectionUpdates($ip, $input);
+        $updates = $this->connectionUpdates($device, $ip, $input);
 
         if (is_array($netdataInfo)) {
             $agent = $netdataInfo['agents'][0] ?? null;
@@ -274,16 +274,15 @@ final class StoreDeviceMetrics
     /**
      * An agent that omits its version or MAC addresses keeps the last ones it reported.
      *
-     * @return array{last_seen: Carbon, last_ip: ?string, agent_version?: string, mac_addresses?: array<int, string>}
+     * @return array{last_seen: Carbon, last_ip: ?string, power_state?: null, power_state_changed_at?: null, agent_version?: string, mac_addresses?: array<int, string>}
      */
-    private function connectionUpdates(?string $ip, array $input): array
+    private function connectionUpdates(Device $device, ?string $ip, array $input): array
     {
         $agentVersion = $input['agent_version'] ?? null;
         $macAddresses = $input['mac_addresses'] ?? null;
 
         return [
-            'last_seen' => now(),
-            'last_ip' => $ip,
+            ...$device->checkInAttributes($ip),
             ...($agentVersion === null ? [] : ['agent_version' => $agentVersion]),
             ...($macAddresses === null ? [] : ['mac_addresses' => $this->normaliseMacAddresses($macAddresses)]),
         ];

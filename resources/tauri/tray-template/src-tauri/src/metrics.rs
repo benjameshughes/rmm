@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::config::{Config, NETDATA_GROUP_BY_INSTANCE};
+use crate::power::PowerGate;
 
 // ============================================================================
 // API key health (dead-key detection)
@@ -443,12 +444,14 @@ impl MetricsCollector {
         }
     }
 
-    /// Start metrics collection loop (runs until the session token is cancelled)
+    /// Start metrics collection loop (runs until the session token is
+    /// cancelled; pauses while the machine sleeps)
     pub async fn start_metrics_loop(
         &self,
         api_key: String,
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
+        mut power_gate: PowerGate,
     ) {
         info!(
             "Starting metrics collection loop (interval: {}s)",
@@ -459,17 +462,10 @@ impl MetricsCollector {
             warn!("Netdata is not available at startup - metrics will be limited");
         }
 
-        loop {
-            tokio::select! {
-                _ = cancellation_token.cancelled() => {
-                    info!("Metrics collection loop cancelled");
-                    break;
-                }
-                _ = tokio::time::sleep(Duration::from_secs(self.config.metrics_interval)) => {
-                    let outcome = self.collect_and_submit(&api_key).await;
-                    key_health.record(outcome);
-                }
-            }
+        let interval = Duration::from_secs(self.config.metrics_interval);
+        while power_gate.tick(interval, &cancellation_token).await {
+            let outcome = self.collect_and_submit(&api_key).await;
+            key_health.record(outcome);
         }
 
         info!("Metrics collection loop stopped");
@@ -519,29 +515,24 @@ impl MetricsCollector {
         }
     }
 
-    /// Start heartbeat loop (runs until the session token is cancelled)
+    /// Start heartbeat loop (runs until the session token is cancelled;
+    /// pauses while the machine sleeps, beats at once on wake)
     pub async fn start_heartbeat_loop(
         &self,
         api_key: String,
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
+        mut power_gate: PowerGate,
     ) {
         info!(
             "Starting heartbeat loop (interval: {}s)",
             self.config.heartbeat_interval
         );
 
-        loop {
-            tokio::select! {
-                _ = cancellation_token.cancelled() => {
-                    info!("Heartbeat loop cancelled");
-                    break;
-                }
-                _ = tokio::time::sleep(Duration::from_secs(self.config.heartbeat_interval)) => {
-                    let outcome = self.send_heartbeat(&api_key).await;
-                    key_health.record(outcome);
-                }
-            }
+        let interval = Duration::from_secs(self.config.heartbeat_interval);
+        while power_gate.tick(interval, &cancellation_token).await {
+            let outcome = self.send_heartbeat(&api_key).await;
+            key_health.record(outcome);
         }
 
         info!("Heartbeat loop stopped");

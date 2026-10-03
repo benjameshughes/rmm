@@ -64,6 +64,15 @@ class AppServiceProvider extends ServiceProvider
                     'message' => 'Too many heartbeat requests. Please try again later.',
                 ], 429, $headers));
         });
+
+        RateLimiter::for('api.power', function (Request $request): Limit {
+
+            return Limit::perMinute(10)
+                ->by($this->deviceThrottleKey($request))
+                ->response(fn (Request $request, array $headers) => response()->json([
+                    'message' => 'Too many power events. Please try again later.',
+                ], 429, $headers));
+        });
     }
 
     /**

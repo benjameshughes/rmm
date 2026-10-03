@@ -37,6 +37,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Power State
+    |--------------------------------------------------------------------------
+    |
+    | The agent posts to /api/power the moment Windows starts sleeping or
+    | shutting down, and again when it wakes or boots. A device powering off
+    | shows as such until it checks in again. Powering on is held for
+    | powering_on_hold_seconds so the badge is seen before regular check-ins
+    | settle it back to Online.
+    |
+    */
+
+    'power' => [
+        'powering_on_hold_seconds' => 60,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Disk Usage Thresholds
     |--------------------------------------------------------------------------
     |

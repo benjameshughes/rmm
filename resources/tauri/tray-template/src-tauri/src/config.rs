@@ -34,6 +34,12 @@ pub const DEFAULT_COMMAND_REQUEST_TIMEOUT_SECS: u64 = 30;
 /// How long to wait for a killed script's output pipes to close
 pub const DEFAULT_COMMAND_DRAIN_GRACE_SECS: u64 = 5;
 
+/// HTTP timeout for sleep/wake/boot power notices
+pub const DEFAULT_POWER_REQUEST_TIMEOUT_SECS: u64 = 5;
+
+/// HTTP timeout for the shutdown power notice, so it never holds up shutdown
+pub const DEFAULT_POWER_SHUTDOWN_TIMEOUT_SECS: u64 = 3;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
@@ -82,6 +88,10 @@ pub struct Config {
     pub command_request_timeout: u64,
     /// Seconds to wait for a killed script's output pipes to close
     pub command_drain_grace: u64,
+    /// HTTP timeout for sleep/wake/boot power notices in seconds
+    pub power_request_timeout: u64,
+    /// HTTP timeout for the shutdown power notice in seconds
+    pub power_shutdown_timeout: u64,
     /// Skip automatic updates
     pub skip_updates: bool,
     /// Netdata API base URL
@@ -123,6 +133,8 @@ impl Default for Config {
             command_output_limit: DEFAULT_COMMAND_OUTPUT_LIMIT_CHARS,
             command_request_timeout: DEFAULT_COMMAND_REQUEST_TIMEOUT_SECS,
             command_drain_grace: DEFAULT_COMMAND_DRAIN_GRACE_SECS,
+            power_request_timeout: DEFAULT_POWER_REQUEST_TIMEOUT_SECS,
+            power_shutdown_timeout: DEFAULT_POWER_SHUTDOWN_TIMEOUT_SECS,
             skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }

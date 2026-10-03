@@ -9,6 +9,9 @@ mod data_dir_security;
 mod enrollment;
 mod keep_awake;
 mod metrics;
+mod power;
+mod power_events;
+mod power_state;
 mod runtime_config;
 mod storage;
 mod sysinfo;
@@ -25,6 +28,8 @@ use chrono::{Duration, Utc};
 
 #[cfg(windows)]
 use tracing::error;
+#[cfg(windows)]
+use power_state::PowerSignal;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -37,9 +42,11 @@ use windows_service::{
         ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
         ServiceType,
     },
-    service_control_handler::{self, ServiceControlHandlerResult},
+    service_control_handler::{self, ServiceControlHandlerResult, ServiceStatusHandle},
     service_dispatcher,
 };
+#[cfg(windows)]
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(windows)]
 const SERVICE_NAME: &str = "BenJHRMM";
@@ -57,6 +64,41 @@ enum ServiceExitCodes {
     EnrollmentFailed = 2,
     ConfigurationError = 3,
     NetdataUnavailable = 4,
+}
+
+/// What the control handler needs once the service starts stopping.
+#[cfg(windows)]
+#[derive(Default)]
+struct StopContext {
+    status_handle: OnceLock<ServiceStatusHandle>,
+    display_registration: Mutex<Option<power_events::DisplayStateRegistration>>,
+}
+
+#[cfg(windows)]
+impl StopContext {
+    /// Stop listening for display changes and report StopPending with no
+    /// controls accepted. windows-service frees the handler closure after
+    /// Stop/Shutdown/Preshutdown, so no further power events may reach it.
+    fn begin_stopping(&self) {
+        drop(
+            self.display_registration
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .take(),
+        );
+
+        if let Some(status_handle) = self.status_handle.get() {
+            let _ = status_handle.set_service_status(ServiceStatus {
+                service_type: ServiceType::OWN_PROCESS,
+                current_state: ServiceState::StopPending,
+                controls_accepted: ServiceControlAccept::empty(),
+                exit_code: ServiceExitCode::Win32(0),
+                checkpoint: 1,
+                wait_hint: std::time::Duration::from_secs(15),
+                process_id: None,
+            });
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -326,13 +368,31 @@ fn run_service() -> Result<()> {
     })?;
     let agent = Arc::new(agent);
     let agent_shutdown = agent.clone();
+    let power = agent.power();
+    let stop_context = Arc::new(StopContext::default());
+    let handler_stop_context = stop_context.clone();
 
-    // Register service control handler
+    // Register service control handler. It must return at once: power events
+    // only update shared state; notices go out from the agent's runtime.
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {
-            ServiceControl::Stop | ServiceControl::Shutdown => {
+            ServiceControl::Stop => {
                 info!("Service stop requested");
+                handler_stop_context.begin_stopping();
                 agent_shutdown.shutdown();
+                ServiceControlHandlerResult::NoError
+            }
+            // The agent stops itself once the shutdown notice is sent.
+            ServiceControl::Preshutdown | ServiceControl::Shutdown => {
+                info!("System shutdown requested");
+                handler_stop_context.begin_stopping();
+                power.signal(PowerSignal::Shutdown);
+                ServiceControlHandlerResult::NoError
+            }
+            ServiceControl::PowerEvent(event) => {
+                if let Some(signal) = power_events::signal_from_power_event(&event) {
+                    power.signal(signal);
+                }
                 ServiceControlHandlerResult::NoError
             }
             ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
@@ -341,12 +401,27 @@ fn run_service() -> Result<()> {
     };
 
     let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
+    let _ = stop_context.status_handle.set(status_handle);
 
-    // Report running status
+    // Modern Standby never sends PBT_APMSUSPEND; display off is the signal.
+    if agent.power().modern_standby() {
+        use std::os::windows::io::AsRawHandle;
+        *stop_context
+            .display_registration
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            power_events::DisplayStateRegistration::register(status_handle.as_raw_handle());
+    }
+
+    // Report running status. PRESHUTDOWN replaces SHUTDOWN (windows-service
+    // documents them as mutually exclusive) and comes early enough to tell
+    // the server before the network goes.
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
         current_state: ServiceState::Running,
-        controls_accepted: ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN,
+        controls_accepted: ServiceControlAccept::STOP
+            | ServiceControlAccept::PRESHUTDOWN
+            | ServiceControlAccept::POWER_EVENT,
         exit_code: ServiceExitCode::Win32(0),
         checkpoint: 0,
         wait_hint: std::time::Duration::default(),
@@ -355,6 +430,15 @@ fn run_service() -> Result<()> {
 
     // Run the agent
     let result = rt.block_on(agent.run());
+
+    // Unregister display notifications if the agent stopped on its own.
+    drop(
+        stop_context
+            .display_registration
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take(),
+    );
 
     let exit_code = match &result {
         Ok(_) => {

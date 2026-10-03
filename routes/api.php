@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\DeviceCommandController;
 use App\Http\Controllers\Api\DeviceEnrollmentController;
 use App\Http\Controllers\Api\DeviceMetricsController;
 use App\Http\Controllers\Api\HeartbeatController;
+use App\Http\Controllers\Api\PowerEventController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/enroll', [DeviceEnrollmentController::class, 'store'])
@@ -18,6 +19,9 @@ Route::middleware(['device.auth'])->group(function (): void {
 
     Route::post('/heartbeat', [HeartbeatController::class, 'store'])
         ->middleware('throttle:api.heartbeat');
+
+    Route::post('/power', [PowerEventController::class, 'store'])
+        ->middleware('throttle:api.power');
 
     Route::get('/commands/pending', [DeviceCommandController::class, 'pending'])
         ->middleware('throttle:api.heartbeat');

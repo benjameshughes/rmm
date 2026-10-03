@@ -60,8 +60,15 @@ final class EvaluateAlertRules
         return $maxUsage !== null ? (float) $maxUsage : null;
     }
 
-    private function getOfflineMinutes(Device $device): float
+    /**
+     * A device that announced it was sleeping or shutting down is off on purpose, so it is not evaluated at all.
+     */
+    private function getOfflineMinutes(Device $device): ?float
     {
+        if ($device->isPoweringOff) {
+            return null;
+        }
+
         if ($device->last_seen === null) {
             return 9999.0;
         }

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\DevicePowerState;
 use App\Enums\DeviceStatus;
 use App\Models\Device;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -70,6 +71,29 @@ class DeviceFactory extends Factory
     {
         return $this->withApiKey()->state(fn (): array => [
             'last_seen' => now()->subHours($this->faker->numberBetween(1, 48)),
+        ]);
+    }
+
+    /**
+     * The agent announced it is sleeping or shutting down. last_seen is left as it was.
+     */
+    public function poweringOff(): static
+    {
+        return $this->state(fn (): array => [
+            'power_state' => DevicePowerState::PoweringOff,
+            'power_state_changed_at' => now(),
+        ]);
+    }
+
+    /**
+     * The agent announced it has woken or booted, which also counts as a check-in.
+     */
+    public function poweringOn(): static
+    {
+        return $this->state(fn (): array => [
+            'last_seen' => now(),
+            'power_state' => DevicePowerState::PoweringOn,
+            'power_state_changed_at' => now(),
         ]);
     }
 

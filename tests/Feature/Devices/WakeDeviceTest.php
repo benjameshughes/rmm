@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\Device\WakeDevice;
+use App\Enums\DevicePowerState;
 use App\Livewire\Devices\Show;
 use App\Models\Device;
 use App\Models\User;
@@ -58,6 +59,7 @@ it('shows the wake button only for offline devices with a MAC', function (array 
 })->with([
     'asleep with a MAC' => [['last_seen' => now()->subHour(), 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']], true],
     'online' => [['last_seen' => now(), 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']], false],
+    'announced sleep inside the online window' => [['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now(), 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']], true],
     'asleep without a MAC' => [['last_seen' => now()->subHour(), 'mac_addresses' => null], false],
     'asleep with an empty list' => [['last_seen' => now()->subHour(), 'mac_addresses' => []], false],
 ]);

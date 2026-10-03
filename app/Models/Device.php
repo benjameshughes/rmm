@@ -6,11 +6,13 @@ namespace App\Models;
 
 use App\Enums\ApiKeyState;
 use App\Enums\CommandStatus;
+use App\Enums\DevicePowerState;
 use App\Enums\DeviceStatus;
 use App\Enums\ScriptPlatform;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -67,6 +70,8 @@ final class Device extends Model
     {
         return [
             'last_seen' => 'datetime',
+            'power_state' => DevicePowerState::class,
+            'power_state_changed_at' => 'datetime',
             'disks' => 'array',
             'mac_addresses' => 'array',
             'status' => DeviceStatus::class,
@@ -87,6 +92,17 @@ final class Device extends Model
             ->where('api_key_hash', self::hashApiKey($apiKey))
             ->where('status', DeviceStatus::Active)
             ->first();
+    }
+
+    /**
+     * Devices that have not announced they are powering off. Null power states
+     * fail a plain inequality in SQL, so they are matched explicitly.
+     */
+    public function scopeNotPoweringOff(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $powerQuery): Builder => $powerQuery
+            ->whereNull('power_state')
+            ->orWhere('power_state', '!=', DevicePowerState::PoweringOff));
     }
 
     public function metrics(): HasMany
@@ -237,10 +253,31 @@ final class Device extends Model
         return $namesWindows ? ScriptPlatform::Windows : ScriptPlatform::Linux;
     }
 
+    /**
+     * Every check-in proves the device is awake, so it clears a powering off
+     * state at once and a powering on state once it has been held long enough
+     * to be seen.
+     *
+     * @return array{last_seen: Carbon, last_ip: ?string, power_state?: null, power_state_changed_at?: null}
+     */
+    public function checkInAttributes(?string $ip): array
+    {
+        $isHoldingPoweringOn = $this->power_state === DevicePowerState::PoweringOn
+            && $this->power_state_changed_at?->greaterThan(now()->subSeconds(config('devices.power.powering_on_hold_seconds')));
+
+        return [
+            'last_seen' => now(),
+            'last_ip' => $ip,
+            ...($isHoldingPoweringOn ? [] : ['power_state' => null, 'power_state_changed_at' => null]),
+        ];
+    }
+
     public function statusLabel(): string
     {
         return match (true) {
             ! $this->status->isApproved() => $this->status->label(),
+            $this->isPoweringOff => DevicePowerState::PoweringOff->label().($this->power_state_changed_at ? ' since '.$this->power_state_changed_at->format('H:i') : ''),
+            $this->isPoweringOn => DevicePowerState::PoweringOn->label(),
             $this->isOnline => 'Online',
             default => 'Offline',
         };
@@ -250,6 +287,7 @@ final class Device extends Model
     {
         return match (true) {
             ! $this->status->isApproved() => $this->status->color(),
+            $this->isPoweringOff, $this->isPoweringOn => $this->power_state->color(),
             $this->isOnline => 'green',
             default => 'red',
         };
@@ -283,9 +321,27 @@ final class Device extends Model
         });
     }
 
+    /**
+     * A device that announced it is powering off is gone now, not once last_seen ages out.
+     */
     protected function isOnline(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->last_seen !== null && $this->last_seen->greaterThan(now()->subMinutes(config('devices.online.threshold_minutes'))));
+        return Attribute::get(fn (): bool => ! $this->isPoweringOff
+            && $this->last_seen !== null
+            && $this->last_seen->greaterThan(now()->subMinutes(config('devices.online.threshold_minutes'))));
+    }
+
+    protected function isPoweringOff(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOff);
+    }
+
+    /**
+     * Only while the device is still reporting: one that powered on and went quiet again is just offline.
+     */
+    protected function isPoweringOn(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOn && $this->isOnline);
     }
 
     protected function isWakeable(): Attribute

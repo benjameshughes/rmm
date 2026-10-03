@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Device\RecordDevicePowerEvent;
+use App\Http\Requests\PowerEventRequest;
 use App\Models\Device;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
-final class HeartbeatController
+final class PowerEventController
 {
-    public function store(Request $request): JsonResponse
+    public function store(PowerEventRequest $request, RecordDevicePowerEvent $recordDevicePowerEvent): JsonResponse
     {
         /** @var Device $device */
         $device = $request->attributes->get('device');
 
-        $device->forceFill($device->checkInAttributes($request->ip()))->save();
+        $recordDevicePowerEvent($device, $request->powerState(), $request->reason(), $request->ip());
 
         return response()->json([
             'status' => 'ok',

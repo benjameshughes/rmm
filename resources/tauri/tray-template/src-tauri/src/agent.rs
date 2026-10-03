@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -8,6 +9,9 @@ use crate::config::Config;
 use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
 use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
+use crate::power::{GatePolicy, PowerController, PowerNotifier};
+use crate::power_events;
+use crate::power_state::{PowerNotice, PowerReason};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
 use crate::updater::Updater;
@@ -64,6 +68,13 @@ impl AgentState {
     }
 }
 
+/// The key the current session authenticates with, for power notices.
+#[derive(Clone)]
+struct SessionAuth {
+    api_key: String,
+    key_health: Arc<KeyHealth>,
+}
+
 /// Main RMM Agent
 pub struct Agent {
     config: Config,
@@ -71,6 +82,12 @@ pub struct Agent {
     enrollment_manager: EnrollmentManager,
     state: Arc<RwLock<AgentState>>,
     cancellation_token: CancellationToken,
+    power: Arc<PowerController>,
+    /// Taken by `run()`, which delivers the notices.
+    power_notices: Mutex<Option<mpsc::UnboundedReceiver<PowerNotice>>>,
+    /// Set while a metrics session is running.
+    session_auth: Mutex<Option<SessionAuth>>,
+    boot_announced: AtomicBool,
 }
 
 impl Agent {
@@ -98,12 +115,23 @@ impl Agent {
             AgentState::NotEnrolled
         };
 
+        let modern_standby = power_events::modern_standby_supported();
+        info!(
+            "Power model: {}",
+            if modern_standby { "Modern Standby" } else { "classic sleep" }
+        );
+        let (power, power_notices) = PowerController::new(modern_standby);
+
         Ok(Self {
             config,
             system_info,
             enrollment_manager,
             state: Arc::new(RwLock::new(initial_state)),
             cancellation_token: CancellationToken::new(),
+            power,
+            power_notices: Mutex::new(Some(power_notices)),
+            session_auth: Mutex::new(None),
+            boot_announced: AtomicBool::new(false),
         })
     }
 
@@ -119,6 +147,12 @@ impl Agent {
             info!("Agent state changed: {:?} -> {:?}", *current, state);
             *current = state;
         }
+    }
+
+    /// Power state shared with the service control handler, which feeds it
+    /// OS power events.
+    pub fn power(&self) -> Arc<PowerController> {
+        self.power.clone()
     }
 
     /// Get the cancellation token for graceful shutdown
@@ -140,6 +174,16 @@ impl Agent {
         );
         info!("Server URL: {}", self.config.base_url);
 
+        let power_task = self.spawn_power_task();
+        let result = self.clone().run_sessions().await;
+        if let Some(task) = power_task {
+            task.abort();
+        }
+
+        result
+    }
+
+    async fn run_sessions(self: Arc<Self>) -> Result<()> {
         while !self.cancellation_token.is_cancelled() {
             let api_key = match self.enrollment_manager.get_api_key().await? {
                 Some(api_key) => {
@@ -273,13 +317,28 @@ impl Agent {
             }
         };
 
+        self.set_session_auth(Some(SessionAuth {
+            api_key: api_key.clone(),
+            key_health: key_health.clone(),
+        }));
+        if !self.boot_announced.swap(true, Ordering::SeqCst) {
+            self.power
+                .announce(PowerNotice::powering_on(PowerReason::Boot));
+        }
+
         // Spawn heartbeat loop as a separate task
         let heartbeat_api_key = api_key.clone();
         let heartbeat_token = session_token.clone();
         let heartbeat_health = key_health.clone();
+        let heartbeat_gate = self.power.gate(GatePolicy::Reporting);
         let heartbeat_handle = tokio::spawn(async move {
             heartbeat_collector
-                .start_heartbeat_loop(heartbeat_api_key, heartbeat_token, heartbeat_health)
+                .start_heartbeat_loop(
+                    heartbeat_api_key,
+                    heartbeat_token,
+                    heartbeat_health,
+                    heartbeat_gate,
+                )
                 .await;
         });
 
@@ -293,9 +352,10 @@ impl Agent {
         let command_api_key = api_key.clone();
         let command_token = session_token.clone();
         let command_health = key_health.clone();
+        let command_power = self.power.clone();
         let command_handle = tokio::spawn(async move {
             command_client
-                .start_command_loop(command_api_key, command_token, command_health)
+                .start_command_loop(command_api_key, command_token, command_health, command_power)
                 .await;
         });
 
@@ -315,7 +375,12 @@ impl Agent {
 
         // Start the metrics loop (blocks until the session is cancelled)
         collector
-            .start_metrics_loop(api_key, session_token.clone(), key_health.clone())
+            .start_metrics_loop(
+                api_key,
+                session_token.clone(),
+                key_health.clone(),
+                self.power.gate(GatePolicy::Reporting),
+            )
             .await;
 
         // Make sure the other loops stop too, then wait for them
@@ -323,11 +388,65 @@ impl Agent {
         let _ = heartbeat_handle.await;
         let _ = command_handle.await;
         let _ = update_handle.await;
+        self.set_session_auth(None);
 
         session_end(
             key_health.key_rejected(),
             self.cancellation_token.is_cancelled(),
         )
+    }
+
+    fn set_session_auth(&self, auth: Option<SessionAuth>) {
+        *self
+            .session_auth
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = auth;
+    }
+
+    fn session_auth(&self) -> Option<SessionAuth> {
+        self.session_auth
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    /// Deliver power notices in order for as long as the agent runs. A
+    /// shutdown notice stops the agent once sent (or timed out).
+    fn spawn_power_task(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<()>> {
+        let mut notices = self
+            .power_notices
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()?;
+
+        // Without a notifier the task still has to stop the agent on shutdown.
+        let notifier = PowerNotifier::new(self.config.clone())
+            .map_err(|e| error!("Failed to create power notifier: {}", e))
+            .ok();
+
+        let agent = self.clone();
+        Some(tokio::spawn(async move {
+            while let Some(notice) = notices.recv().await {
+                if let Some(notifier) = &notifier {
+                    agent.deliver_power_notice(notifier, notice).await;
+                }
+
+                if notice.is_shutdown() {
+                    info!("Machine is shutting down, stopping the agent");
+                    agent.shutdown();
+                }
+            }
+        }))
+    }
+
+    async fn deliver_power_notice(&self, notifier: &PowerNotifier, notice: PowerNotice) {
+        let Some(auth) = self.session_auth() else {
+            debug!("Not enrolled yet, not sending power notice {:?}", notice);
+            return;
+        };
+
+        let delivery = notifier.send(&auth.api_key, notice).await;
+        auth.key_health.record(delivery.key_outcome());
     }
 
     /// Trigger graceful shutdown

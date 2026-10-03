@@ -18,6 +18,10 @@ final class DeviceCommandController
         /** @var Device $device */
         $device = $request->attributes->get('device');
 
+        if ($device->isPoweringOff) {
+            return response()->json(['command' => null]);
+        }
+
         $command = DeviceCommand::query()
             ->where('device_id', $device->id)
             ->where('status', CommandStatus::Pending)
