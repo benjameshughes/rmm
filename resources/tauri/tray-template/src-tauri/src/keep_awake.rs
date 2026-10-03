@@ -10,8 +10,9 @@
 /// Keeps the machine awake until dropped. On other platforms it does nothing.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub struct KeepAwake {
+    // Only held for its Drop, which clears the request.
     #[cfg(windows)]
-    request: windows::PowerRequest,
+    _request: windows::PowerRequest,
 }
 
 impl KeepAwake {
@@ -20,7 +21,7 @@ impl KeepAwake {
     pub fn acquire(reason: &str) -> Option<Self> {
         #[cfg(windows)]
         {
-            windows::PowerRequest::create(reason).map(|request| Self { request })
+            windows::PowerRequest::create(reason).map(|request| Self { _request: request })
         }
 
         #[cfg(not(windows))]
@@ -31,9 +32,9 @@ impl KeepAwake {
     }
 
     /// Whether Windows accepted the request to keep the system running.
-    #[cfg(windows)]
+    #[cfg(all(windows, test))]
     pub fn is_holding(&self) -> bool {
-        self.request.is_holding()
+        self._request.is_holding()
     }
 }
 
@@ -90,6 +91,7 @@ mod windows {
             Some(Self { handle, held, _reason: wide })
         }
 
+        #[cfg(test)]
         pub fn is_holding(&self) -> bool {
             !self.held.is_empty()
         }
