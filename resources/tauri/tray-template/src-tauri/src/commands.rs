@@ -3,6 +3,12 @@
 //! The agent only ever calls out to its own enrolled server with its device
 //! key; nothing listens on the machine. Every request outcome feeds the shared
 //! `KeyHealth`, so a revoked key ends the session like heartbeats and metrics.
+//!
+//! Windows only: other builds never start the command loop (see
+//! `Agent::spawn_command_loop`), and the loop itself refuses to run there.
+
+// Only Windows builds (and tests) start the command loop.
+#![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
 use crate::command_runner::{self, ExecutionResult, RunLimits, ScriptType};
 use crate::config::Config;
@@ -177,6 +183,11 @@ impl CommandClient {
         power: Arc<PowerController>,
         startup: StartupProgress,
     ) {
+        if !command_runner::COMMANDS_ENABLED {
+            warn!("Monitor-only agent: refusing to poll for commands");
+            return;
+        }
+
         info!(
             "Starting command loop (interval: {}s)",
             self.config.command_poll_interval
@@ -630,6 +641,29 @@ mod tests {
             queue.log(),
             vec![Step::Awake, Step::Refused(32), Step::Released]
         );
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test(start_paused = true)]
+    async fn the_command_loop_refuses_to_start_on_monitor_only_builds() {
+        // Nothing listens here: any request would fail, but none must be made.
+        let client = CommandClient::new(Config::new("http://127.0.0.1:9".to_string())).unwrap();
+        let (power, _notices) = PowerController::new();
+        let token = CancellationToken::new();
+
+        let started = tokio::time::Instant::now();
+        client
+            .start_command_loop(
+                "key".to_string(),
+                token,
+                Arc::new(KeyHealth::new(CancellationToken::new())),
+                power,
+                StartupProgress::default(),
+            )
+            .await;
+
+        // Returned at once instead of polling until cancelled.
+        assert_eq!(started.elapsed(), Duration::ZERO);
     }
 
     #[test]

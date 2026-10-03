@@ -27,6 +27,53 @@ use crate::config::{Config, AGENT_VERSION, GITHUB_RELEASES_URL};
 pub const EXE_ASSET_NAME: &str = "rmm.exe";
 /// Name of the checksum asset (lowercase hex SHA-256 of rmm.exe).
 pub const CHECKSUM_ASSET_NAME: &str = "rmm.exe.sha256";
+/// Static Linux x86_64 binary in the release.
+pub const LINUX_X86_64_ASSET_NAME: &str = "rmm-linux-x86_64";
+/// Its checksum (`sha256sum` format).
+pub const LINUX_X86_64_CHECKSUM_ASSET_NAME: &str = "rmm-linux-x86_64.sha256";
+
+/// The release assets (binary, checksum) this platform updates from, if
+/// updates are published for it.
+pub fn update_assets_for(os: &str, arch: &str) -> Option<(&'static str, &'static str)> {
+    match (os, arch) {
+        ("windows", _) => Some((EXE_ASSET_NAME, CHECKSUM_ASSET_NAME)),
+        ("linux", "x86_64") => Some((LINUX_X86_64_ASSET_NAME, LINUX_X86_64_CHECKSUM_ASSET_NAME)),
+        _ => None,
+    }
+}
+
+/// `update_assets_for` this build.
+pub fn update_assets() -> Option<(&'static str, &'static str)> {
+    update_assets_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// Pick the binary and checksum assets by name. Both must be present: an
+/// update is never installed without its published checksum.
+fn select_assets<'a>(
+    assets: &'a [GitHubAsset],
+    binary_name: &str,
+    checksum_name: &str,
+) -> Result<(&'a GitHubAsset, &'a GitHubAsset)> {
+    let binary = assets
+        .iter()
+        .find(|asset| asset.name == binary_name)
+        .with_context(|| format!("No {} found in release assets", binary_name))?;
+    let checksum = assets
+        .iter()
+        .find(|asset| asset.name == checksum_name)
+        .with_context(|| format!("Release has no {} asset - refusing to update", checksum_name))?;
+    Ok((binary, checksum))
+}
+
+/// Path of the running executable. Linux reports a replaced binary as
+/// "<path> (deleted)"; the install target is still `<path>`.
+pub fn installed_exe_path(current_exe: &Path) -> PathBuf {
+    let text = current_exe.to_string_lossy();
+    match text.strip_suffix(" (deleted)") {
+        Some(path) => PathBuf::from(path),
+        None => current_exe.to_path_buf(),
+    }
+}
 /// Refuse downloads larger than this (the agent is a few MB).
 const MAX_EXE_BYTES: u64 = 200 * 1024 * 1024;
 /// Refuse checksum files larger than this.
@@ -110,6 +157,84 @@ pub fn backup_path(target: &Path) -> PathBuf {
 /// written as a fresh file, so it gets the install directory's normal ACL.
 /// On any failure the original executable is restored.
 pub fn install_executable(target: &Path, bytes: &[u8], expected_sha256: &str) -> Result<()> {
+    #[cfg(unix)]
+    {
+        install_atomically(target, bytes, expected_sha256)
+    }
+
+    #[cfg(not(unix))]
+    {
+        install_by_rename(target, bytes, expected_sha256)
+    }
+}
+
+/// Unix: write the new binary next to the target, fsync it, verify it, keep
+/// the current one as `<name>.bak` (hard link, or a copy), then rename the new
+/// one over the target. The rename is atomic, so the target path always holds
+/// a complete binary.
+#[cfg_attr(not(unix), allow(dead_code))]
+pub fn install_atomically(target: &Path, bytes: &[u8], expected_sha256: &str) -> Result<()> {
+    verify_sha256(bytes, expected_sha256).context("Refusing to install unverified executable")?;
+
+    let permissions = std::fs::metadata(target)
+        .with_context(|| format!("Cannot stat current executable {}", target.display()))?
+        .permissions();
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .context("Executable path has no file name")?;
+    let staged = target.with_file_name(format!(".{}.new-{}", name, std::process::id()));
+    let _ = std::fs::remove_file(&staged);
+
+    let stage = (|| -> Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)
+            .context("Failed to create staged executable")?;
+        file.write_all(bytes).context("Failed to write staged executable")?;
+        file.sync_all().context("Failed to flush staged executable")?;
+        drop(file);
+
+        std::fs::set_permissions(&staged, permissions)
+            .context("Failed to set permissions on staged executable")?;
+
+        let written = std::fs::read(&staged).context("Failed to read back staged executable")?;
+        verify_sha256(&written, expected_sha256).context("Staged executable failed verification")?;
+
+        let backup = backup_path(target);
+        let _ = std::fs::remove_file(&backup);
+        if std::fs::hard_link(target, &backup).is_err() {
+            std::fs::copy(target, &backup).with_context(|| {
+                format!("Failed to keep the current executable as {}", backup.display())
+            })?;
+        }
+
+        std::fs::rename(&staged, target)
+            .with_context(|| format!("Failed to move the new executable into {}", target.display()))
+    })();
+
+    if let Err(e) = stage {
+        error!("Update install failed, current executable left in place: {:#}", e);
+        let _ = std::fs::remove_file(&staged);
+        return Err(e);
+    }
+
+    #[cfg(unix)]
+    if let Some(dir) = target.parent() {
+        if let Ok(dir) = std::fs::File::open(dir) {
+            let _ = dir.sync_all();
+        }
+    }
+
+    Ok(())
+}
+
+/// Windows: rename the running executable to `<name>.bak` (allowed for a
+/// running image) and write the new one as a fresh file, rolling back on any
+/// failure.
+#[cfg_attr(unix, allow(dead_code))]
+pub fn install_by_rename(target: &Path, bytes: &[u8], expected_sha256: &str) -> Result<()> {
     verify_sha256(bytes, expected_sha256).context("Refusing to install unverified executable")?;
 
     let backup = backup_path(target);
@@ -202,9 +327,10 @@ pub fn encode_powershell(script: &str) -> String {
     general_purpose::STANDARD.encode(utf16le)
 }
 
-/// Auto-updates are only published for Windows (rmm.exe).
-pub const fn auto_update_supported() -> bool {
-    cfg!(target_os = "windows")
+/// Auto-updates are published for Windows (rmm.exe) and Linux x86_64
+/// (rmm-linux-x86_64).
+pub fn auto_update_supported() -> bool {
+    update_assets().is_some()
 }
 
 /// Auto-updater for the RMM agent
@@ -270,22 +396,11 @@ impl Updater {
             return Ok(None);
         }
 
-        let exe_asset = release
-            .assets
-            .iter()
-            .find(|a| a.name == EXE_ASSET_NAME)
-            .context("No rmm.exe found in release assets")?;
-
-        let checksum_asset = release
-            .assets
-            .iter()
-            .find(|a| a.name == CHECKSUM_ASSET_NAME)
-            .with_context(|| {
-                format!(
-                    "Release v{} has no {} asset - refusing to update",
-                    remote, CHECKSUM_ASSET_NAME
-                )
-            })?;
+        let (binary_name, checksum_name) =
+            update_assets().context("No updates are published for this platform")?;
+        let (exe_asset, checksum_asset) =
+            select_assets(&release.assets, binary_name, checksum_name)
+                .with_context(|| format!("Release v{} is incomplete", remote))?;
 
         info!(
             "Update available: {} -> {} ({})",
@@ -379,12 +494,13 @@ impl Updater {
     /// Download, verify and install an update over the running executable.
     pub async fn download_and_install(&self, info: &UpdateInfo) -> Result<PathBuf> {
         if !auto_update_supported() {
-            anyhow::bail!("Automatic updates are only supported on Windows");
+            anyhow::bail!("Automatic updates are not published for this platform");
         }
 
         let (bytes, sha256) = self.download_verified(info).await?;
-        let current_exe =
-            std::env::current_exe().context("Failed to get current executable path")?;
+        let current_exe = installed_exe_path(
+            &std::env::current_exe().context("Failed to get current executable path")?,
+        );
 
         install_executable(&current_exe, &bytes, &sha256)?;
         info!(
@@ -425,9 +541,17 @@ impl Updater {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    /// Linux: ask systemd to restart the service without waiting, so the
+    /// restart job survives this process being stopped.
+    #[cfg(target_os = "linux")]
     pub fn trigger_restart(&self) -> Result<()> {
-        info!("Non-Windows platform: manual restart required");
+        info!("Restarting service to load the new version");
+        crate::linux_service::restart_detached()
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    pub fn trigger_restart(&self) -> Result<()> {
+        info!("This platform has no service: restart the agent manually");
         Ok(())
     }
 
@@ -439,7 +563,7 @@ impl Updater {
         }
 
         if !auto_update_supported() {
-            info!("Automatic updates are only supported on Windows - update loop disabled");
+            info!("No updates are published for this platform - update loop disabled");
             return;
         }
 
@@ -587,41 +711,57 @@ mod tests {
         );
     }
 
+    type Installer = fn(&Path, &[u8], &str) -> Result<()>;
+
+    /// Both strategies run everywhere; `install_executable` picks one per OS.
+    const INSTALLERS: [(&str, Installer); 3] = [
+        ("platform", install_executable),
+        ("atomic", install_atomically),
+        ("rename", install_by_rename),
+    ];
+
     #[test]
     fn installs_verified_executable_and_keeps_backup() {
-        let tmp = TempDir::new().unwrap();
-        let target = tmp.path().join("rmm.exe");
-        std::fs::write(&target, b"old").unwrap();
+        for (name, install) in INSTALLERS {
+            let tmp = TempDir::new().unwrap();
+            let target = tmp.path().join("rmm.exe");
+            std::fs::write(&target, b"old").unwrap();
 
-        install_executable(&target, b"hello", HELLO_SHA).unwrap();
+            install(&target, b"hello", HELLO_SHA).unwrap();
 
-        assert_eq!(std::fs::read(&target).unwrap(), b"hello");
-        assert_eq!(std::fs::read(backup_path(&target)).unwrap(), b"old");
+            assert_eq!(std::fs::read(&target).unwrap(), b"hello", "{name}");
+            assert_eq!(std::fs::read(backup_path(&target)).unwrap(), b"old", "{name}");
+        }
     }
 
     #[test]
     fn replaces_stale_backup() {
-        let tmp = TempDir::new().unwrap();
-        let target = tmp.path().join("rmm.exe");
-        std::fs::write(&target, b"old").unwrap();
-        std::fs::write(backup_path(&target), b"older").unwrap();
+        for (name, install) in INSTALLERS {
+            let tmp = TempDir::new().unwrap();
+            let target = tmp.path().join("rmm.exe");
+            std::fs::write(&target, b"old").unwrap();
+            std::fs::write(backup_path(&target), b"older").unwrap();
 
-        install_executable(&target, b"hello", HELLO_SHA).unwrap();
+            install(&target, b"hello", HELLO_SHA).unwrap();
 
-        assert_eq!(std::fs::read(&target).unwrap(), b"hello");
-        assert_eq!(std::fs::read(backup_path(&target)).unwrap(), b"old");
+            assert_eq!(std::fs::read(&target).unwrap(), b"hello", "{name}");
+            assert_eq!(std::fs::read(backup_path(&target)).unwrap(), b"old", "{name}");
+        }
     }
 
     #[test]
     fn refuses_unverified_executable_without_touching_disk() {
-        let tmp = TempDir::new().unwrap();
-        let target = tmp.path().join("rmm.exe");
-        std::fs::write(&target, b"old").unwrap();
+        for (name, install) in INSTALLERS {
+            let tmp = TempDir::new().unwrap();
+            let target = tmp.path().join("rmm.exe");
+            std::fs::write(&target, b"old").unwrap();
 
-        assert!(install_executable(&target, b"evil", HELLO_SHA).is_err());
+            assert!(install(&target, b"evil", HELLO_SHA).is_err(), "{name}");
 
-        assert_eq!(std::fs::read(&target).unwrap(), b"old");
-        assert!(!backup_path(&target).exists());
+            assert_eq!(std::fs::read(&target).unwrap(), b"old", "{name}");
+            assert!(!backup_path(&target).exists(), "{name}");
+            assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1, "{name}");
+        }
     }
 
     #[cfg(unix)]
@@ -629,22 +769,114 @@ mod tests {
     fn preserves_executable_permissions() {
         use std::os::unix::fs::PermissionsExt;
 
-        let tmp = TempDir::new().unwrap();
-        let target = tmp.path().join("rmm");
-        std::fs::write(&target, b"old").unwrap();
-        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for (name, install) in INSTALLERS {
+            let tmp = TempDir::new().unwrap();
+            let target = tmp.path().join("rmm");
+            std::fs::write(&target, b"old").unwrap();
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        install_executable(&target, b"hello", HELLO_SHA).unwrap();
+            install(&target, b"hello", HELLO_SHA).unwrap();
 
-        let mode = std::fs::metadata(&target).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, 0o755);
+            let mode = std::fs::metadata(&target).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o755, "{name}");
+        }
     }
 
     #[test]
     fn fails_cleanly_when_target_missing() {
+        for (name, install) in INSTALLERS {
+            let tmp = TempDir::new().unwrap();
+            let target = tmp.path().join("missing-dir").join("rmm.exe");
+            assert!(install(&target, b"hello", HELLO_SHA).is_err(), "{name}");
+            assert!(!backup_path(&target).exists(), "{name}");
+        }
+    }
+
+    #[test]
+    fn atomic_install_leaves_no_staged_file_behind() {
         let tmp = TempDir::new().unwrap();
-        let target = tmp.path().join("missing-dir").join("rmm.exe");
-        assert!(install_executable(&target, b"hello", HELLO_SHA).is_err());
-        assert!(!backup_path(&target).exists());
+        let target = tmp.path().join("rmm-linux-x86_64");
+        std::fs::write(&target, b"old").unwrap();
+
+        install_atomically(&target, b"hello", HELLO_SHA).unwrap();
+
+        let mut names: Vec<String> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["rmm-linux-x86_64", "rmm-linux-x86_64.bak"]);
+    }
+
+    #[test]
+    fn picks_the_release_assets_for_each_platform() {
+        assert_eq!(
+            update_assets_for("windows", "x86_64"),
+            Some(("rmm.exe", "rmm.exe.sha256"))
+        );
+        assert_eq!(
+            update_assets_for("linux", "x86_64"),
+            Some(("rmm-linux-x86_64", "rmm-linux-x86_64.sha256"))
+        );
+        assert_eq!(update_assets_for("linux", "aarch64"), None);
+        assert_eq!(update_assets_for("macos", "aarch64"), None);
+    }
+
+    fn release_assets() -> Vec<GitHubAsset> {
+        let release: GitHubRelease = serde_json::from_str(
+            r#"{"tag_name":"v0.7.0","assets":[
+                {"name":"benjh-rmm-0.7.0-x86_64.msi","browser_download_url":"https://example.test/msi","size":5},
+                {"name":"rmm.exe","browser_download_url":"https://example.test/exe","size":10},
+                {"name":"rmm.exe.sha256","browser_download_url":"https://example.test/exe.sha256","size":74},
+                {"name":"rmm-linux-x86_64","browser_download_url":"https://example.test/linux","size":20},
+                {"name":"rmm-linux-x86_64.sha256","browser_download_url":"https://example.test/linux.sha256","size":83}
+            ]}"#,
+        )
+        .unwrap();
+        release.assets
+    }
+
+    #[test]
+    fn selects_the_linux_binary_and_its_checksum() {
+        let assets = release_assets();
+        let (binary, checksum) =
+            select_assets(&assets, LINUX_X86_64_ASSET_NAME, LINUX_X86_64_CHECKSUM_ASSET_NAME).unwrap();
+
+        assert_eq!(binary.browser_download_url, "https://example.test/linux");
+        assert_eq!(binary.size, 20);
+        assert_eq!(checksum.browser_download_url, "https://example.test/linux.sha256");
+    }
+
+    #[test]
+    fn refuses_a_release_without_the_checksum() {
+        let assets: Vec<GitHubAsset> = release_assets()
+            .into_iter()
+            .filter(|asset| asset.name != LINUX_X86_64_CHECKSUM_ASSET_NAME)
+            .collect();
+
+        let error = select_assets(&assets, LINUX_X86_64_ASSET_NAME, LINUX_X86_64_CHECKSUM_ASSET_NAME)
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("refusing to update"));
+        assert!(select_assets(&assets, "rmm-linux-aarch64", "x").is_err());
+    }
+
+    #[test]
+    fn accepts_the_linux_checksum_file_format() {
+        assert_eq!(
+            parse_checksum(&format!("{}  rmm-linux-x86_64\n", HELLO_SHA)).unwrap(),
+            HELLO_SHA
+        );
+    }
+
+    #[test]
+    fn strips_the_deleted_marker_from_a_replaced_binary() {
+        assert_eq!(
+            installed_exe_path(Path::new("/usr/local/bin/rmm (deleted)")),
+            PathBuf::from("/usr/local/bin/rmm")
+        );
+        assert_eq!(
+            installed_exe_path(Path::new("/usr/local/bin/rmm")),
+            PathBuf::from("/usr/local/bin/rmm")
+        );
     }
 }

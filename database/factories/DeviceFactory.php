@@ -126,6 +126,16 @@ class DeviceFactory extends Factory
         ]);
     }
 
+    /**
+     * A device whose agent reported it is read-only, such as the Linux agent.
+     */
+    public function monitorOnly(): static
+    {
+        return $this->linux()->state(fn (): array => [
+            'is_monitor_only' => true,
+        ]);
+    }
+
     public function windows(): static
     {
         return $this->state(fn (): array => [

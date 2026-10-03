@@ -22,8 +22,8 @@ final class BulkExecuteScript
     ) {}
 
     /**
-     * Inactive devices are skipped, and so are devices whose agent is too old
-     * for a parameterised script, so one old agent never stops the batch.
+     * Inactive and monitor-only devices are skipped, and so are devices whose
+     * agent is too old for a parameterised script, so one device never stops the batch.
      *
      * @param  Collection<int, Device>  $devices
      * @param  array<string, string>  $parameters  Values already checked by ValidateScriptParameterValues
@@ -32,8 +32,16 @@ final class BulkExecuteScript
      */
     public function __invoke(Script $script, Collection $devices, User $user, array $parameters = [], ?ScheduledTask $scheduledTask = null): int
     {
-        [$eligible, $outdated] = $devices
+        [$monitorOnly, $commandable] = $devices
             ->filter(fn (Device $device): bool => $device->status === DeviceStatus::Active)
+            ->partition(fn (Device $device): bool => $device->isMonitorOnly);
+
+        $monitorOnly->each(fn (Device $device) => Log::info('script.skipped_monitor_only', [
+            'script_id' => $script->id,
+            'device_id' => $device->id,
+        ]));
+
+        [$eligible, $outdated] = $commandable
             ->partition(fn (Device $device): bool => $script->parameters->isEmpty() || $this->agentVersions->supportsScriptParameters($device));
 
         $outdated->each(fn (Device $device) => Log::warning('script.skipped_outdated_agent', [

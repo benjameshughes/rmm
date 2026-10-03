@@ -8,6 +8,13 @@
 //! Script parameters reach the child only as `RMM_<NAME>` environment
 //! variables, never spliced into the script text, so values need no escaping
 //! and cannot inject code.
+//!
+//! Only Windows agents run commands. Every other build is monitor-only by
+//! construction: `run_script` refuses without touching disk, and the executor
+//! behind it is only reachable from Windows builds (and this module's tests).
+
+// The executor is only called from Windows builds and tests.
+#![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -19,6 +26,13 @@ use tokio::process::Command;
 const STDERR_SEPARATOR: &str = "\n\n--- stderr ---\n";
 const TRUNCATION_MARKER: &str = "\n[output truncated]";
 const PARAMETER_ENV_PREFIX: &str = "RMM_";
+
+/// Whether this build may run commands at all. Compile-time: false on every
+/// non-Windows build (Linux agents are read-only monitors).
+pub const COMMANDS_ENABLED: bool = cfg!(windows);
+
+/// Error returned by `run_script` on monitor-only builds.
+pub const MONITOR_ONLY_REFUSAL: &str = "This agent is monitor-only and never runs commands";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScriptType {
@@ -143,8 +157,28 @@ pub fn parameter_env_vars(parameters: &HashMap<String, String>) -> Vec<(String, 
 }
 
 /// Execute `content` as a script of `script_type` within `limits`, exposing
-/// each of `parameters` as an `RMM_<NAME>` environment variable.
+/// each of `parameters` as an `RMM_<NAME>` environment variable. Refuses on
+/// monitor-only (non-Windows) builds.
 pub async fn run_script(
+    script_type: &ScriptType,
+    content: &str,
+    parameters: &HashMap<String, String>,
+    command_id: u64,
+    limits: &RunLimits,
+) -> ExecutionResult {
+    #[cfg(windows)]
+    {
+        run_script_unchecked(script_type, content, parameters, command_id, limits).await
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = (script_type, content, parameters, command_id, limits);
+        ExecutionResult::failed(MONITOR_ONLY_REFUSAL.to_string(), Instant::now())
+    }
+}
+
+async fn run_script_unchecked(
     script_type: &ScriptType,
     content: &str,
     parameters: &HashMap<String, String>,
@@ -448,7 +482,7 @@ mod tests {
             ScriptType::Powershell
         };
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &foreign,
             "echo hi",
             &HashMap::new(),
@@ -466,7 +500,7 @@ mod tests {
     async fn refuses_unknown_types() {
         let dir = tempfile::tempdir().unwrap();
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Unknown("cobol".to_string()),
             "DISPLAY 'HI'",
             &HashMap::new(),
@@ -484,7 +518,7 @@ mod tests {
     async fn runs_a_shell_script_and_cleans_up() {
         let dir = tempfile::tempdir().unwrap();
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Sh,
             "echo hello\necho problem >&2\nexit 3\n",
             &HashMap::new(),
@@ -500,6 +534,40 @@ mod tests {
             result.output,
             format!("hello\n{}problem\n", STDERR_SEPARATOR)
         );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn monitor_only_builds_cannot_run_commands() {
+        assert!(!COMMANDS_ENABLED);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_builds_run_commands() {
+        assert!(COMMANDS_ENABLED);
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn run_script_refuses_on_monitor_only_builds_without_writing_anything() {
+        let dir = tempfile::tempdir().unwrap();
+
+        for script_type in [ScriptType::Sh, ScriptType::Bash, ScriptType::Powershell] {
+            let result = run_script(
+                &script_type,
+                "touch should-not-exist",
+                &HashMap::new(),
+                1,
+                &limits(dir.path(), 5, 100),
+            )
+            .await;
+
+            assert_eq!(result.exit_code, -1);
+            assert_eq!(result.error_message.as_deref(), Some(MONITOR_ONLY_REFUSAL));
+            assert!(!result.timed_out);
+        }
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 
@@ -527,7 +595,7 @@ mod tests {
             "it's \"quoted\" $(whoami); rm -rf /".to_string(),
         )]);
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Bash,
             "printf '%s' \"$RMM_PackageId\"\n",
             &parameters,
@@ -546,7 +614,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let parameters = HashMap::from([("PackageId".to_string(), "Mozilla.Firefox".to_string())]);
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Powershell,
             "Write-Output $env:RMM_PackageId",
             &parameters,
@@ -565,7 +633,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let started = Instant::now();
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Sh,
             "echo before\nsleep 30 &\nsleep 30\n",
             &HashMap::new(),
@@ -589,7 +657,7 @@ mod tests {
     async fn runs_a_powershell_script() {
         let dir = tempfile::tempdir().unwrap();
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Powershell,
             "Write-Output 'hello from powershell'\nexit 4",
             &HashMap::new(),
@@ -608,7 +676,7 @@ mod tests {
     async fn runs_a_cmd_script() {
         let dir = tempfile::tempdir().unwrap();
 
-        let result = run_script(
+        let result = run_script_unchecked(
             &ScriptType::Cmd,
             "@echo off\r\necho hello from cmd\r\nexit /b 0\r\n",
             &HashMap::new(),

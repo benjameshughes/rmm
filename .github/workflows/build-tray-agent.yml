@@ -14,6 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
 
     steps:
       - name: Checkout
@@ -94,35 +96,121 @@ jobs:
             resources/tauri/tray-template/src-tauri/target/release/rmm.exe.sha256
           retention-days: 90
 
+  # Read-only monitoring agent for Linux servers/LXCs: one static musl binary
+  # (no OpenSSL; reqwest uses rustls), never runs commands.
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install musl tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "resources/tauri/tray-template/src-tauri -> target"
+
+      - name: Run Tests
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: cargo test --release
+
+      - name: Build static binary
+        working-directory: resources/tauri/tray-template/src-tauri
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      # Agents refuse to auto-update unless the binary matches this checksum
+      - name: Package binary and SHA-256
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: |
+          mkdir -p dist-linux
+          cp target/x86_64-unknown-linux-musl/release/rmm dist-linux/rmm-linux-x86_64
+          chmod 755 dist-linux/rmm-linux-x86_64
+          cd dist-linux
+          file rmm-linux-x86_64
+          if ldd rmm-linux-x86_64 >/dev/null 2>&1; then
+            echo "rmm-linux-x86_64 is dynamically linked" >&2
+            exit 1
+          fi
+          ./rmm-linux-x86_64 --version
+          sha256sum rmm-linux-x86_64 > rmm-linux-x86_64.sha256
+          cat rmm-linux-x86_64.sha256
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmm-agent-linux
+          path: |
+            resources/tauri/tray-template/src-tauri/dist-linux/rmm-linux-x86_64
+            resources/tauri/tray-template/src-tauri/dist-linux/rmm-linux-x86_64.sha256
+          retention-days: 90
+
+  # One release with every platform's assets, created only once both builds
+  # (and their tests) have passed.
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: [build, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List release files
+        run: ls -la dist
+
       - name: Create Release
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: RMM Agent v${{ steps.version.outputs.VERSION }}
+          tag_name: v${{ needs.build.outputs.version }}
+          name: RMM Agent v${{ needs.build.outputs.version }}
           files: |
-            resources/tauri/tray-template/src-tauri/target/wix/*.msi
-            resources/tauri/tray-template/src-tauri/target/release/rmm.exe
-            resources/tauri/tray-template/src-tauri/target/release/rmm.exe.sha256
+            dist/*.msi
+            dist/rmm.exe
+            dist/rmm.exe.sha256
+            dist/rmm-linux-x86_64
+            dist/rmm-linux-x86_64.sha256
+          fail_on_unmatched_files: true
           generate_release_notes: false
           body: |
-            ## RMM Agent v${{ steps.version.outputs.VERSION }}
+            ## RMM Agent v${{ needs.build.outputs.version }}
 
             ### Downloads
-            - **MSI Installer** - For fresh installations
-            - **rmm.exe** - For auto-updates (agents download this automatically)
+            - **MSI Installer** - For fresh Windows installations
+            - **rmm.exe** - For Windows auto-updates (agents download this automatically)
             - **rmm.exe.sha256** - SHA-256 of rmm.exe; agents refuse updates that do not match
+            - **rmm-linux-x86_64** - Static Linux agent (read-only monitoring, never runs commands)
+            - **rmm-linux-x86_64.sha256** - SHA-256 of the Linux agent
 
             ### Installation
-            Run the MSI installer or use PowerShell:
+            Windows - run the MSI installer or use PowerShell:
             ```powershell
             irm https://your-server/agent/install.ps1 | iex
+            ```
+
+            Linux - as root:
+            ```sh
+            curl -fsSL https://your-server/agent/install.sh | sh
             ```
 
             ### After Installation
             The `rmm` command will be available in PATH:
             ```powershell
-            # Run from an elevated (Administrator) prompt
+            # Run from an elevated (Administrator) prompt, or with sudo on Linux
             rmm status           # Show agent status
             rmm update --check   # Check for updates
             rmm --url <URL>      # Set server URL

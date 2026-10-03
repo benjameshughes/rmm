@@ -15,6 +15,7 @@ final class Agent extends Component
     {
         return view('livewire.devices.agent', [
             'downloadUrl' => route('agent.download'),
+            'linuxInstallCommand' => 'curl -fsSL '.route('agent.download.linux').' | sudo bash',
         ]);
     }
 }

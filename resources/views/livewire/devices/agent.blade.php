@@ -36,4 +36,23 @@
             </ul>
         </flux:callout>
     </div>
+
+    <flux:separator variant="subtle" />
+
+    <div class="space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+            <flux:heading size="lg">Linux (monitor only)</flux:heading>
+            <flux:badge size="sm" color="zinc" icon="eye">Read-only</flux:badge>
+        </div>
+
+        <flux:text>
+            Run this as root on an x86_64 Linux server or LXC. It downloads the latest agent, checks its SHA-256 checksum, installs it to /usr/local/bin/rmm and registers it with this panel. Run it again to upgrade.
+        </flux:text>
+
+        <flux:input :value="$linuxInstallCommand" readonly copyable input:class="font-mono" aria-label="Linux install command" />
+
+        <flux:callout variant="subtle" icon="eye" heading="Monitor only">
+            <flux:callout.text>The Linux agent reports metrics and disk usage and never runs commands. The panel refuses to queue commands, scripts or wake packets for it, whatever the agent reports.</flux:callout.text>
+        </flux:callout>
+    </div>
 </div>

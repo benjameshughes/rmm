@@ -19,6 +19,8 @@ return [
 
     'installer' => resource_path('scripts/installer/install.ps1'),
 
+    'linux_installer' => resource_path('scripts/installer/install.sh'),
+
     'types' => [
         'ps1' => 'powershell',
         'cmd' => 'cmd',

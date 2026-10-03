@@ -42,10 +42,17 @@ pub const SID_ADMINISTRATORS: &str = "S-1-5-32-544";
 
 /// Message shown when a CLI command cannot access the locked data dir.
 pub fn elevation_message(data_dir: &Path) -> String {
-    format!(
-        "Access denied to {}.\nThe agent's data directory is restricted to SYSTEM and Administrators.\nRun this command from an elevated (Administrator) prompt.",
-        data_dir.display()
-    )
+    if cfg!(windows) {
+        format!(
+            "Access denied to {}.\nThe agent's data directory is restricted to SYSTEM and Administrators.\nRun this command from an elevated (Administrator) prompt.",
+            data_dir.display()
+        )
+    } else {
+        format!(
+            "Access denied to {}.\nThe agent's data directory is restricted to root.\nRun this command with sudo.",
+            data_dir.display()
+        )
+    }
 }
 
 /// Arguments (after the directory path) that lock a single directory down:
@@ -585,9 +592,18 @@ mod tests {
         assert!(check_data_dir_access(tmp.path()).is_ok());
     }
 
+    #[cfg(windows)]
     #[test]
     fn elevation_message_mentions_admin() {
         let msg = elevation_message(Path::new("/data"));
         assert!(msg.contains("elevated (Administrator)"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn elevation_message_mentions_sudo() {
+        let msg = elevation_message(Path::new("/var/lib/benjh-rmm"));
+        assert!(msg.contains("sudo"));
+        assert!(msg.contains("/var/lib/benjh-rmm"));
     }
 }

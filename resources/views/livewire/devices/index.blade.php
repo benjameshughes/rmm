@@ -108,7 +108,10 @@
                             </flux:table.cell>
                             <flux:table.cell>
                                 <div class="space-y-1">
-                                    <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
+                                        <x-device.monitor-only-badge :device="$device" />
+                                    </div>
                                     <flux:text size="xs">{{ $device->lastSeenForHumans() }}</flux:text>
                                 </div>
                             </flux:table.cell>

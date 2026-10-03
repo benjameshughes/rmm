@@ -177,7 +177,7 @@ final class Index extends Component
 
         if ($queued < $devices->count()) {
             Flux::toast(
-                text: 'Inactive devices and devices whose agent is older than '.config('agent.parameters_min_version').' were skipped.',
+                text: 'Inactive and monitor-only devices, and devices whose agent is older than '.config('agent.parameters_min_version').', were skipped.',
                 heading: "Queued on {$queued} of {$devices->count()} ".Str::plural('device', $devices->count()),
                 variant: 'warning',
             );
@@ -186,10 +186,7 @@ final class Index extends Component
 
     public function updateOutdatedAgents(BulkExecuteScript $action, AgentVersionQueries $agentVersions): void
     {
-        $devices = $agentVersions->outdatedDevices()
-            ->each(fn (Device $device) => $this->authorize('runCommands', $device));
-
-        $action(Script::findSystem('update-agent'), $devices, auth()->user());
+        $action(Script::findSystem('update-agent'), $this->authorizeCommandableDevices($agentVersions->outdatedDevices()), auth()->user());
         $this->dispatch('command-queued');
     }
 
@@ -246,10 +243,22 @@ final class Index extends Component
     /** @return Collection<int, Device> */
     private function authorizedSelectedDevices(): Collection
     {
-        return Device::query()
-            ->whereIn('id', $this->selectedDevices)
-            ->get()
+        return $this->authorizeCommandableDevices(Device::query()->whereIn('id', $this->selectedDevices)->get());
+    }
+
+    /**
+     * Monitor-only devices pass through unchecked for the bulk action to skip,
+     * so one Linux server in a selection does not refuse the whole batch.
+     *
+     * @param  Collection<int, Device>  $devices
+     * @return Collection<int, Device>
+     */
+    private function authorizeCommandableDevices(Collection $devices): Collection
+    {
+        $devices->reject(fn (Device $device): bool => $device->isMonitorOnly)
             ->each(fn (Device $device) => $this->authorize('runCommands', $device));
+
+        return $devices;
     }
 
     protected function query(DeviceListQueries $deviceList): Builder

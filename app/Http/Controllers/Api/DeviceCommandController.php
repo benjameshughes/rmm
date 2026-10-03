@@ -13,10 +13,17 @@ use Illuminate\Support\Facades\Log;
 
 final class DeviceCommandController
 {
+    /**
+     * A monitor-only device is never handed a command, whatever its agent claims to support.
+     */
     public function pending(Request $request): JsonResponse
     {
         /** @var Device $device */
         $device = $request->attributes->get('device');
+
+        if ($device->isMonitorOnly) {
+            return response()->json(['command' => null]);
+        }
 
         $command = DeviceCommand::query()
             ->where('device_id', $device->id)

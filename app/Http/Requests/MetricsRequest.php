@@ -85,6 +85,7 @@ final class MetricsRequest extends FormRequest
             'netdata_net_drops' => ['nullable', 'array'],
             'netdata_net_speed' => ['nullable', 'array'],
             'agent_version' => ['nullable', 'string', 'max:20'],
+            'monitor_only' => ['nullable', 'boolean'],
             'mac_addresses' => ['nullable', 'array', 'max:32'],
             'mac_addresses.*' => ['string', 'mac_address'],
             'payload' => ['nullable', 'array'],

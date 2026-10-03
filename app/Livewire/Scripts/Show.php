@@ -69,6 +69,7 @@ final class Show extends Component
 
         $availableDevices = Device::query()
             ->where('status', DeviceStatus::Active)
+            ->acceptsCommands()
             ->when($this->deviceSearch !== '', fn ($q) => $q->where('hostname', 'like', '%'.$this->deviceSearch.'%'))
             ->orderBy('hostname')
             ->limit(20)

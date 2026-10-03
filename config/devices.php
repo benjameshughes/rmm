@@ -73,7 +73,9 @@ return [
     | Used-space percentages at which a disk is shown as filling up or full.
     | Volumes matching an ignored pattern (Str::is wildcards) are not stored
     | or alerted on: Windows EFI/recovery partitions have no drive letter and
-    | sit 70-90% full by design, as do Linux boot and runtime mounts.
+    | sit 70-90% full by design, as do Linux boot and runtime mounts. Linux
+    | hosts also report Docker and container storage layers, pseudo
+    | filesystems and RAM-backed tmpfs, matched by mount point or filesystem.
     |
     */
 
@@ -87,6 +89,19 @@ return [
             '/dev*',
             '/sys*',
             '/snap*',
+            '/proc*',
+            '/var/lib/docker*',
+            '/var/lib/containers*',
+            '/var/lib/lxcfs*',
+        ],
+        'ignored_filesystems' => [
+            'tmpfs',
+            'devtmpfs',
+            'overlay',
+            'squashfs',
+            'proc',
+            'sysfs',
+            'fuse.lxcfs',
         ],
     ],
 

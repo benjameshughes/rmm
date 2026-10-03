@@ -8,7 +8,9 @@ mod config;
 mod data_dir_security;
 mod enrollment;
 mod keep_awake;
+mod linux_service;
 mod metrics;
+mod native_metrics;
 mod power;
 #[cfg(windows)]
 mod power_events;
@@ -549,29 +551,60 @@ fn stop_service_cmd() -> Result<()> {
     Ok(())
 }
 
-// Non-Windows stubs
-#[cfg(not(windows))]
+// Linux: systemd service (monitor-only agent)
+#[cfg(target_os = "linux")]
 fn install_service() -> Result<()> {
-    println!("Service installation is only supported on Windows");
-    Ok(())
+    linux_service::install()
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn uninstall_service() -> Result<()> {
-    println!("Service uninstallation is only supported on Windows");
-    Ok(())
+    linux_service::uninstall()
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn start_service_cmd() -> Result<()> {
-    println!("Service control is only supported on Windows");
+    linux_service::start()
+}
+
+#[cfg(target_os = "linux")]
+fn stop_service_cmd() -> Result<()> {
+    linux_service::stop()
+}
+
+// Other platforms (macOS development builds)
+#[cfg(not(any(windows, target_os = "linux")))]
+fn install_service() -> Result<()> {
+    println!("Service installation is only supported on Windows and Linux");
     Ok(())
 }
 
-#[cfg(not(windows))]
-fn stop_service_cmd() -> Result<()> {
-    println!("Service control is only supported on Windows");
+#[cfg(not(any(windows, target_os = "linux")))]
+fn uninstall_service() -> Result<()> {
+    println!("Service uninstallation is only supported on Windows and Linux");
     Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn start_service_cmd() -> Result<()> {
+    println!("Service control is only supported on Windows and Linux");
+    Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn stop_service_cmd() -> Result<()> {
+    println!("Service control is only supported on Windows and Linux");
+    Ok(())
+}
+
+/// Lock the Linux data directory (root only, 0700) before anything in it is
+/// read or the log is opened. Elsewhere the Windows service does its own.
+fn harden_data_dir(config: &Config) -> Option<data_dir_security::HardeningReport> {
+    if cfg!(target_os = "linux") {
+        Some(data_dir_security::secure_data_dir(&config.data_dir))
+    } else {
+        None
+    }
 }
 
 fn show_status() -> Result<()> {
@@ -728,6 +761,10 @@ fn reenroll_device(force: bool) -> Result<()> {
 
     // 1. Stop service
     println!("Stopping service...");
+    #[cfg(target_os = "linux")]
+    {
+        let _ = linux_service::stop();
+    }
     #[cfg(windows)]
     {
         let _ = std::process::Command::new("sc")
@@ -746,6 +783,10 @@ fn reenroll_device(force: bool) -> Result<()> {
 
     // 3. Restart service
     println!("Starting service...");
+    #[cfg(target_os = "linux")]
+    {
+        let _ = linux_service::start();
+    }
     #[cfg(windows)]
     {
         let _ = std::process::Command::new("sc")
@@ -893,8 +934,12 @@ fn run_cli(cli: Cli) -> Result<()> {
 
     match cli.command {
         Some(Commands::Run) => {
-            // Console mode - run in foreground
+            // Console mode - run in foreground (also how systemd runs it)
+            let hardening = harden_data_dir(&config);
             let _guard = init_logging(&config);
+            if let Some(report) = hardening {
+                report.log();
+            }
 
             let rt = tokio::runtime::Runtime::new()?;
 
@@ -962,7 +1007,11 @@ fn run_cli(cli: Cli) -> Result<()> {
             #[cfg(not(windows))]
             {
                 // On non-Windows, just run in console mode
+                let hardening = harden_data_dir(&config);
                 let _guard = init_logging(&config);
+                if let Some(report) = hardening {
+                    report.log();
+                }
                 let rt = tokio::runtime::Runtime::new()?;
 
                 // Clean up old logs (async, non-blocking)
@@ -977,4 +1026,25 @@ fn run_cli(cli: Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod cli_contract_tests {
+    use super::*;
+
+    // resources/scripts/installer/install.sh runs exactly this; --url is a
+    // top-level flag, so it must come before the subcommand.
+    #[test]
+    fn accepts_the_linux_installer_invocation() {
+        let cli = Cli::try_parse_from(["rmm", "--url", "https://rmm.example", "install"])
+            .expect("installer invocation must parse");
+
+        assert_eq!(cli.url.as_deref(), Some("https://rmm.example"));
+        assert!(matches!(cli.command, Some(Commands::Install)));
+    }
+
+    #[test]
+    fn rejects_url_after_the_subcommand() {
+        assert!(Cli::try_parse_from(["rmm", "install", "--url", "https://rmm.example"]).is_err());
+    }
 }

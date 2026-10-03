@@ -148,6 +148,17 @@ final class Device extends Model
     }
 
     /**
+     * Devices the server will queue commands for: monitor-only devices never take one.
+     * Devices that have not reported yet have no flag, so null counts as not monitor only.
+     */
+    public function scopeAcceptsCommands(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $flagQuery): Builder => $flagQuery
+            ->whereNull('is_monitor_only')
+            ->orWhere('is_monitor_only', false));
+    }
+
+    /**
      * Devices still carrying a power state that has outlived its window.
      */
     public function scopeWithLapsedPowerState(Builder $query): Builder
@@ -459,5 +470,14 @@ final class Device extends Model
     protected function isWakeable(): Attribute
     {
         return Attribute::get(fn (): bool => ! $this->isOnline && ! empty($this->mac_addresses));
+    }
+
+    /**
+     * Set once the agent reports it is read-only and never cleared by a later report,
+     * so a compromised or swapped agent cannot grant itself commands back.
+     */
+    protected function isMonitorOnly(): Attribute
+    {
+        return Attribute::get(fn (): bool => (bool) ($this->attributes['is_monitor_only'] ?? false));
     }
 }

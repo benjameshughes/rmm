@@ -7,6 +7,9 @@ namespace App\Policies;
 use App\Models\Device;
 use App\Models\User;
 
+/**
+ * A monitor-only device is watched, never driven: nothing that queues a command or sends a power signal is allowed on it.
+ */
 final class DevicePolicy
 {
     public function viewAny(User $user): bool
@@ -36,17 +39,17 @@ final class DevicePolicy
 
     public function runCommands(User $user, Device $device): bool
     {
-        return true;
+        return ! $device->isMonitorOnly;
     }
 
     public function runAdHocCommand(User $user, Device $device): bool
     {
-        return true;
+        return ! $device->isMonitorOnly;
     }
 
     public function wake(User $user, Device $device): bool
     {
-        return true;
+        return ! $device->isMonitorOnly;
     }
 
     public function resetEnrolment(User $user, Device $device): bool

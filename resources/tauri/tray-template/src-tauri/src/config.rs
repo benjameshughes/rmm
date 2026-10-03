@@ -145,7 +145,7 @@ impl Default for Config {
         };
 
         #[cfg(target_os = "linux")]
-        let data_dir = PathBuf::from("/var/lib/rmm");
+        let data_dir = PathBuf::from("/var/lib/benjh-rmm");
 
         let key_file = data_dir.join("agent.key");
         let log_file = data_dir.join("agent.log");

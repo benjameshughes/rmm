@@ -87,9 +87,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('audit', AuditIndex::class)->name('audit.index');
 });
 
-// Public download for the agent installer script
+// Public downloads for the agent installer scripts
 Route::get('agent/install.ps1', [AgentInstallerController::class, 'download'])
     ->name('agent.download');
+Route::get('agent/install.sh', [AgentInstallerController::class, 'downloadLinux'])
+    ->name('agent.download.linux');
 Route::get('agent/tauri.zip', [AgentTrayController::class, 'download'])
     ->name('agent.tauri.download');
 Route::get('agent/rmm-tray.exe', [AgentTrayController::class, 'downloadExe'])

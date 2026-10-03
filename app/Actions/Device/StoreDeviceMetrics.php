@@ -76,7 +76,7 @@ final class StoreDeviceMetrics
 
         $metric = DeviceMetric::create($metricData);
 
-        $metric->recordDisks($input['disks'] ?? null);
+        $metric->recordDisks($this->reportedVolumes($input['disks'] ?? null));
         $metric->recordNetworkInterfaces($input['network'] ?? null);
         $this->updateDeviceInfo($device, $input['system_info'] ?? null, $ip, $input);
 
@@ -223,6 +223,25 @@ final class StoreDeviceMetrics
         return $metricData;
     }
 
+    /**
+     * A Linux host reports every mount, including Docker layers, pseudo
+     * filesystems and RAM-backed tmpfs that fill and empty by design.
+     */
+    private function reportedVolumes(mixed $disks): mixed
+    {
+        if (! is_array($disks)) {
+            return $disks;
+        }
+
+        return collect($disks)
+            ->reject(fn (mixed $disk): bool => is_array($disk) && (
+                Str::is(config('devices.disk.ignored_volumes'), (string) ($disk['mount_point'] ?? ''))
+                || Str::is(config('devices.disk.ignored_filesystems'), (string) ($disk['filesystem'] ?? ''))
+            ))
+            ->values()
+            ->all();
+    }
+
     private function updateDeviceInfo(Device $device, mixed $systemInfo, ?string $ip, array $input): void
     {
         $updates = $this->connectionUpdates($device, $ip, $input);
@@ -273,18 +292,22 @@ final class StoreDeviceMetrics
 
     /**
      * An agent that omits its version or MAC addresses keeps the last ones it reported.
+     * Monitor only is a one-way latch: a later report of false or nothing never
+     * clears it, so a compromised or replaced agent cannot grant itself commands.
      *
-     * @return array{last_seen: Carbon, last_ip: ?string, power_state?: null, power_state_changed_at?: null, agent_version?: string, mac_addresses?: array<int, string>}
+     * @return array{last_seen: Carbon, last_ip: ?string, power_state?: null, power_state_changed_at?: null, agent_version?: string, mac_addresses?: array<int, string>, is_monitor_only?: true}
      */
     private function connectionUpdates(Device $device, ?string $ip, array $input): array
     {
         $agentVersion = $input['agent_version'] ?? null;
         $macAddresses = $input['mac_addresses'] ?? null;
+        $reportsMonitorOnly = filter_var($input['monitor_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         return [
             ...$device->checkInAttributes($ip),
             ...($agentVersion === null ? [] : ['agent_version' => $agentVersion]),
             ...($macAddresses === null ? [] : ['mac_addresses' => $this->normaliseMacAddresses($macAddresses)]),
+            ...($reportsMonitorOnly ? ['is_monitor_only' => true] : []),
         ];
     }
 

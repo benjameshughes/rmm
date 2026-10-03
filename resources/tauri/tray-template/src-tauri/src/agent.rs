@@ -7,6 +7,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::enrollment::{EnrollmentManager, EnrollmentStatus};
+#[cfg(windows)]
 use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::power::{self, PowerController, PowerNotifier};
@@ -302,8 +303,8 @@ impl Agent {
             }
         };
 
-        // Check if Netdata is available
-        if !collector.check_netdata_available().await {
+        // Windows reads metrics from Netdata; other builds collect natively.
+        if cfg!(windows) && !collector.check_netdata_available().await {
             warn!("Netdata is not available - metrics collection will be limited");
             warn!("Please ensure Netdata is installed and running");
         }
@@ -355,29 +356,13 @@ impl Agent {
                 .await;
         });
 
-        let command_client = match CommandClient::new(self.config.clone()) {
-            Ok(client) => client,
+        let command_handle = match self.spawn_command_loop(&api_key, &session_token, &key_health) {
+            Ok(handle) => handle,
             Err(e) => {
                 error!("Failed to create command client: {}", e);
                 return SessionEnd::Shutdown;
             }
         };
-        let command_api_key = api_key.clone();
-        let command_token = session_token.clone();
-        let command_health = key_health.clone();
-        let command_power = self.power.clone();
-        let command_startup = self.startup_progress();
-        let command_handle = tokio::spawn(async move {
-            command_client
-                .start_command_loop(
-                    command_api_key,
-                    command_token,
-                    command_health,
-                    command_power,
-                    command_startup,
-                )
-                .await;
-        });
 
         // Spawn update check loop as a separate task
         let update_config = self.config.clone();
@@ -407,7 +392,9 @@ impl Agent {
         // Make sure the other loops stop too, then wait for them
         session_token.cancel();
         let _ = heartbeat_handle.await;
-        let _ = command_handle.await;
+        if let Some(handle) = command_handle {
+            let _ = handle.await;
+        }
         let _ = update_handle.await;
         self.set_session_auth(None);
 
@@ -415,6 +402,42 @@ impl Agent {
             key_health.key_rejected(),
             self.cancellation_token.is_cancelled(),
         )
+    }
+
+    /// Start polling for commands. Windows only: every other build is a
+    /// read-only monitor and never asks the server for commands.
+    #[cfg(windows)]
+    fn spawn_command_loop(
+        &self,
+        api_key: &str,
+        session_token: &CancellationToken,
+        key_health: &Arc<KeyHealth>,
+    ) -> Result<Option<tokio::task::JoinHandle<()>>> {
+        let command_client = CommandClient::new(self.config.clone())?;
+        let api_key = api_key.to_string();
+        let token = session_token.clone();
+        let health = key_health.clone();
+        let power = self.power.clone();
+        let startup = self.startup_progress();
+
+        Ok(Some(tokio::spawn(async move {
+            command_client
+                .start_command_loop(api_key, token, health, power, startup)
+                .await;
+        })))
+    }
+
+    #[cfg(not(windows))]
+    fn spawn_command_loop(
+        &self,
+        _api_key: &str,
+        _session_token: &CancellationToken,
+        _key_health: &Arc<KeyHealth>,
+    ) -> Result<Option<tokio::task::JoinHandle<()>>> {
+        info!("Monitor-only agent: command polling is not part of this build");
+        // Nothing to drain, so the startup keep-awake need not wait for it.
+        self.startup_progress().mark(Milestone::CommandsDrained);
+        Ok(None)
     }
 
     fn set_session_auth(&self, auth: Option<SessionAuth>) {

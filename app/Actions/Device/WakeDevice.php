@@ -19,6 +19,7 @@ final class WakeDevice
      */
     public function __invoke(Device $device): void
     {
+        throw_if($device->isMonitorOnly, RuntimeException::class, "{$device->hostname} is monitor only and is never sent a wake packet");
         throw_if(empty($device->mac_addresses), RuntimeException::class, "{$device->hostname} has not reported a MAC address yet");
 
         $address = config('devices.wake_on_lan.broadcast_address');

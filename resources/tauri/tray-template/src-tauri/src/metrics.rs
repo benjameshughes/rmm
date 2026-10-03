@@ -216,6 +216,7 @@ async fn run_heartbeats<F, Fut>(
 
 /// Raw metrics payload - forwards Netdata JSON directly to Laravel
 #[derive(Debug, Serialize)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub struct RawMetricsPayload {
     /// Device hostname
     pub hostname: String,
@@ -287,7 +288,15 @@ pub struct MetricsCollector {
     client: reqwest::Client,
     hostname: String,
     mac_addresses: Vec<String>,
+    /// Monitor-only builds read metrics themselves (no Netdata).
+    #[cfg(not(windows))]
+    native: Arc<Mutex<crate::native_metrics::NativeCollector>>,
 }
+
+/// Longest a native collection may take (a stuck mount must not stall the
+/// metrics loop).
+#[cfg(not(windows))]
+const NATIVE_COLLECTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl MetricsCollector {
     /// Create a new metrics collector
@@ -302,10 +311,13 @@ impl MetricsCollector {
             client,
             hostname,
             mac_addresses,
+            #[cfg(not(windows))]
+            native: Arc::new(Mutex::new(crate::native_metrics::NativeCollector::new())),
         })
     }
 
     /// Fetch raw JSON from Netdata v3 API (no parsing)
+    #[cfg_attr(not(windows), allow(dead_code))]
     async fn fetch_netdata_info(&self) -> Option<serde_json::Value> {
         let url = format!("{}/api/v3/info", self.config.netdata_url);
         debug!("Fetching Netdata info from: {}", url);
@@ -326,12 +338,14 @@ impl MetricsCollector {
     }
 
     /// Fetch raw data from a Netdata v3 API context (no parsing)
+    #[cfg_attr(not(windows), allow(dead_code))]
     async fn fetch_netdata_context(&self, context: &str) -> Option<serde_json::Value> {
         self.fetch_netdata_query(context, None).await
     }
 
     /// `group_by` keeps instances apart: without it Netdata averages every
     /// instance of a context together (e.g. all disk volumes into one number).
+    #[cfg_attr(not(windows), allow(dead_code))]
     async fn fetch_netdata_query(
         &self,
         context: &str,
@@ -362,6 +376,7 @@ impl MetricsCollector {
     }
 
     /// Collect raw metrics from Netdata
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub async fn collect_metrics(&self) -> RawMetricsPayload {
         debug!("Collecting raw metrics from Netdata");
 
@@ -429,11 +444,7 @@ impl MetricsCollector {
     }
 
     /// Submit raw metrics to Laravel backend
-    pub async fn submit_metrics(
-        &self,
-        metrics: &RawMetricsPayload,
-        api_key: &str,
-    ) -> RequestOutcome {
+    pub async fn submit_metrics<P: Serialize>(&self, metrics: &P, api_key: &str) -> RequestOutcome {
         let url = format!("{}/api/metrics", self.config.base_url);
 
         debug!("Submitting metrics to backend: {}", url);
@@ -466,7 +477,53 @@ impl MetricsCollector {
         outcome
     }
 
+    /// Collect natively and submit (monitor-only builds; no Netdata)
+    #[cfg(not(windows))]
+    pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
+        let settle = self
+            .native
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .cpu_settle_time();
+        tokio::time::sleep(settle).await;
+
+        let native = self.native.clone();
+        let hostname = self.hostname.clone();
+        let mac_addresses = self.mac_addresses.clone();
+        let collection = tokio::task::spawn_blocking(move || {
+            native
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .collect(&hostname, &mac_addresses)
+        });
+
+        let metrics = match tokio::time::timeout(NATIVE_COLLECTION_TIMEOUT, collection).await {
+            Ok(Ok(metrics)) => metrics,
+            Ok(Err(e)) => {
+                error!("Metrics collection failed: {}", e);
+                return RequestOutcome::Inconclusive;
+            }
+            Err(_) => {
+                warn!(
+                    "Metrics collection took over {}s (a stuck mount?); skipping this round",
+                    NATIVE_COLLECTION_TIMEOUT.as_secs()
+                );
+                return RequestOutcome::Inconclusive;
+            }
+        };
+
+        let outcome = self.submit_metrics(&metrics, api_key).await;
+        if outcome == RequestOutcome::Success {
+            info!(
+                "Metrics submitted ({} filesystems, monitor-only)",
+                metrics.disks.len()
+            );
+        }
+        outcome
+    }
+
     /// Collect and submit metrics in one operation
+    #[cfg(windows)]
     pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
         let metrics = self.collect_metrics().await;
         let outcome = self.submit_metrics(&metrics, api_key).await;
@@ -517,7 +574,7 @@ impl MetricsCollector {
             self.config.metrics_interval
         );
 
-        if !self.check_netdata_available().await {
+        if cfg!(windows) && !self.check_netdata_available().await {
             warn!("Netdata is not available at startup - metrics will be limited");
         }
 

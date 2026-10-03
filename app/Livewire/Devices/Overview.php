@@ -60,7 +60,7 @@ final class Overview extends Component
             'fullestDisk' => $this->device->fullestDisk(),
             'trend' => MetricChart::cpuAndMemory($metrics->performance($this->device, $trendRange)),
             'trendTimeFormat' => $trendRange->timeFormat(),
-            'recentCommands' => $this->device->commands()->with('script')->latest('queued_at')->limit(config('devices.metrics.recent_commands'))->get(),
+            'recentCommands' => $this->device->commands()->with(['script', 'device'])->latest('queued_at')->limit(config('devices.metrics.recent_commands'))->get(),
             'openAlerts' => $this->device->unresolvedAlerts()->with('alertRule')->latest('triggered_at')->get(),
         ])->title(DeviceTab::Overview->pageTitle($this->device));
     }

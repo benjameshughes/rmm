@@ -36,7 +36,7 @@ final class Commands extends Component
     {
         return view('livewire.devices.commands', [
             'commands' => $this->device->commands()
-                ->with(['script', 'queuedBy'])
+                ->with(['script', 'queuedBy', 'device'])
                 ->latest('queued_at')
                 ->latest('id')
                 ->paginate(config('commands.per_page')),

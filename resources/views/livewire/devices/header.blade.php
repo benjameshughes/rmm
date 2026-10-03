@@ -3,6 +3,7 @@
         <div class="flex flex-wrap items-center gap-3">
             <flux:heading size="xl" level="1" class="truncate">{{ $device->hostname }}</flux:heading>
             <x-device.status-badge :label="$statusLabel" :color="$statusColor" size="lg" />
+            <x-device.monitor-only-badge :device="$device" />
         </div>
 
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -21,27 +22,34 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-        @if($device->isWakeable)
-            <flux:button wire:click="wake" icon="sun">Wake</flux:button>
-        @endif
+        @can('wake', $device)
+            @if($device->isWakeable)
+                <flux:button wire:click="wake" icon="sun">Wake</flux:button>
+            @endif
+        @endcan
 
-        <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary">Run Command</flux:button>
-        <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">Run Script</flux:button>
+        @can('runAdHocCommand', $device)
+            <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary">Run Command</flux:button>
+        @endcan
 
-        <flux:dropdown position="bottom" align="end">
-            <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
+        @can('runCommands', $device)
+            <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">Run Script</flux:button>
 
-            <flux:menu>
-                <flux:menu.item wire:click="restart" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?" icon="arrow-path">Restart</flux:menu.item>
-                <flux:menu.item wire:click="powerOff" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?" icon="power" variant="danger">Power Off</flux:menu.item>
-                <flux:menu.item wire:click="logOff" wire:confirm="Log the signed-in user off {{ $device->hostname }}? Unsaved work is lost." icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
+            <flux:dropdown position="bottom" align="end">
+                <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
 
-                <flux:menu.separator />
+                <flux:menu>
+                    <flux:menu.item wire:click="restart" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?" icon="arrow-path">Restart</flux:menu.item>
+                    <flux:menu.item wire:click="powerOff" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?" icon="power" variant="danger">Power Off</flux:menu.item>
+                    <flux:menu.item wire:click="logOff" wire:confirm="Log the signed-in user off {{ $device->hostname }}? Unsaved work is lost." icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
 
-                <flux:menu.item wire:click="checkForUpdates" icon="arrow-down-tray">Check for Updates</flux:menu.item>
-                <flux:menu.item wire:click="updateAgent" icon="arrow-up-circle">Update Agent</flux:menu.item>
-            </flux:menu>
-        </flux:dropdown>
+                    <flux:menu.separator />
+
+                    <flux:menu.item wire:click="checkForUpdates" icon="arrow-down-tray">Check for Updates</flux:menu.item>
+                    <flux:menu.item wire:click="updateAgent" icon="arrow-up-circle">Update Agent</flux:menu.item>
+                </flux:menu>
+            </flux:dropdown>
+        @endcan
     </div>
 
     <flux:modal wire:model="showScriptModal" class="md:w-96">

@@ -24,7 +24,7 @@ final class PrepareWakeOnLanForApprovedDevice
     {
         $script = Script::query()->system()->where('slug', config('devices.wake_on_lan.prepare_script_slug'))->first();
 
-        if ($script === null || $event->device->platform() !== ScriptPlatform::Windows) {
+        if ($script === null || $event->device->platform() !== ScriptPlatform::Windows || $event->device->isMonitorOnly) {
             return;
         }
 

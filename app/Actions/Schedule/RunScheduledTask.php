@@ -9,6 +9,7 @@ use App\Actions\Device\WakeDevice;
 use App\Enums\ScheduledTaskAction;
 use App\Models\Device;
 use App\Models\ScheduledTask;
+use Illuminate\Support\Facades\Log;
 
 final class RunScheduledTask
 {
@@ -43,12 +44,21 @@ final class RunScheduledTask
     }
 
     /**
-     * Online devices are already awake and devices without a MAC cannot be woken, so both are skipped.
+     * Online devices are already awake and devices without a MAC cannot be woken, so both are skipped,
+     * as are monitor-only devices, which are never sent a power signal.
      */
     private function wake(ScheduledTask $task): int
     {
-        return $task->resolveDevices()
+        [$monitorOnly, $wakeable] = $task->resolveDevices()
             ->filter(fn (Device $device): bool => $device->isWakeable)
+            ->partition(fn (Device $device): bool => $device->isMonitorOnly);
+
+        $monitorOnly->each(fn (Device $device) => Log::info('wake.skipped_monitor_only', [
+            'scheduled_task_id' => $task->id,
+            'device_id' => $device->id,
+        ]));
+
+        return $wakeable
             ->each(fn (Device $device) => ($this->wakeDevice)($device))
             ->count();
     }
