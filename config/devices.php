@@ -102,12 +102,22 @@ return [
     | Each report keeps the top_apps busiest apps by CPU plus the top_apps
     | biggest by memory. App rows are pruned after app_history_hours.
     |
+    | The device Metrics tab charts each range averaged into buckets of
+    | bucket_seconds, so a week is ~170 points rather than ~40,000 reports.
+    | recent_commands is how many commands the Overview tab lists.
+    |
     */
 
     'metrics' => [
         'store_raw_payload' => (bool) env('DEVICE_METRICS_STORE_RAW_PAYLOAD', false),
         'top_apps' => 10,
         'app_history_hours' => 24,
+        'recent_commands' => 5,
+        'chart_ranges' => [
+            '1h' => ['minutes' => 60, 'bucket_seconds' => 60],
+            '24h' => ['minutes' => 1440, 'bucket_seconds' => 600],
+            '7d' => ['minutes' => 10080, 'bucket_seconds' => 3600],
+        ],
     ],
 
     /*

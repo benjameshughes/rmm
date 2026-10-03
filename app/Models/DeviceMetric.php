@@ -212,6 +212,18 @@ final class DeviceMetric extends Model
         return $this->mebibytesForHumans($this->swap_used_mib).' / '.$this->mebibytesForHumans($this->swap_total_mib);
     }
 
+    /**
+     * How busy the processors are beyond a percentage: load average where the OS reports it, otherwise the CPU queue.
+     */
+    public function processorLoadForHumans(): ?string
+    {
+        return match (true) {
+            $this->load1 !== null => 'Load Average '.$this->loadForHumans().' · '.$this->loadTrendForHumans(),
+            $this->cpu_queue_length !== null => 'CPU Queue '.$this->cpuQueueForHumans().' threads waiting',
+            default => null,
+        };
+    }
+
     public function uptimeForHumans(): ?string
     {
         if ($this->uptime_seconds === null) {
@@ -226,6 +238,11 @@ final class DeviceMetric extends Model
     protected function hasLoadAverage(): Attribute
     {
         return Attribute::get(fn (): bool => $this->load1 !== null);
+    }
+
+    protected function hasAlertCounts(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->alerts_warning !== null || $this->alerts_critical !== null);
     }
 
     protected function hasPerformanceData(): Attribute

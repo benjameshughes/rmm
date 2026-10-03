@@ -340,8 +340,38 @@ final class Device extends Model
         };
     }
 
+    public function lastSeenForHumans(): string
+    {
+        return $this->last_seen === null ? 'Never seen' : 'Seen '.$this->last_seen->diffForHumans();
+    }
+
+    public function operatingSystem(): ?string
+    {
+        return $this->os_name ?? $this->os;
+    }
+
     /**
-     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, barColor: string}>
+     * The agent's own figure where it sent one, otherwise what Netdata last measured.
+     */
+    public function totalRamForHumans(): ?string
+    {
+        $totalRamGb = $this->total_ram_gb ?: ($this->latestMetric?->memory_total_mib ? $this->latestMetric->memory_total_mib / 1024 : null);
+
+        return $totalRamGb ? number_format((float) $totalRamGb, 1).' GB' : null;
+    }
+
+    /**
+     * The volume closest to full, which is the one worth a headline.
+     *
+     * @return array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}|null
+     */
+    public function fullestDisk(): ?array
+    {
+        return $this->diskUsage()->sortByDesc('usedPercent')->first();
+    }
+
+    /**
+     * @return Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string}>
      */
     public function diskUsage(): Collection
     {
@@ -359,6 +389,8 @@ final class Device extends Model
                 'availableGb' => $availableGb,
                 'totalGb' => $totalGb,
                 'usedPercent' => $usedPercent,
+                'usedForHumans' => $usedPercent === null ? null : number_format($usedPercent, 1).'%',
+                'freeForHumans' => $totalGb !== null && $availableGb !== null ? number_format($availableGb, 1).' GB free of '.number_format($totalGb, 1).' GB' : null,
                 'barColor' => match (true) {
                     $usedPercent > config('devices.disk.critical_percent') => 'bg-red-500',
                     $usedPercent > config('devices.disk.warning_percent') => 'bg-amber-500',

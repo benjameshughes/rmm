@@ -7,9 +7,13 @@ use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Audit\Index as AuditIndex;
 use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
+use App\Livewire\Devices\Apps as DeviceApps;
+use App\Livewire\Devices\Commands as DeviceCommands;
+use App\Livewire\Devices\Details as DeviceDetails;
 use App\Livewire\Devices\Index as DevicesIndex;
+use App\Livewire\Devices\Metrics as DeviceMetrics;
+use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending as DevicesPending;
-use App\Livewire\Devices\Show as DevicesShow;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Create as ScriptsCreate;
 use App\Livewire\Scripts\Edit as ScriptsEdit;
@@ -53,7 +57,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('devices', DevicesIndex::class)->name('devices.index');
     Route::get('devices/pending', DevicesPending::class)->name('devices.pending');
     Route::get('devices/agent', DevicesAgent::class)->name('devices.agent');
-    Route::get('devices/{device}', DevicesShow::class)->name('devices.show');
+
+    Route::prefix('devices/{device}')->name('devices.')->group(function () {
+        Route::get('/', DeviceOverview::class)->name('show');
+        Route::get('metrics', DeviceMetrics::class)->name('metrics');
+        Route::get('commands', DeviceCommands::class)->name('commands');
+        Route::get('apps', DeviceApps::class)->name('apps');
+        Route::get('details', DeviceDetails::class)->name('details');
+    });
 
     // Scripts
     Route::get('scripts', ScriptsIndex::class)->name('scripts.index');

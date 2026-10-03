@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 use App\Enums\DeviceStatus;
+use App\Livewire\Devices\Details;
+use App\Livewire\Devices\Overview;
 use App\Livewire\Devices\Pending;
-use App\Livewire\Devices\Show;
 use App\Models\Device;
 use App\Models\DeviceMetric;
 use App\Models\User;
@@ -13,7 +14,7 @@ use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
 
-it('shows device details and recent metrics', function (): void {
+it('shows the device and its latest metrics on the overview', function (): void {
     $user = User::factory()->create();
 
     $device = Device::factory()->active()->create([
@@ -45,20 +46,20 @@ it('shows key status instead of any part of the key', function (): void {
     $pending = Device::factory()->create();
 
     $this->actingAs($user)
-        ->get(route('devices.show', $claimed))
+        ->get(route('devices.details', $claimed))
         ->assertSuccessful()
         ->assertSee('Claimed')
         ->assertDontSee('KEY-SHOW')
         ->assertDontSee(substr(Device::hashApiKey('KEY-SHOW-CLAIMED'), 0, 8));
 
     $this->actingAs($user)
-        ->get(route('devices.show', $awaiting))
+        ->get(route('devices.details', $awaiting))
         ->assertSuccessful()
         ->assertSee('Awaiting agent')
         ->assertDontSee('KEY-SHOW');
 
     $this->actingAs($user)
-        ->get(route('devices.show', $pending))
+        ->get(route('devices.details', $pending))
         ->assertSuccessful()
         ->assertSee('None')
         ->assertDontSee('Reset enrolment');
@@ -71,7 +72,7 @@ it('resets enrolment so the old key stops working', function (): void {
     $this->postJson('/api/heartbeat', [], ['X-Agent-Key' => 'KEY-TO-RESET'])->assertSuccessful();
 
     Livewire::actingAs($user)
-        ->test(Show::class, ['device' => $device])
+        ->test(Details::class, ['device' => $device])
         ->assertSee('Reset enrolment')
         ->call('resetEnrolment')
         ->assertDispatched('notify');
@@ -95,7 +96,7 @@ it('lets a reset device re-enrol and collect a fresh key after re-approval', fun
         'hardware_fingerprint' => 'FP-REENROL',
     ]);
 
-    Livewire::actingAs($user)->test(Show::class, ['device' => $device])->call('resetEnrolment');
+    Livewire::actingAs($user)->test(Details::class, ['device' => $device])->call('resetEnrolment');
 
     $payload = ['hostname' => 'REENROL-PC', 'hardware_fingerprint' => 'FP-REENROL'];
     $this->postJson('/api/enroll', $payload)->assertSuccessful()->assertJsonPath('status', 'pending');
@@ -119,7 +120,7 @@ it('shows uptime and disk usage computed by the models', function (): void {
     DeviceMetric::factory()->create(['device_id' => $device->id, 'uptime_seconds' => (2 * 86400) + (5 * 3600) + 600]);
 
     Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
+        ->test(Overview::class, ['device' => $device])
         ->assertSee('2d 5h')
         ->assertSee('5.0 GB free of 100.0 GB')
         ->assertSee('95.0% used')

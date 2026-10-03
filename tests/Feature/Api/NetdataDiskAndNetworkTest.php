@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use App\DTOs\NetdataV3Metrics;
-use App\Livewire\Devices\Show;
+use App\Livewire\Devices\Overview;
 use App\Models\Device;
 use App\Models\DeviceDiskMetric;
 use App\Models\DeviceMetric;
@@ -138,7 +138,7 @@ it('shows reported volumes on the device page', function (): void {
     $metric->recordDisks((new NetdataV3Metrics(diskByVolume()))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
 
     Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
+        ->test(Overview::class, ['device' => $device])
         ->assertSee('Disk Storage')
         ->assertSee('C:')
         ->assertSee('116.0 GB free of 235.6 GB')

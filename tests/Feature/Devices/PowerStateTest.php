@@ -8,8 +8,8 @@ use App\Enums\AlertOperator;
 use App\Enums\DevicePowerState;
 use App\Enums\PowerEventReason;
 use App\Events\DeviceUpdated;
+use App\Livewire\Devices\Header;
 use App\Livewire\Devices\Index;
-use App\Livewire\Devices\Show;
 use App\Models\Alert;
 use App\Models\AlertRule;
 use App\Models\Device;
@@ -49,9 +49,9 @@ it('labels and colours a device from its power state', function (array $attribut
     expect($device->statusLabel())->toBe($label)
         ->and($device->statusColor())->toBe($color);
 })->with([
-    'powering off' => [['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->setTime(17, 30)], 'Powering off since 17:30', 'amber'],
-    'powering on' => [['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], 'Powering on', 'sky'],
-    'powered on then went quiet' => [['last_seen' => now()->subHour(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subHour()], 'Offline', 'red'],
+    'powering off' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->setTime(17, 30)], 'Powering off since 17:30', 'amber'],
+    'powering on' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], 'Powering on', 'sky'],
+    'powered on then went quiet' => [fn (): array => ['last_seen' => now()->subHour(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subHour()], 'Offline', 'red'],
 ]);
 
 it('lets a powering off device be woken even inside the online window', function (): void {
@@ -59,7 +59,7 @@ it('lets a powering off device be woken even inside the online window', function
 
     expect($device->isWakeable)->toBeTrue();
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertSeeHtml('wire:click="wake"');
 });
 
@@ -75,7 +75,7 @@ it('shows the power state badges on the device list', function (): void {
 it('shows the power state badge on the device page and flips it when the device wakes', function (): void {
     $device = Device::factory()->active()->poweringOff()->create(['last_seen' => now()]);
 
-    $page = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $page = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertSee('Powering off since');
 
     app(RecordDevicePowerEvent::class)($device->fresh(), DevicePowerState::PoweringOn, PowerEventReason::Resume);
@@ -247,7 +247,7 @@ it('agrees between the model and the query on which devices are holding powering
         ->and($device->isPoweringOn)->toBe($isHolding)
         ->and(Device::query()->withLapsedPowerState()->whereKey($device->id)->exists())->toBe(! $isHolding);
 })->with([
-    'within the hold' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], true],
-    'past the hold' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subMinute()], false],
+    'within the hold' => [fn (): array => ['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], true],
+    'past the hold' => [fn (): array => ['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subMinute()], false],
     'powered on with no time' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => null], false],
 ]);

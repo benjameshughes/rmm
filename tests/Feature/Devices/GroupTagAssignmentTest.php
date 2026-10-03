@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Livewire\Devices\Details;
 use App\Livewire\Devices\Index;
-use App\Livewire\Devices\Show;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Tag;
@@ -14,13 +14,13 @@ use Livewire\Livewire;
 pest()->use(RefreshDatabase::class);
 
 describe('Group assignment', function (): void {
-    it('assigns a device to a group via show page', function (): void {
+    it('assigns a device to a group via the details tab', function (): void {
         $user = User::factory()->create();
         $device = Device::factory()->active()->create();
         $group = DeviceGroup::factory()->create(['name' => 'Servers']);
 
         Livewire::actingAs($user)
-            ->test(Show::class, ['device' => $device])
+            ->test(Details::class, ['device' => $device])
             ->set('selectedGroupId', (string) $group->id);
 
         $device->refresh();
@@ -33,7 +33,7 @@ describe('Group assignment', function (): void {
         $device = Device::factory()->active()->create(['device_group_id' => $group->id]);
 
         Livewire::actingAs($user)
-            ->test(Show::class, ['device' => $device])
+            ->test(Details::class, ['device' => $device])
             ->set('selectedGroupId', '');
 
         $device->refresh();
@@ -55,14 +55,14 @@ describe('Group assignment', function (): void {
 });
 
 describe('Tag assignment', function (): void {
-    it('adds tags to a device via show page', function (): void {
+    it('adds tags to a device via the details tab', function (): void {
         $user = User::factory()->create();
         $device = Device::factory()->active()->create();
         $tag1 = Tag::factory()->create(['name' => 'critical']);
         $tag2 = Tag::factory()->create(['name' => 'windows']);
 
         Livewire::actingAs($user)
-            ->test(Show::class, ['device' => $device])
+            ->test(Details::class, ['device' => $device])
             ->set('selectedTagIds', [(string) $tag1->id, (string) $tag2->id]);
 
         $device->refresh();
@@ -77,7 +77,7 @@ describe('Tag assignment', function (): void {
         $device->tags()->attach($tag->id);
 
         Livewire::actingAs($user)
-            ->test(Show::class, ['device' => $device])
+            ->test(Details::class, ['device' => $device])
             ->set('selectedTagIds', []);
 
         $device->refresh();

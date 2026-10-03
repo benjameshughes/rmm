@@ -20,32 +20,31 @@
             </div>
 
             <flux:navlist variant="outline">
-                <flux:navlist.group :heading="__('Platform')" class="grid">
+                <flux:navlist.group :heading="__('Fleet')" class="grid">
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
-                    <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index') || request()->routeIs('devices.show')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
+                    <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index', 'devices.show', 'devices.metrics', 'devices.commands', 'devices.apps', 'devices.details')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
                     <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>{{ __('Pending') }}</flux:navlist.item>
+                </flux:navlist.group>
+
+                <flux:navlist.group :heading="__('Automation')" class="grid">
                     <flux:navlist.item icon="code-bracket" :href="route('scripts.index')" :current="request()->routeIs('scripts.*')" wire:navigate>{{ __('Scripts') }}</flux:navlist.item>
-                    <flux:navlist.item icon="rectangle-group" :href="route('device-groups.index')" :current="request()->routeIs('device-groups.*') || request()->routeIs('tags.*')" wire:navigate>{{ __('Groups') }}</flux:navlist.item>
-                    <flux:navlist.item icon="bell-alert" :href="route('alerts.index')" :current="request()->routeIs('alerts.*') || request()->routeIs('alert-rules.*')" wire:navigate>{{ __('Alerts') }}</flux:navlist.item>
                     <flux:navlist.item icon="calendar" :href="route('scheduled-tasks.index')" :current="request()->routeIs('scheduled-tasks.*')" wire:navigate>{{ __('Schedules') }}</flux:navlist.item>
-                    <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>{{ __('Agent') }}</flux:navlist.item>
+                </flux:navlist.group>
+
+                <flux:navlist.group :heading="__('Monitoring')" class="grid">
+                    <flux:navlist.item icon="bell-alert" :href="route('alerts.index')" :current="request()->routeIs('alerts.*', 'alert-rules.*')" wire:navigate>{{ __('Alerts') }}</flux:navlist.item>
                     @can('viewAny', App\Models\AuditLog::class)
                         <flux:navlist.item icon="shield-check" :href="route('audit.index')" :current="request()->routeIs('audit.*')" wire:navigate>{{ __('Audit Log') }}</flux:navlist.item>
                     @endcan
                 </flux:navlist.group>
+
+                <flux:navlist.group :heading="__('Setup')" class="grid">
+                    <flux:navlist.item icon="rectangle-group" :href="route('device-groups.index')" :current="request()->routeIs('device-groups.*', 'tags.*')" wire:navigate>{{ __('Groups') }}</flux:navlist.item>
+                    <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>{{ __('Agent') }}</flux:navlist.item>
+                </flux:navlist.group>
             </flux:navlist>
 
             <flux:spacer />
-
-            <flux:navlist variant="outline">
-                <flux:navlist.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                {{ __('Repository') }}
-                </flux:navlist.item>
-
-                <flux:navlist.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                {{ __('Documentation') }}
-                </flux:navlist.item>
-            </flux:navlist>
 
             <!-- Desktop User Menu -->
             <flux:dropdown class="hidden lg:block" position="bottom" align="start">

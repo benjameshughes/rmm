@@ -7,9 +7,11 @@ use App\Enums\DeviceStatus;
 use App\Livewire\AlertBell;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Commands\Detail;
+use App\Livewire\Devices\Commands as DeviceCommands;
+use App\Livewire\Devices\Header as DeviceHeader;
 use App\Livewire\Devices\Index as DevicesIndex;
+use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending;
-use App\Livewire\Devices\Show;
 use App\Livewire\Scripts\Show as ScriptsShow;
 use App\Models\Alert;
 use App\Models\Device;
@@ -64,10 +66,10 @@ it('updates the pending list as devices enrol and get approved elsewhere', funct
         ->assertDontSee('NEW-ARRIVAL');
 });
 
-it('refreshes the device page from its own channel', function (): void {
+it('refreshes the device header from its own channel', function (): void {
     $device = Device::factory()->active()->create(['last_seen' => now()->subHour()]);
 
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $component = Livewire::actingAs($this->user)->test(DeviceHeader::class, ['device' => $device])
         ->assertSee('Offline');
 
     $device->update(['last_seen' => now(), 'status' => DeviceStatus::Active]);
@@ -77,18 +79,21 @@ it('refreshes the device page from its own channel', function (): void {
         ->assertDontSee('Offline');
 });
 
-it('shows new commands on the device page as they are queued elsewhere', function (): void {
+it('shows new commands on the device tabs as they are queued elsewhere', function (string $component): void {
     $device = Device::factory()->active()->create();
 
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
-        ->assertDontSee('Recent Commands');
+    $tab = Livewire::actingAs($this->user)->test($component, ['device' => $device])
+        ->assertSee('No commands run on this device yet.');
 
     $command = DeviceCommand::factory()->pending()->create(['device_id' => $device->id]);
 
-    $component->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'pending'])
-        ->assertSee('Recent Commands')
+    $tab->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'pending'])
+        ->assertDontSee('No commands run on this device yet.')
         ->assertSeeHtml("commandId: {$command->id} ");
-});
+})->with([
+    'overview' => [DeviceOverview::class],
+    'commands' => [DeviceCommands::class],
+]);
 
 it('refreshes an open command when that command changes', function (): void {
     $command = DeviceCommand::factory()->create(['status' => CommandStatus::Running, 'output' => null]);

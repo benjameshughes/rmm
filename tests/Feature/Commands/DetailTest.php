@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 use App\Enums\CommandStatus;
 use App\Livewire\Commands\Detail;
-use App\Livewire\Devices\Show;
+use App\Livewire\Devices\Commands;
+use App\Livewire\Devices\Overview;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Script;
@@ -105,7 +106,7 @@ it('gives every command status a badge colour', function (CommandStatus $status)
     expect($status->color())->toBeString()->not->toBeEmpty();
 })->with(CommandStatus::cases());
 
-it('lists commands on the device page without a query per row', function (): void {
+it('lists commands on the device tabs without a query per row', function (string $component): void {
     $device = Device::factory()->active()->create();
     $script = Script::factory()->create(['name' => 'Get Hostname']);
     DeviceCommand::factory()->count(5)->create([
@@ -117,10 +118,13 @@ it('lists commands on the device page without a query per row', function (): voi
     DB::enableQueryLog();
 
     Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
+        ->test($component, ['device' => $device])
         ->assertSee('Get Hostname')
         ->assertSee('show-command', false);
 
     $scriptQueries = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], 'from "scripts" where "scripts"."id" ='));
     expect($scriptQueries)->toBeEmpty();
-});
+})->with([
+    'overview' => [Overview::class],
+    'commands' => [Commands::class],
+]);

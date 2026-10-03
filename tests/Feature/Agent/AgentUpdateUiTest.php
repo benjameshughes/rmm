@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 use App\Actions\Script\SyncSystemScripts;
+use App\Livewire\Devices\Details;
+use App\Livewire\Devices\Header;
 use App\Livewire\Devices\Index;
-use App\Livewire\Devices\Show;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Script;
@@ -81,23 +82,27 @@ it('refreshes badges and banner when a new release is announced', function (): v
 it('shows the update badge and agent version on the device page', function (): void {
     $device = Device::factory()->active()->create(['agent_version' => '0.5.0']);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertSee('Update available 0.5.0')
-        ->assertSee('Agent Version')
+        ->assertSee('Agent 0.5.0')
         ->assertSee('Update Agent');
+
+    Livewire::actingAs($this->user)->test(Details::class, ['device' => $device])
+        ->assertSee('Agent Version')
+        ->assertSee('0.5.0');
 });
 
 it('hides the device page badge when the agent is current', function (): void {
     $device = Device::factory()->active()->create(['agent_version' => '0.5.1']);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertDontSee('Update available');
 });
 
 it('refreshes the device page badge when a new release is announced', function (): void {
     $device = Device::factory()->active()->create(['agent_version' => '0.5.1']);
 
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertDontSee('Update available');
 
     Cache::forever(config('agent.latest_version_cache_key'), '0.6.0');
@@ -109,7 +114,7 @@ it('refreshes the device page badge when a new release is announced', function (
 it('queues the update-agent script from the device page', function (): void {
     $device = Device::factory()->active()->create(['agent_version' => '0.5.0']);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->call('updateAgent')
         ->assertDispatched('command-queued');
 

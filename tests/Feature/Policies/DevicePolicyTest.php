@@ -8,9 +8,14 @@ use App\Enums\DeviceStatus;
 use App\Livewire\AlertBell;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Commands\Detail;
+use App\Livewire\Devices\Apps;
+use App\Livewire\Devices\Commands;
+use App\Livewire\Devices\Details;
+use App\Livewire\Devices\Header;
 use App\Livewire\Devices\Index;
+use App\Livewire\Devices\Metrics;
+use App\Livewire\Devices\Overview;
 use App\Livewire\Devices\Pending;
-use App\Livewire\Devices\Show;
 use App\Livewire\Scripts\Show as ScriptsShow;
 use App\Models\Alert;
 use App\Models\Device;
@@ -55,23 +60,30 @@ it('gates viewing the device pages through the policy', function (string $compon
     'pending list' => [Pending::class],
 ]);
 
-it('gates viewing a device through the policy', function (): void {
+it('gates viewing a device through the policy', function (string $component): void {
     denyAbility('view');
 
     Livewire::actingAs($this->user)
-        ->test(Show::class, ['device' => Device::factory()->active()->create()])
+        ->test($component, ['device' => Device::factory()->active()->create()])
         ->assertForbidden();
-});
+})->with([
+    'header' => [Header::class],
+    'overview' => [Overview::class],
+    'metrics' => [Metrics::class],
+    'commands' => [Commands::class],
+    'apps' => [Apps::class],
+    'details' => [Details::class],
+]);
 
-it('gates running commands from the device page through the policy', function (string $method): void {
+it('gates running commands from the device header through the policy', function (string $method): void {
     $device = Device::factory()->active()->create();
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device]);
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device]);
     denyAbility('runCommands');
 
     $component->call($method)->assertForbidden();
 
     expect(DeviceCommand::query()->count())->toBe(0);
-})->with(['powerOff', 'restart', 'logOff', 'checkForUpdates']);
+})->with(['powerOff', 'restart', 'logOff', 'checkForUpdates', 'updateAgent']);
 
 it('gates running commands from the device list through the policy', function (): void {
     $device = Device::factory()->active()->create();
@@ -110,7 +122,7 @@ it('gates approving and rejecting through the policy', function (string $ability
 
 it('gates resetting enrolment through the policy', function (): void {
     $device = Device::factory()->withApiKey('KEY-KEEP')->create();
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device]);
+    $component = Livewire::actingAs($this->user)->test(Details::class, ['device' => $device]);
     denyAbility('resetEnrolment');
 
     $component->call('resetEnrolment')->assertForbidden();
@@ -121,7 +133,7 @@ it('gates resetting enrolment through the policy', function (): void {
 it('gates group and tag changes through the policy', function (): void {
     $device = Device::factory()->active()->create();
     $group = DeviceGroup::factory()->create();
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device]);
+    $component = Livewire::actingAs($this->user)->test(Details::class, ['device' => $device]);
     denyAbility('manageGroupsAndTags');
 
     $component->set('selectedGroupId', (string) $group->id)->assertForbidden();

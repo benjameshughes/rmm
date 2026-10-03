@@ -469,3 +469,23 @@ it('rejects MAC addresses that are not MAC addresses', function (): void {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('mac_addresses.0');
 });
+
+it('stamps metrics with the time the server received them, not the PC clock', function (array $payload): void {
+    $this->freezeTime();
+    $device = Device::factory()->active()->withApiKey('VALID-KEY-123')->create();
+
+    $this->withHeaders(['X-Agent-Key' => 'VALID-KEY-123'])
+        ->postJson('/api/metrics', [
+            'hostname' => 'FAST-CLOCK-PC',
+            'timestamp' => now()->addMinutes(4)->addSeconds(15)->toIso8601String(),
+            'recorded_at' => now()->addMinutes(4)->addSeconds(15)->toIso8601String(),
+            ...$payload,
+        ])
+        ->assertSuccessful();
+
+    expect(DeviceMetric::query()->where('device_id', $device->id)->sole()->recorded_at->toDateTimeString())
+        ->toBe(now()->toDateTimeString());
+})->with([
+    'standard format' => [['cpu' => ['usage_percent' => 12.5]]],
+    'raw netdata format' => [['agent_version' => '0.6.5', 'netdata_cpu_queue' => []]],
+]);

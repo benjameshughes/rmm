@@ -6,7 +6,8 @@ use App\Enums\AuditAction;
 use App\Enums\CommandStatus;
 use App\Enums\ScriptPlatform;
 use App\Livewire\Commands\Detail;
-use App\Livewire\Devices\Show;
+use App\Livewire\Devices\Commands;
+use App\Livewire\Devices\Header;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -25,7 +26,7 @@ it('queues a pending ad-hoc command with exactly what was typed', function (): v
     $device = Device::factory()->active()->windows()->create();
     $commandText = "ipconfig /flushdns\nipconfig /registerdns";
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', $commandText)
         ->set('commandType', 'cmd')
         ->set('commandTimeoutSeconds', 120)
@@ -49,7 +50,7 @@ it('queues a pending ad-hoc command with exactly what was typed', function (): v
 it('closes the modal, resets the form, refreshes the list and toasts', function (): void {
     $device = Device::factory()->active()->windows()->create();
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('showCommandModal', true)
         ->set('commandText', 'Get-Process')
         ->set('commandType', 'cmd')
@@ -66,7 +67,7 @@ it('closes the modal, resets the form, refreshes the list and toasts', function 
 it('offers only the shells the device platform can run, defaulting to the first', function (string $factoryState, array $types): void {
     $device = Device::factory()->active()->{$factoryState}()->create();
 
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->assertSet('commandType', $types[0])
         ->assertSet('commandTimeoutSeconds', config('commands.ad_hoc.timeout_seconds.default'));
 
@@ -92,7 +93,7 @@ it('validates the command before queueing anything', function (string $factorySt
     config()->set('commands.ad_hoc.max_length', 20);
     $device = Device::factory()->active()->{$factoryState}()->create();
 
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', 'hostname');
 
     collect($input)->each(fn (mixed $value, string $property) => $component->set($property, $value));
@@ -117,7 +118,7 @@ it('validates the command before queueing anything', function (string $factorySt
 it('accepts the timeout bounds themselves', function (int $timeoutSeconds): void {
     $device = Device::factory()->active()->linux()->create();
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', 'uptime')
         ->set('commandTimeoutSeconds', $timeoutSeconds)
         ->call('runAdHocCommand')
@@ -130,7 +131,7 @@ it('accepts the timeout bounds themselves', function (int $timeoutSeconds): void
 
 it('checks the runAdHocCommand ability before queueing anything', function (): void {
     $device = Device::factory()->active()->windows()->create();
-    $component = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', 'Stop-Computer -Force');
     Gate::before(fn (User $user, string $ability): ?bool => $ability === 'runAdHocCommand' ? false : null);
 
@@ -142,7 +143,7 @@ it('checks the runAdHocCommand ability before queueing anything', function (): v
 it('hands the command to the agent like any other, with empty parameters', function (): void {
     $device = Device::factory()->active()->linux()->withApiKey('ADHOC-KEY')->create();
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', 'df -h')
         ->set('commandTimeoutSeconds', 45)
         ->call('runAdHocCommand');
@@ -170,7 +171,7 @@ it('audits the full command text and who ran it', function (): void {
     $device = Device::factory()->active()->windows()->create(['hostname' => 'TILL-01']);
     $commandText = "Get-Process\n| Where-Object CPU -gt 50\n| Stop-Process -Force";
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->set('commandText', $commandText)
         ->call('runAdHocCommand');
 
@@ -196,7 +197,7 @@ it('names an ad-hoc command after the first line of what was typed', function (s
     'nothing printable' => ["  \n ", 'Ad-hoc command'],
 ]);
 
-it('lists an ad-hoc command among recent commands and opens its detail', function (): void {
+it('lists an ad-hoc command on the commands tab and opens its detail', function (): void {
     $device = Device::factory()->active()->windows()->create();
     $command = DeviceCommand::factory()->completed()->create([
         'device_id' => $device->id,
@@ -206,7 +207,7 @@ it('lists an ad-hoc command among recent commands and opens its detail', functio
         'output' => 'Spooler restarted',
     ]);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Commands::class, ['device' => $device])
         ->assertSee('Ad-hoc command: Get-Service Spooler');
 
     Livewire::actingAs($this->user)->test(Detail::class)

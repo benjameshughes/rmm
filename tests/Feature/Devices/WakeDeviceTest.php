@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\Device\WakeDevice;
 use App\Enums\DevicePowerState;
-use App\Livewire\Devices\Show;
+use App\Livewire\Devices\Header;
 use App\Models\Device;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,7 +53,7 @@ it('shows the wake button only for offline devices with a MAC', function (array 
 
     expect($device->isWakeable)->toBe($isWakeable);
 
-    $page = Livewire::actingAs($this->user)->test(Show::class, ['device' => $device]);
+    $page = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device]);
 
     $isWakeable ? $page->assertSeeHtml('wire:click="wake"') : $page->assertDontSeeHtml('wire:click="wake"');
 })->with([
@@ -68,7 +68,7 @@ it('wakes the device from its page and toasts', function (): void {
     $listener = listenForWakePackets();
     $device = Device::factory()->active()->create(['last_seen' => now()->subHour(), 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->call('wake')
         ->assertDispatched('toast-show');
 
@@ -80,7 +80,7 @@ it('checks the wake ability before sending anything', function (): void {
     $device = Device::factory()->active()->create(['last_seen' => now()->subHour(), 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
     Gate::before(fn (User $user, string $ability): ?bool => $ability === 'wake' ? false : null);
 
-    Livewire::actingAs($this->user)->test(Show::class, ['device' => $device])
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
         ->call('wake')
         ->assertForbidden();
 

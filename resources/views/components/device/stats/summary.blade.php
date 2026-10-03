@@ -1,19 +1,20 @@
-@props(['metric' => null])
+@props(['metric' => null, 'disk' => null])
 
 <div {{ $attributes->class('grid gap-4 sm:grid-cols-2 lg:grid-cols-4') }}>
     <flux:card>
-        <x-device.stats.stat label="CPU Usage" :value="$metric?->cpuForHumans()" />
+        <x-device.stats.stat label="CPU Usage" :value="$metric?->cpuForHumans()" :detail="$metric?->processorLoadForHumans()" />
     </flux:card>
 
     <flux:card>
         <x-device.stats.stat label="RAM Usage" :value="$metric?->ramForHumans()" :detail="$metric?->memoryUsageForHumans()" />
     </flux:card>
 
-    <flux:card>
-        @if($metric && ! $metric->hasLoadAverage)
-            <x-device.stats.stat label="CPU Queue" :value="$metric->cpuQueueForHumans()" detail="threads waiting for a CPU" />
+    <flux:card class="space-y-2">
+        @if($disk && $disk['usedPercent'] !== null)
+            <x-device.stats.stat :label="'Disk '.$disk['name']" :value="$disk['usedForHumans']" :detail="$disk['freeForHumans']" />
+            <x-device.usage-bar :percent="$disk['usedPercent']" :color="$disk['barColor']" />
         @else
-            <x-device.stats.stat label="Load Average" :value="$metric?->loadForHumans()" :detail="$metric?->loadTrendForHumans()" />
+            <x-device.stats.stat label="Disk" />
         @endif
     </flux:card>
 

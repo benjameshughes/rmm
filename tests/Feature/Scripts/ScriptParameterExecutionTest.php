@@ -5,8 +5,8 @@ declare(strict_types=1);
 use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Schedule\RunScheduledTask;
 use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Livewire\Devices\Header as DeviceHeader;
 use App\Livewire\Devices\Index as DevicesIndex;
-use App\Livewire\Devices\Show as DeviceShow;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Show as ScriptShow;
 use App\Models\Device;
@@ -98,7 +98,7 @@ describe('device page', function (): void {
         $device = deviceOnAgent('0.6.2');
 
         Livewire::actingAs($this->user)
-            ->test(DeviceShow::class, ['device' => $device])
+            ->test(DeviceHeader::class, ['device' => $device])
             ->set('selectedScriptId', $this->script->id)
             ->assertSet('parameterValues', ['PackageId' => '', 'Force' => true, 'Scope' => ''])
             ->assertSeeHtml('wire:model="parameterValues.PackageId"')
@@ -116,7 +116,7 @@ describe('device page', function (): void {
 
     it('shows value errors instead of queuing', function (): void {
         Livewire::actingAs($this->user)
-            ->test(DeviceShow::class, ['device' => deviceOnAgent('0.6.2')])
+            ->test(DeviceHeader::class, ['device' => deviceOnAgent('0.6.2')])
             ->set('selectedScriptId', $this->script->id)
             ->set('parameterValues.Scope', 'everyone')
             ->call('runScript')
@@ -127,7 +127,7 @@ describe('device page', function (): void {
 
     it('shows the outdated agent message instead of crashing', function (): void {
         Livewire::actingAs($this->user)
-            ->test(DeviceShow::class, ['device' => deviceOnAgent('0.6.1')])
+            ->test(DeviceHeader::class, ['device' => deviceOnAgent('0.6.1')])
             ->set('selectedScriptId', $this->script->id)
             ->set('parameterValues.PackageId', 'Git.Git')
             ->call('runScript')
@@ -139,7 +139,7 @@ describe('device page', function (): void {
 
     it('renders no parameter inputs for a script without parameters', function (): void {
         Livewire::actingAs($this->user)
-            ->test(DeviceShow::class, ['device' => deviceOnAgent(null)])
+            ->test(DeviceHeader::class, ['device' => deviceOnAgent(null)])
             ->set('selectedScriptId', Script::factory()->create()->id)
             ->assertSet('parameterValues', [])
             ->assertDontSeeHtml('wire:model="parameterValues.')

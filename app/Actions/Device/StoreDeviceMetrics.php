@@ -15,6 +15,10 @@ use App\Models\DeviceMetric;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
+/**
+ * Metrics are stamped with the time the server received them: an agent's own
+ * timestamp follows the PC's clock, which can run minutes fast or slow.
+ */
 final class StoreDeviceMetrics
 {
     public function __invoke(Device $device, array $input, ?string $ip = null): DeviceMetric
@@ -35,13 +39,11 @@ final class StoreDeviceMetrics
     {
         $cpu = $this->parseCpuMetric($input['cpu'] ?? null);
         $ram = $this->parseRamMetric($input['memory'] ?? $input['ram'] ?? null);
-        $recordedAt = Carbon::parse($input['recorded_at'] ?? $input['timestamp'] ?? now());
-
         $metricData = [
             'device_id' => $device->id,
             'cpu' => $cpu,
             'ram' => $ram,
-            'recorded_at' => $recordedAt,
+            'recorded_at' => now(),
             'agent_version' => $input['agent_version'] ?? null,
             'payload' => $this->rawPayload($input),
         ];
@@ -85,8 +87,6 @@ final class StoreDeviceMetrics
 
     private function handleRawNetdata(Device $device, array $input, ?string $ip): DeviceMetric
     {
-        $recordedAt = isset($input['timestamp']) ? Carbon::parse($input['timestamp']) : now();
-
         $cpuParser = new NetdataV3Metrics($input['netdata_cpu'] ?? $input['netdata_metrics'] ?? []);
         $ramParser = new NetdataV3Metrics($input['netdata_ram'] ?? $input['netdata_metrics'] ?? []);
         $loadParser = new NetdataV3Metrics($input['netdata_load'] ?? []);
@@ -102,7 +102,7 @@ final class StoreDeviceMetrics
             'device_id' => $device->id,
             'cpu' => $cpuParser->parseCpuUsage(),
             'ram' => $ramParser->parseRamUsage(),
-            'recorded_at' => $recordedAt,
+            'recorded_at' => now(),
             'agent_version' => $input['agent_version'] ?? null,
             'cpu_user' => $cpuDetails['user'],
             'cpu_system' => $cpuDetails['system'],

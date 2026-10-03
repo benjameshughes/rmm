@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Livewire\Devices\Show;
+use App\Livewire\Devices\Apps;
+use App\Livewire\Devices\Details;
+use App\Livewire\Devices\Metrics;
+use App\Livewire\Devices\Overview;
 use App\Models\Device;
 use App\Models\DeviceAppMetric;
 use App\Models\DeviceMetric;
@@ -22,24 +25,34 @@ function reportFromWindowsAgent(string $apiKey): void
         ->assertSuccessful();
 }
 
-it('shows performance, network adapters and top apps for a windows device', function (): void {
+it('spreads performance, network adapters and top apps across the tabs for a windows device', function (): void {
     $device = Device::factory()->withApiKey('KEY-PAGE')->create(['hostname' => 'DESKTOP-5ULJ14E']);
     reportFromWindowsAgent('KEY-PAGE');
+    $user = User::factory()->create();
 
-    Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
+    Livewire::actingAs($user)
+        ->test(Overview::class, ['device' => $device])
         ->assertDontSee('Load Average')
-        ->assertSee('CPU Queue')
-        ->assertSee('0.27')
-        ->assertSee('Performance')
+        ->assertSee('CPU Queue 0.27 threads waiting');
+
+    Livewire::actingAs($user)
+        ->test(Metrics::class, ['device' => $device])
+        ->assertSee('Performance right now')
+        ->assertSee('Page File')
         ->assertSee('32.0%')
         ->assertSee('5.3 GB / 16.7 GB')
-        ->assertSee('0.8%')
+        ->assertSee('0.8%');
+
+    Livewire::actingAs($user)
+        ->test(Details::class, ['device' => $device])
         ->assertSee('Network Adapters')
         ->assertSee('Intel[R] Ethernet Connection [17] I219-LM')
         ->assertSee('1 Gbps')
         ->assertSee('14 kbps')
-        ->assertSee('6.9 kbps')
+        ->assertSee('6.9 kbps');
+
+    Livewire::actingAs($user)
+        ->test(Apps::class, ['device' => $device])
         ->assertSee('Top Apps')
         ->assertSeeInOrder(['Netdata Agent', '2.2%', '106.8 MB'])
         ->assertSee('Dell TechHub')
@@ -49,34 +62,35 @@ it('shows performance, network adapters and top apps for a windows device', func
 it('keeps load average and hides the windows sections for a linux device', function (): void {
     $device = Device::factory()->active()->create();
     DeviceMetric::factory()->create(['device_id' => $device->id, 'load1' => 1.5, 'load5' => 1.25, 'load15' => 1.0]);
+    $user = User::factory()->create();
 
-    Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
-        ->assertSee('Load Average')
-        ->assertSee('1.50')
-        ->assertSee('1.25 / 1.00')
-        ->assertDontSee('CPU Queue')
-        ->assertDontSee('Performance')
-        ->assertDontSee('Network Adapters')
-        ->assertDontSee('Top Apps');
+    Livewire::actingAs($user)
+        ->test(Overview::class, ['device' => $device])
+        ->assertSee('Load Average 1.50 · 1.25 / 1.00')
+        ->assertDontSee('CPU Queue');
+
+    Livewire::actingAs($user)->test(Metrics::class, ['device' => $device])->assertDontSee('Performance right now');
+    Livewire::actingAs($user)->test(Details::class, ['device' => $device])->assertDontSee('Network Adapters');
+    Livewire::actingAs($user)->test(Apps::class, ['device' => $device])->assertDontSee('Top Apps');
 });
 
-it('eager loads every section of the latest report on mount and on live refresh', function (): void {
-    $device = Device::factory()->withApiKey('KEY-LIVE')->create();
+it('eager loads the parts of the latest report each tab shows, on mount and on live refresh', function (string $component, string $relation, string $section): void {
+    $device = Device::factory()->withApiKey('KEY-LIVE')->create(['disks' => null]);
 
-    $component = Livewire::actingAs(User::factory()->create())
-        ->test(Show::class, ['device' => $device])
-        ->assertDontSee('Network Adapters');
+    $tab = Livewire::actingAs(User::factory()->create())
+        ->test($component, ['device' => $device])
+        ->assertDontSee($section);
 
     reportFromWindowsAgent('KEY-LIVE');
 
-    $component->call('refreshDevice')->assertSee('Network Adapters')->assertSee('Top Apps');
+    $tab->call('refreshDevice')->assertSee($section);
 
-    $latest = $component->get('device')->latestMetric;
-    expect($latest->relationLoaded('diskMetrics'))->toBeTrue()
-        ->and($latest->relationLoaded('networkMetrics'))->toBeTrue()
-        ->and($latest->relationLoaded('appMetrics'))->toBeTrue();
-});
+    expect($tab->get('device')->latestMetric->relationLoaded($relation))->toBeTrue();
+})->with([
+    'overview' => [Overview::class, 'diskMetrics', 'CPU Queue 0.27'],
+    'details adapters' => [Details::class, 'networkMetrics', 'Network Adapters'],
+    'apps' => [Apps::class, 'appMetrics', 'Top Apps'],
+]);
 
 it('highlights adapters with errors or drops', function (): void {
     $healthy = DeviceNetworkMetric::make(['interface' => 'Ethernet', 'errors_inbound' => 0.0, 'errors_outbound' => 0.0, 'drops_inbound' => 0.0, 'drops_outbound' => 0.0]);
@@ -145,18 +159,19 @@ it('renders the performance and summary components from a metric', function (): 
     ]);
 
     $this->blade('<x-device.stats.performance :metric="$metric" />', ['metric' => $metric])
-        ->assertSee('Performance')
-        ->assertSee('3.00')
+        ->assertSee('Performance right now')
+        ->assertDontSee('CPU Queue')
         ->assertSee('25.0%')
         ->assertSee('512.0 MB / 2.0 GB')
         ->assertSee('55.6%');
 
     $this->blade('<x-device.stats.summary :metric="$metric" />', ['metric' => $metric])
         ->assertSee('12.5%')
-        ->assertSee('CPU Queue')
+        ->assertSee('CPU Queue 3.00 threads waiting')
         ->assertDontSee('Load Average');
 
     $this->blade('<x-device.stats.summary :metric="$metric" />', ['metric' => null])
-        ->assertSee('Load Average')
+        ->assertSee('CPU Usage')
+        ->assertDontSee('CPU Queue')
         ->assertSee('—');
 });
