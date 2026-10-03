@@ -11,6 +11,7 @@ use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::power::{GatePolicy, PowerController, PowerNotifier};
 use crate::power_state::{PowerNotice, PowerReason};
+use crate::startup_grace::{self, Milestone, StartupProgress};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
 use crate::updater::Updater;
@@ -87,6 +88,8 @@ pub struct Agent {
     /// Set while a metrics session is running.
     session_auth: Mutex<Option<SessionAuth>>,
     boot_announced: AtomicBool,
+    /// Milestones for the startup keep-awake (no-op until the first session).
+    startup: Mutex<StartupProgress>,
 }
 
 impl Agent {
@@ -126,6 +129,7 @@ impl Agent {
             power_notices: Mutex::new(Some(power_notices)),
             session_auth: Mutex::new(None),
             boot_announced: AtomicBool::new(false),
+            startup: Mutex::new(StartupProgress::default()),
         })
     }
 
@@ -316,6 +320,16 @@ impl Agent {
             key_health: key_health.clone(),
         }));
         if !self.boot_announced.swap(true, Ordering::SeqCst) {
+            // Hold the machine awake until this agent has checked in: after a
+            // self-update nothing else keeps a dark-woken PC up.
+            *self
+                .startup
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                startup_grace::hold_while_starting(
+                    std::time::Duration::from_secs(self.config.startup_keep_awake_max),
+                    self.cancellation_token.clone(),
+                );
             self.power
                 .announce(PowerNotice::powering_on(PowerReason::Boot));
         }
@@ -347,9 +361,16 @@ impl Agent {
         let command_token = session_token.clone();
         let command_health = key_health.clone();
         let command_power = self.power.clone();
+        let command_startup = self.startup_progress();
         let command_handle = tokio::spawn(async move {
             command_client
-                .start_command_loop(command_api_key, command_token, command_health, command_power)
+                .start_command_loop(
+                    command_api_key,
+                    command_token,
+                    command_health,
+                    command_power,
+                    command_startup,
+                )
                 .await;
         });
 
@@ -374,6 +395,7 @@ impl Agent {
                 session_token.clone(),
                 key_health.clone(),
                 self.power.gate(GatePolicy::Reporting),
+                self.startup_progress(),
             )
             .await;
 
@@ -395,6 +417,13 @@ impl Agent {
             .session_auth
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = auth;
+    }
+
+    fn startup_progress(&self) -> StartupProgress {
+        self.startup
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     fn session_auth(&self) -> Option<SessionAuth> {
@@ -423,6 +452,10 @@ impl Agent {
             while let Some(notice) = notices.recv().await {
                 if let Some(notifier) = &notifier {
                     agent.deliver_power_notice(notifier, notice).await;
+                }
+
+                if notice == PowerNotice::powering_on(PowerReason::Boot) {
+                    agent.startup_progress().mark(Milestone::BootAnnounced);
                 }
 
                 if notice.is_shutdown() {

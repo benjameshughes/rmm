@@ -40,6 +40,13 @@ pub const DEFAULT_POWER_REQUEST_TIMEOUT_SECS: u64 = 5;
 /// HTTP timeout for the shutdown power notice, so it never holds up shutdown
 pub const DEFAULT_POWER_SHUTDOWN_TIMEOUT_SECS: u64 = 3;
 
+/// Longest the agent holds the machine awake after starting while it checks in
+pub const DEFAULT_STARTUP_KEEP_AWAKE_MAX_SECS: u64 = 120;
+
+/// How long the post-update restart script keeps the machine awake after
+/// restarting the service, so the new agent can take over
+pub const DEFAULT_RESTART_HANDOVER_GRACE_SECS: u64 = 30;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
@@ -92,6 +99,10 @@ pub struct Config {
     pub power_request_timeout: u64,
     /// HTTP timeout for the shutdown power notice in seconds
     pub power_shutdown_timeout: u64,
+    /// Most seconds the startup keep-awake is held
+    pub startup_keep_awake_max: u64,
+    /// Seconds the restart script stays awake after restarting the service
+    pub restart_handover_grace: u64,
     /// Skip automatic updates
     pub skip_updates: bool,
     /// Netdata API base URL
@@ -135,6 +146,8 @@ impl Default for Config {
             command_drain_grace: DEFAULT_COMMAND_DRAIN_GRACE_SECS,
             power_request_timeout: DEFAULT_POWER_REQUEST_TIMEOUT_SECS,
             power_shutdown_timeout: DEFAULT_POWER_SHUTDOWN_TIMEOUT_SECS,
+            startup_keep_awake_max: DEFAULT_STARTUP_KEEP_AWAKE_MAX_SECS,
+            restart_handover_grace: DEFAULT_RESTART_HANDOVER_GRACE_SECS,
             skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }

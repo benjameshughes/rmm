@@ -16,6 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::{Config, NETDATA_GROUP_BY_INSTANCE};
 use crate::power::PowerGate;
+use crate::startup_grace::{Milestone, StartupProgress};
 
 // ============================================================================
 // API key health (dead-key detection)
@@ -452,6 +453,7 @@ impl MetricsCollector {
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
         mut power_gate: PowerGate,
+        startup: StartupProgress,
     ) {
         info!(
             "Starting metrics collection loop (interval: {}s)",
@@ -462,10 +464,17 @@ impl MetricsCollector {
             warn!("Netdata is not available at startup - metrics will be limited");
         }
 
+        // Submit straight away at start so the server sees this version
+        // quickly, then on the interval.
         let interval = Duration::from_secs(self.config.metrics_interval);
-        while power_gate.tick(interval, &cancellation_token).await {
+        let mut ready = power_gate.wait_until_allowed(&cancellation_token).await;
+        while ready {
             let outcome = self.collect_and_submit(&api_key).await;
             key_health.record(outcome);
+            if outcome == RequestOutcome::Success {
+                startup.mark(Milestone::MetricsPosted);
+            }
+            ready = power_gate.tick(interval, &cancellation_token).await;
         }
 
         info!("Metrics collection loop stopped");

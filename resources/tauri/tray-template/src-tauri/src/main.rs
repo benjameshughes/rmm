@@ -14,6 +14,7 @@ mod power;
 mod power_events;
 mod power_state;
 mod runtime_config;
+mod startup_grace;
 mod storage;
 mod sysinfo;
 mod updater;

@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::keep_awake::KeepAwake;
 use crate::metrics::{KeyHealth, RequestOutcome};
 use crate::power::{GatePolicy, PowerController};
+use crate::startup_grace::{Milestone, StartupProgress};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -47,9 +48,8 @@ trait CommandQueue {
     type Command;
     type Awake;
 
-    /// The next queued command; None when the queue is empty or the server
-    /// could not be asked.
-    async fn next(&mut self) -> Option<Self::Command>;
+    /// The next queued command.
+    async fn next(&mut self) -> Fetched<Self::Command>;
 
     /// Ask the machine to stay awake until the returned guard is dropped.
     fn keep_awake(&mut self) -> Self::Awake;
@@ -59,6 +59,25 @@ trait CommandQueue {
     async fn run(&mut self, command: Self::Command) -> bool;
 }
 
+/// What asking the server for the next command gave.
+#[derive(Debug)]
+enum Fetched<C> {
+    Command(C),
+    /// The server has nothing queued.
+    Empty,
+    /// The server could not be asked or gave an unusable answer.
+    Failed,
+}
+
+/// How a drain ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Drained {
+    /// Commands run.
+    ran: usize,
+    /// The server said the queue is empty.
+    emptied: bool,
+}
+
 /// Run queued commands back to back until the queue is empty.
 ///
 /// One keep-awake guard covers the whole drain: it is taken as soon as the
@@ -66,19 +85,24 @@ trait CommandQueue {
 /// (or sleep, shutdown or cancellation stops the drain). Releasing it between
 /// commands let Windows drop back into standby before the next one was
 /// fetched. Each round holds the power command slot, so a sleep request waits
-/// for the running command and no further one starts. Returns how many
-/// commands ran.
-async fn drain_queue<Q: CommandQueue>(queue: &mut Q, power: &Arc<PowerController>) -> usize {
+/// for the running command and no further one starts.
+async fn drain_queue<Q: CommandQueue>(queue: &mut Q, power: &Arc<PowerController>) -> Drained {
     let mut awake: Option<Q::Awake> = None;
     let mut ran = 0;
+    let mut emptied = false;
 
     loop {
         let Some(_slot) = power.try_begin_command() else {
             break;
         };
 
-        let Some(command) = queue.next().await else {
-            break;
+        let command = match queue.next().await {
+            Fetched::Command(command) => command,
+            Fetched::Empty => {
+                emptied = true;
+                break;
+            }
+            Fetched::Failed => break,
         };
 
         // Sleep started while asking: leave the command queued on the server.
@@ -98,7 +122,7 @@ async fn drain_queue<Q: CommandQueue>(queue: &mut Q, power: &Arc<PowerController
     }
 
     drop(awake);
-    ran
+    Drained { ran, emptied }
 }
 
 /// The real queue: this device's pending commands on the server.
@@ -112,7 +136,7 @@ impl CommandQueue for ServerQueue<'_> {
     type Command = PendingCommand;
     type Awake = Option<KeepAwake>;
 
-    async fn next(&mut self) -> Option<PendingCommand> {
+    async fn next(&mut self) -> Fetched<PendingCommand> {
         self.client.fetch_pending(self.api_key, self.key_health).await
     }
 
@@ -151,6 +175,7 @@ impl CommandClient {
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
         power: Arc<PowerController>,
+        startup: StartupProgress,
     ) {
         info!(
             "Starting command loop (interval: {}s)",
@@ -160,27 +185,40 @@ impl CommandClient {
         let mut power_gate = power.gate(GatePolicy::Commands);
         let interval = Duration::from_secs(self.config.command_poll_interval);
 
-        while power_gate.tick(interval, &cancellation_token).await {
+        // Poll straight away at start, then on the interval.
+        let mut ready = power_gate.wait_until_allowed(&cancellation_token).await;
+        while ready {
             tokio::select! {
                 _ = cancellation_token.cancelled() => break,
-                _ = self.poll_once(&api_key, &key_health, &power) => {}
+                drained = self.poll_once(&api_key, &key_health, &power) => {
+                    if drained.emptied {
+                        startup.mark(Milestone::CommandsDrained);
+                    }
+                }
             }
+            ready = power_gate.tick(interval, &cancellation_token).await;
         }
 
         info!("Command loop stopped");
     }
 
-    async fn poll_once(&self, api_key: &str, key_health: &KeyHealth, power: &Arc<PowerController>) {
+    async fn poll_once(
+        &self,
+        api_key: &str,
+        key_health: &KeyHealth,
+        power: &Arc<PowerController>,
+    ) -> Drained {
         let mut queue = ServerQueue {
             client: self,
             api_key,
             key_health,
         };
 
-        let ran = drain_queue(&mut queue, power).await;
-        if ran > 1 {
-            info!("Drained {} queued commands", ran);
+        let drained = drain_queue(&mut queue, power).await;
+        if drained.ran > 1 {
+            info!("Drained {} queued commands", drained.ran);
         }
+        drained
     }
 
     /// Report the command started, run it and report the result. False when
@@ -229,7 +267,7 @@ impl CommandClient {
         }
     }
 
-    async fn fetch_pending(&self, api_key: &str, key_health: &KeyHealth) -> Option<PendingCommand> {
+    async fn fetch_pending(&self, api_key: &str, key_health: &KeyHealth) -> Fetched<PendingCommand> {
         let url = format!("{}/api/commands/pending", self.config.base_url);
         let response = self
             .client
@@ -244,7 +282,7 @@ impl CommandClient {
             Err(e) => {
                 key_health.record(RequestOutcome::Inconclusive);
                 debug!("Command poll network error: {}", e);
-                return None;
+                return Fetched::Failed;
             }
         };
 
@@ -253,14 +291,17 @@ impl CommandClient {
 
         if outcome != RequestOutcome::Success {
             warn!("Command poll failed ({})", response.status().as_u16());
-            return None;
+            return Fetched::Failed;
         }
 
         match response.json::<PendingResponse>().await {
-            Ok(body) => body.command,
+            Ok(PendingResponse {
+                command: Some(command),
+            }) => Fetched::Command(command),
+            Ok(PendingResponse { command: None }) => Fetched::Empty,
             Err(e) => {
                 warn!("Command poll returned an unreadable body: {}", e);
-                None
+                Fetched::Failed
             }
         }
     }
@@ -383,6 +424,7 @@ mod tests {
         signal_while_running: Option<(u64, PowerSignal)>,
         signal_while_fetching: Option<PowerSignal>,
         refuse: Option<u64>,
+        fail_fetch: bool,
     }
 
     impl FakeQueue {
@@ -394,6 +436,7 @@ mod tests {
                 signal_while_running: None,
                 signal_while_fetching: None,
                 refuse: None,
+                fail_fetch: false,
             }
         }
 
@@ -406,11 +449,17 @@ mod tests {
         type Command = u64;
         type Awake = FakeAwake;
 
-        async fn next(&mut self) -> Option<u64> {
+        async fn next(&mut self) -> Fetched<u64> {
             if let Some(signal) = self.signal_while_fetching.take() {
                 self.power.signal(signal);
             }
-            self.queued.pop_front()
+            if self.fail_fetch {
+                return Fetched::Failed;
+            }
+            match self.queued.pop_front() {
+                Some(id) => Fetched::Command(id),
+                None => Fetched::Empty,
+            }
         }
 
         fn keep_awake(&mut self) -> FakeAwake {
@@ -438,7 +487,10 @@ mod tests {
         let (power, _notices) = PowerController::new();
         let mut queue = FakeQueue::new(&power, &[32, 33, 34]);
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 3);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 3, emptied: true }
+        );
 
         assert_eq!(
             queue.log(),
@@ -457,7 +509,10 @@ mod tests {
         let (power, _notices) = PowerController::new();
         let mut queue = FakeQueue::new(&power, &[]);
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 0);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 0, emptied: true }
+        );
         assert!(queue.log().is_empty());
     }
 
@@ -479,7 +534,10 @@ mod tests {
         let mut queue = FakeQueue::new(&power, &[32, 34]);
         queue.signal_while_running = Some((32, PowerSignal::Suspend));
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 1);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 1, emptied: false }
+        );
 
         assert_eq!(queue.log(), vec![Step::Awake, Step::Ran(32), Step::Released]);
         assert_eq!(queue.queued, VecDeque::from([34]));
@@ -496,7 +554,10 @@ mod tests {
         let mut queue = FakeQueue::new(&power, &[32, 34]);
         queue.signal_while_running = Some((32, PowerSignal::Shutdown));
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 1);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 1, emptied: false }
+        );
 
         assert_eq!(queue.log(), vec![Step::Awake, Step::Ran(32), Step::Released]);
         assert_eq!(queue.queued, VecDeque::from([34]));
@@ -512,7 +573,10 @@ mod tests {
         let mut queue = FakeQueue::new(&power, &[32]);
         queue.signal_while_fetching = Some(PowerSignal::Suspend);
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 0);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 0, emptied: false }
+        );
 
         assert!(queue.log().is_empty());
         assert_eq!(power.state(), PowerState::Asleep);
@@ -528,8 +592,27 @@ mod tests {
         power.signal(PowerSignal::Suspend);
         let mut queue = FakeQueue::new(&power, &[32]);
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 0);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 0, emptied: false }
+        );
         assert_eq!(queue.queued, VecDeque::from([32]));
+    }
+
+    #[tokio::test]
+    async fn a_failed_fetch_does_not_count_as_drained() {
+        let (power, _notices) = PowerController::new();
+        let mut queue = FakeQueue::new(&power, &[32]);
+        queue.fail_fetch = true;
+
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained {
+                ran: 0,
+                emptied: false
+            }
+        );
+        assert!(queue.log().is_empty());
     }
 
     #[tokio::test]
@@ -538,7 +621,10 @@ mod tests {
         let mut queue = FakeQueue::new(&power, &[32, 33]);
         queue.refuse = Some(32);
 
-        assert_eq!(drain_queue(&mut queue, &power).await, 0);
+        assert_eq!(
+            drain_queue(&mut queue, &power).await,
+            Drained { ran: 0, emptied: false }
+        );
 
         assert_eq!(
             queue.log(),

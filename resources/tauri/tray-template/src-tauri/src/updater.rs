@@ -168,6 +168,40 @@ pub fn install_executable(target: &Path, bytes: &[u8], expected_sha256: &str) ->
     Ok(())
 }
 
+/// Windows service restarted after an update.
+const SERVICE_NAME: &str = "BenJHRMM";
+
+/// PowerShell run detached to restart the service after an update.
+///
+/// The old agent's keep-awake dies with it, so on a dark-woken (Modern
+/// Standby) PC Windows would drop straight back into standby before the new
+/// agent checks in. The script asks Windows to stay up (SetThreadExecutionState
+/// ES_CONTINUOUS | ES_SYSTEM_REQUIRED = 0x80000001) for its whole lifetime,
+/// restarts the service, then keeps holding for `grace_secs` so the new agent
+/// can take over with its own startup keep-awake. If Add-Type fails the
+/// restart still happens.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn restart_script(grace_secs: u64) -> String {
+    format!(
+        "try {{ Add-Type -Namespace RmmPower -Name Native -MemberDefinition \
+'[DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint esFlags);' \
+-ErrorAction Stop; [void][RmmPower.Native]::SetThreadExecutionState([uint32]2147483649) }} catch {{ }}\n\
+Start-Sleep -Seconds 2\n\
+Restart-Service -Name '{SERVICE_NAME}' -Force\n\
+Start-Sleep -Seconds {grace_secs}\n"
+    )
+}
+
+/// `-EncodedCommand` form: base64 of the UTF-16LE script, so no quoting
+/// survives to the command line.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn encode_powershell(script: &str) -> String {
+    use base64::{engine::general_purpose, Engine as _};
+
+    let utf16le: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    general_purpose::STANDARD.encode(utf16le)
+}
+
 /// Auto-updates are only published for Windows (rmm.exe).
 pub const fn auto_update_supported() -> bool {
     cfg!(target_os = "windows")
@@ -382,8 +416,8 @@ impl Updater {
                 "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
-                "-Command",
-                "Start-Sleep -Seconds 2; Restart-Service -Name 'BenJHRMM' -Force",
+                "-EncodedCommand",
+                &encode_powershell(&restart_script(self.config.restart_handover_grace)),
             ])
             .spawn()
             .context("Failed to spawn service restart")?;
@@ -476,6 +510,40 @@ mod tests {
     use tempfile::TempDir;
 
     const HELLO_SHA: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+
+    #[test]
+    fn restart_script_holds_the_machine_awake_around_the_restart() {
+        let script = restart_script(30);
+
+        assert!(script.is_ascii());
+        let hold = script.find("SetThreadExecutionState([uint32]2147483649)").unwrap();
+        let restart = script.find("Restart-Service -Name 'BenJHRMM' -Force").unwrap();
+        let grace = script.find("Start-Sleep -Seconds 30").unwrap();
+        assert!(hold < restart && restart < grace);
+        // 2147483649 == ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+        assert_eq!(2147483649u32, 0x8000_0000 | 0x0000_0001);
+        // A failed Add-Type must not stop the restart.
+        assert!(script.starts_with("try {"));
+        assert!(script[..restart].contains("catch { }"));
+    }
+
+    #[test]
+    fn encodes_powershell_as_utf16le_base64() {
+        use base64::{engine::general_purpose, Engine as _};
+
+        // Known value: powershell -EncodedCommand for "dir".
+        assert_eq!(encode_powershell("dir"), "ZABpAHIA");
+
+        let script = restart_script(30);
+        let bytes = general_purpose::STANDARD
+            .decode(encode_powershell(&script))
+            .unwrap();
+        let units: Vec<u16> = bytes
+            .chunks(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        assert_eq!(String::from_utf16(&units).unwrap(), script);
+    }
 
     #[test]
     fn parses_bare_and_sha256sum_formats() {
