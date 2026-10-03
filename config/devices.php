@@ -133,6 +133,7 @@ return [
     | devices' LAN and the broadcast address of that subnet. 255.255.255.255
     | leaves through the default route, which is usually the wrong network.
     | Each MAC gets packets_per_mac packets: a sleeping NIC can miss one.
+    | The prepare script is queued on every Windows device when it is approved.
     |
     */
 
@@ -140,6 +141,7 @@ return [
         'broadcast_address' => env('WAKE_ON_LAN_BROADCAST_ADDRESS', '255.255.255.255'),
         'port' => (int) env('WAKE_ON_LAN_PORT', 9),
         'packets_per_mac' => 3,
+        'prepare_script_slug' => 'prepare-wake-on-lan',
     ],
 
 ];

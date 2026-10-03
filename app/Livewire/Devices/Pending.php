@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Enums\DeviceStatus;
+use App\Events\DeviceApproved;
 use App\Models\Device;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Expression;
@@ -51,6 +52,7 @@ final class Pending extends Component
         }
 
         $device->issueApiKey();
+        DeviceApproved::dispatch($device, auth()->user());
         $this->dispatch('notify', message: 'Device approved');
     }
 
