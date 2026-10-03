@@ -139,3 +139,31 @@ describe('offline announcements', function (): void {
         Event::assertDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => $event->deviceId === $device->id);
     });
 });
+
+it('stops showing Powering on once the hold passes even without another check-in', function (): void {
+    $device = Device::factory()->active()->create([
+        'last_seen' => now(),
+        'power_state' => DevicePowerState::PoweringOn,
+        'power_state_changed_at' => now(),
+    ]);
+
+    expect($device->statusLabel())->toBe('Powering on');
+
+    $this->travel(config('devices.power.powering_on_hold_seconds') + 1)->seconds();
+
+    expect($device->fresh()->statusLabel())->toBe('Online');
+});
+
+it('settles an expired Powering on every minute and broadcasts it', function (): void {
+    $expired = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subMinutes(2)]);
+    $fresh = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()]);
+    $asleep = Device::factory()->active()->create(['power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->subHour()]);
+    Event::fake([DeviceUpdated::class]);
+
+    $this->artisan('devices:check-offline')->assertSuccessful();
+
+    expect($expired->fresh()->power_state)->toBeNull()
+        ->and($fresh->fresh()->power_state)->toBe(DevicePowerState::PoweringOn)
+        ->and($asleep->fresh()->power_state)->toBe(DevicePowerState::PoweringOff);
+    Event::assertDispatched(DeviceUpdated::class, fn (DeviceUpdated $event): bool => $event->deviceId === $expired->id);
+});

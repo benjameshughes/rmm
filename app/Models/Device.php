@@ -337,11 +337,14 @@ final class Device extends Model
     }
 
     /**
-     * Only while the device is still reporting: one that powered on and went quiet again is just offline.
+     * Only for the hold window and only while the device is still reporting: a Modern Standby PC
+     * often checks in once and dozes off again, so waiting for a later check-in to clear it never ends.
      */
     protected function isPoweringOn(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOn && $this->isOnline);
+        return Attribute::get(fn (): bool => $this->power_state === DevicePowerState::PoweringOn
+            && $this->power_state_changed_at?->greaterThan(now()->subSeconds(config('devices.power.powering_on_hold_seconds')))
+            && $this->isOnline);
     }
 
     protected function isWakeable(): Attribute

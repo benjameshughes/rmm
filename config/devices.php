@@ -49,7 +49,7 @@ return [
     */
 
     'power' => [
-        'powering_on_hold_seconds' => 60,
+        'powering_on_hold_seconds' => 15,
     ],
 
     /*
