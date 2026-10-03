@@ -280,8 +280,10 @@ async fn execute(
     };
 
     let byte_limit = limits.output_limit.saturating_mul(4);
-    let stdout_task = tokio::spawn(read_capped(child.stdout.take(), byte_limit));
-    let stderr_task = tokio::spawn(read_capped(child.stderr.take(), byte_limit));
+    let stdout_buffer = CapturedOutput::default();
+    let stderr_buffer = CapturedOutput::default();
+    let stdout_task = tokio::spawn(read_capped(child.stdout.take(), byte_limit, stdout_buffer.clone()));
+    let stderr_task = tokio::spawn(read_capped(child.stderr.take(), byte_limit, stderr_buffer.clone()));
 
     let (exit_code, timed_out) = match tokio::time::timeout(limits.timeout, child.wait()).await {
         Ok(Ok(status)) => (status.code().unwrap_or(-1), false),
@@ -298,8 +300,8 @@ async fn execute(
         }
     };
 
-    let stdout = drain(stdout_task, limits.drain_grace).await;
-    let stderr = drain(stderr_task, limits.drain_grace).await;
+    let stdout = drain(stdout_task, &stdout_buffer, limits.drain_grace).await;
+    let stderr = drain(stderr_task, &stderr_buffer, limits.drain_grace).await;
 
     ExecutionResult {
         exit_code,
@@ -315,25 +317,37 @@ async fn execute(
     }
 }
 
-async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, limit: usize) -> Vec<u8> {
+/// Output captured so far, shared with the reader task so a pipe that never
+/// closes (a background child still holding it after a timeout) cannot throw
+/// away what was already read.
+type CapturedOutput = std::sync::Arc<std::sync::Mutex<Vec<u8>>>;
+
+async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, limit: usize, captured: CapturedOutput) {
     let Some(mut pipe) = pipe else {
-        return Vec::new();
+        return;
     };
 
-    let mut captured = Vec::new();
-    let _ = (&mut pipe)
-        .take(limit as u64)
-        .read_to_end(&mut captured)
-        .await;
-    let _ = tokio::io::copy(&mut pipe, &mut tokio::io::sink()).await;
-    captured
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = match pipe.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
+
+        let mut buffer = captured.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let room = limit.saturating_sub(buffer.len());
+        buffer.extend_from_slice(&chunk[..read.min(room)]);
+    }
 }
 
-async fn drain(task: tokio::task::JoinHandle<Vec<u8>>, grace: Duration) -> Vec<u8> {
-    match tokio::time::timeout(grace, task).await {
-        Ok(Ok(bytes)) => bytes,
-        _ => Vec::new(),
+/// Waits up to `grace` for the pipe to close, then returns whatever was read,
+/// stopping the reader if the pipe is still held open.
+async fn drain(mut task: tokio::task::JoinHandle<()>, captured: &CapturedOutput, grace: Duration) -> Vec<u8> {
+    if tokio::time::timeout(grace, &mut task).await.is_err() {
+        task.abort();
     }
+
+    std::mem::take(&mut *captured.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
 }
 
 #[cfg(windows)]
@@ -625,6 +639,21 @@ mod tests {
 
         assert_eq!(result.exit_code, 0, "output: {}", result.output);
         assert!(result.output.contains("Mozilla.Firefox"));
+    }
+
+    #[tokio::test]
+    async fn keeps_output_already_read_when_the_pipe_never_closes() {
+        use tokio::io::AsyncWriteExt;
+
+        let (mut writer, reader) = tokio::io::duplex(64);
+        writer.write_all(b"before").await.unwrap();
+
+        let captured = CapturedOutput::default();
+        let task = tokio::spawn(read_capped(Some(reader), 1000, captured.clone()));
+        let output = drain(task, &captured, Duration::from_millis(200)).await;
+
+        assert_eq!(output, b"before");
+        drop(writer);
     }
 
     #[cfg(unix)]
