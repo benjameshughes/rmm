@@ -22,7 +22,7 @@ final class AnnounceDevicesGoneOffline
      */
     public function __invoke(): int
     {
-        $threshold = now()->subMinutes(config('devices.online.threshold_minutes'));
+        $threshold = Device::onlineCutoff();
 
         return Device::query()
             ->where('status', DeviceStatus::Active)

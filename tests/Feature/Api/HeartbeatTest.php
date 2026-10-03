@@ -99,3 +99,13 @@ describe('heartbeat endpoint', function (): void {
         $response->assertStatus(429);
     });
 });
+
+it('tells the agent how often to heartbeat', function (): void {
+    config(['devices.heartbeat.interval_seconds' => 20]);
+    Device::factory()->active()->withApiKey('BEAT-KEY')->create();
+
+    $this->withHeaders(['X-Device-Key' => 'BEAT-KEY'])
+        ->postJson('/api/heartbeat')
+        ->assertSuccessful()
+        ->assertJsonPath('heartbeat_interval_seconds', 20);
+});

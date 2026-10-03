@@ -20,6 +20,7 @@ final class HeartbeatController
         return response()->json([
             'status' => 'ok',
             'server_time' => now()->toIso8601String(),
+            'heartbeat_interval_seconds' => config('devices.heartbeat.interval_seconds'),
         ]);
     }
 }

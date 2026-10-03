@@ -81,6 +81,14 @@ final class Device extends Model
         ];
     }
 
+    /**
+     * Devices that reported after this moment are online: a few missed heartbeats, not a flat timeout.
+     */
+    public static function onlineCutoff(): Carbon
+    {
+        return now()->subSeconds(config('devices.heartbeat.interval_seconds') * config('devices.online.missed_heartbeats'));
+    }
+
     public static function hashApiKey(string $apiKey): string
     {
         return hash('sha256', $apiKey);
@@ -367,7 +375,7 @@ final class Device extends Model
     {
         return Attribute::get(fn (): bool => ! $this->isPoweringOff
             && $this->last_seen !== null
-            && $this->last_seen->greaterThan(now()->subMinutes(config('devices.online.threshold_minutes'))));
+            && $this->last_seen->greaterThan(self::onlineCutoff()));
     }
 
     protected function isPoweringOff(): Attribute

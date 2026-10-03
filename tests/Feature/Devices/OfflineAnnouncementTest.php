@@ -13,9 +13,13 @@ use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
 
+beforeEach(function (): void {
+    config(['devices.heartbeat.interval_seconds' => 15, 'devices.online.missed_heartbeats' => 3]);
+});
+
 it('announces a device the moment it crosses the offline threshold', function (): void {
     Event::fake([DeviceUpdated::class]);
-    $device = Device::factory()->active()->create(['last_seen' => now()->subMinutes(5)->subSeconds(30)]);
+    $device = Device::factory()->active()->create(['last_seen' => now()->subSeconds(60)]);
 
     $this->artisan('devices:check-offline')->assertSuccessful();
 
@@ -24,7 +28,7 @@ it('announces a device the moment it crosses the offline threshold', function ()
 
 it('announces it even when no offline alert rule exists', function (): void {
     Event::fake([DeviceUpdated::class]);
-    Device::factory()->active()->create(['last_seen' => now()->subMinutes(6)]);
+    Device::factory()->active()->create(['last_seen' => now()->subSeconds(90)]);
 
     $this->artisan('devices:check-offline')->assertSuccessful();
 
@@ -39,16 +43,16 @@ it('leaves online, long-offline and pending devices alone', function (array $att
 
     Event::assertNotDispatched(DeviceUpdated::class);
 })->with([
-    'online' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subMinutes(2)]],
+    'online' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subSeconds(20)]],
     'offline for hours' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subHours(3)]],
     'never seen' => [['status' => DeviceStatus::Active, 'last_seen' => null]],
-    'pending approval' => [['status' => DeviceStatus::Pending, 'last_seen' => now()->subMinutes(6)]],
+    'pending approval' => [['status' => DeviceStatus::Pending, 'last_seen' => now()->subSeconds(90)]],
 ]);
 
 it('follows the configured threshold', function (): void {
     Event::fake([DeviceUpdated::class]);
-    config(['devices.online.threshold_minutes' => 10]);
-    $device = Device::factory()->active()->create(['last_seen' => now()->subMinutes(6)]);
+    config(['devices.online.missed_heartbeats' => 10]);
+    $device = Device::factory()->active()->create(['last_seen' => now()->subSeconds(90)]);
 
     $this->artisan('devices:check-offline')->assertSuccessful();
 
@@ -57,12 +61,12 @@ it('follows the configured threshold', function (): void {
 });
 
 it('flips the device list to Offline when the announcement arrives', function (): void {
-    $device = Device::factory()->active()->create(['last_seen' => now()->subMinutes(4)]);
+    $device = Device::factory()->active()->create(['last_seen' => now()->subSeconds(30)]);
 
     $component = Livewire::actingAs(User::factory()->create())->test(Index::class)
         ->assertSee('Online');
 
-    $this->travel(2)->minutes();
+    $this->travel(30)->seconds();
 
     $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
         ->assertSee('Offline');

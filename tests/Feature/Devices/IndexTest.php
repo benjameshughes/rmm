@@ -42,9 +42,10 @@ it('lists devices with status and snapshots', function (): void {
         ->assertSee('57%');
 });
 
-it('reports a device as offline once it has been silent for five minutes', function (): void {
-    $online = Device::factory()->active()->create(['last_seen' => now()->subMinutes(4)]);
-    $offline = Device::factory()->active()->create(['last_seen' => now()->subMinutes(10)]);
+it('reports a device as offline once it has missed three heartbeats', function (): void {
+    config(['devices.heartbeat.interval_seconds' => 15, 'devices.online.missed_heartbeats' => 3]);
+    $online = Device::factory()->active()->create(['last_seen' => now()->subSeconds(40)]);
+    $offline = Device::factory()->active()->create(['last_seen' => now()->subSeconds(50)]);
     $neverSeen = Device::factory()->active()->create(['last_seen' => null]);
 
     expect($online->isOnline)->toBeTrue();

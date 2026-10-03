@@ -7,7 +7,8 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -150,6 +151,62 @@ impl KeyHealth {
     /// True once the key has been declared dead.
     pub fn key_rejected(&self) -> bool {
         self.rejected.load(Ordering::SeqCst)
+    }
+}
+
+// ============================================================================
+// Heartbeat interval (set by the server)
+// ============================================================================
+
+/// The part of a heartbeat response the agent uses. Older servers send no
+/// interval (or no JSON at all).
+#[derive(Debug, Default, Deserialize)]
+struct HeartbeatResponse {
+    #[serde(default)]
+    heartbeat_interval_seconds: Option<u64>,
+}
+
+/// The interval a heartbeat response asks for, if it asks for one.
+fn requested_heartbeat_interval(body: &str) -> Option<u64> {
+    serde_json::from_str::<HeartbeatResponse>(body)
+        .ok()
+        .and_then(|response| response.heartbeat_interval_seconds)
+}
+
+/// Keep a server-requested interval within `[min, max]` seconds.
+fn clamp_heartbeat_interval(requested: u64, min: u64, max: u64) -> Duration {
+    Duration::from_secs(requested.clamp(min, max.max(min)))
+}
+
+/// Beat at once, then every `interval`, adopting whatever interval each
+/// beat's response asks for (clamped) from the next tick on. Pauses while the
+/// machine sleeps. `beat` returns the requested interval in seconds.
+async fn run_heartbeats<F, Fut>(
+    mut interval: Duration,
+    bounds: (u64, u64),
+    power_gate: &mut PowerGate,
+    cancellation_token: &CancellationToken,
+    mut beat: F,
+) where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Option<u64>>,
+{
+    let mut ready = power_gate.wait_until_allowed(cancellation_token).await;
+
+    while ready {
+        if let Some(requested) = beat().await {
+            let next = clamp_heartbeat_interval(requested, bounds.0, bounds.1);
+            if next != interval {
+                info!(
+                    "Heartbeat interval changed by server: {}s -> {}s",
+                    interval.as_secs(),
+                    next.as_secs()
+                );
+                interval = next;
+            }
+        }
+
+        ready = power_gate.tick(interval, cancellation_token).await;
     }
 }
 
@@ -480,8 +537,9 @@ impl MetricsCollector {
         info!("Metrics collection loop stopped");
     }
 
-    /// Send a lightweight heartbeat to the backend
-    pub async fn send_heartbeat(&self, api_key: &str) -> RequestOutcome {
+    /// Send a lightweight heartbeat to the backend. Also returns the interval
+    /// the server asked for, if any.
+    pub async fn send_heartbeat(&self, api_key: &str) -> (RequestOutcome, Option<u64>) {
         let url = format!("{}/api/heartbeat", self.config.base_url);
 
         debug!("Sending heartbeat to: {}", url);
@@ -497,9 +555,14 @@ impl MetricsCollector {
             Ok(resp) => {
                 let status = resp.status();
                 let outcome = RequestOutcome::from_status(status);
+                let mut requested_interval = None;
 
                 match outcome {
-                    RequestOutcome::Success => debug!("Heartbeat OK"),
+                    RequestOutcome::Success => {
+                        debug!("Heartbeat OK");
+                        let body = resp.text().await.unwrap_or_default();
+                        requested_interval = requested_heartbeat_interval(&body);
+                    }
                     RequestOutcome::Unauthorized => {
                         let body = resp.text().await.unwrap_or_default();
                         warn!("Heartbeat auth failed (401): {}", body);
@@ -515,17 +578,18 @@ impl MetricsCollector {
                     }
                 }
 
-                outcome
+                (outcome, requested_interval)
             }
             Err(e) => {
                 warn!("Heartbeat network error: {}", e);
-                RequestOutcome::Inconclusive
+                (RequestOutcome::Inconclusive, None)
             }
         }
     }
 
     /// Start heartbeat loop (runs until the session token is cancelled;
-    /// pauses while the machine sleeps, beats at once on wake)
+    /// beats at once at start and on wake, pauses while the machine sleeps,
+    /// follows the interval the server asks for)
     pub async fn start_heartbeat_loop(
         &self,
         api_key: String,
@@ -538,11 +602,23 @@ impl MetricsCollector {
             self.config.heartbeat_interval
         );
 
-        let interval = Duration::from_secs(self.config.heartbeat_interval);
-        while power_gate.tick(interval, &cancellation_token).await {
-            let outcome = self.send_heartbeat(&api_key).await;
-            key_health.record(outcome);
-        }
+        let api_key = &api_key;
+        let key_health = &key_health;
+        run_heartbeats(
+            Duration::from_secs(self.config.heartbeat_interval),
+            (
+                self.config.heartbeat_interval_min,
+                self.config.heartbeat_interval_max,
+            ),
+            &mut power_gate,
+            &cancellation_token,
+            || async move {
+                let (outcome, requested_interval) = self.send_heartbeat(api_key).await;
+                key_health.record(outcome);
+                requested_interval
+            },
+        )
+        .await;
 
         info!("Heartbeat loop stopped");
     }
@@ -679,6 +755,95 @@ mod tests {
     }
 
     use reqwest::StatusCode;
+
+    #[test]
+    fn reads_the_interval_from_a_heartbeat_response() {
+        assert_eq!(
+            requested_heartbeat_interval(
+                r#"{"status":"ok","server_time":"2026-10-03T10:00:00Z","heartbeat_interval_seconds":15}"#
+            ),
+            Some(15)
+        );
+    }
+
+    #[test]
+    fn older_servers_send_no_interval() {
+        for body in [
+            r#"{"status":"ok","server_time":"2026-10-03T10:00:00Z"}"#,
+            r#"{"status":"ok","heartbeat_interval_seconds":null}"#,
+            "",
+            "OK",
+            r#"{"heartbeat_interval_seconds":-5}"#,
+            r#"{"heartbeat_interval_seconds":"15"}"#,
+        ] {
+            assert_eq!(requested_heartbeat_interval(body), None, "{body}");
+        }
+    }
+
+    #[test]
+    fn clamps_the_requested_interval() {
+        let clamp = |secs| clamp_heartbeat_interval(secs, 5, 300).as_secs();
+
+        assert_eq!(clamp(15), 15);
+        assert_eq!(clamp(0), 5);
+        assert_eq!(clamp(1), 5);
+        assert_eq!(clamp(5), 5);
+        assert_eq!(clamp(300), 300);
+        assert_eq!(clamp(86_400), 300);
+    }
+
+    /// Beat times (seconds from start) for a server answering `replies` in turn.
+    async fn beat_times(replies: Vec<Option<u64>>, beats: usize) -> Vec<u64> {
+        let (power, _notices) = crate::power::PowerController::new();
+        let mut gate = power.gate();
+        let token = CancellationToken::new();
+        let start = tokio::time::Instant::now();
+        let times = Arc::new(Mutex::new(Vec::new()));
+        let mut replies = replies.into_iter();
+
+        let recorded = times.clone();
+        let stop = token.clone();
+        run_heartbeats(
+            Duration::from_secs(15),
+            (5, 300),
+            &mut gate,
+            &token,
+            || {
+                let mut times = recorded.lock().unwrap();
+                times.push(start.elapsed().as_secs());
+                if times.len() == beats {
+                    stop.cancel();
+                }
+                let reply = replies.next().flatten();
+                async move { reply }
+            },
+        )
+        .await;
+
+        let times = times.lock().unwrap().clone();
+        times
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn beats_at_once_then_on_the_default_interval() {
+        assert_eq!(beat_times(vec![], 3).await, vec![0, 15, 30]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_next_tick_uses_the_interval_the_server_asked_for() {
+        assert_eq!(
+            beat_times(vec![Some(15), Some(60), Some(60), None], 5).await,
+            vec![0, 15, 75, 135, 195]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn out_of_range_intervals_are_clamped() {
+        assert_eq!(
+            beat_times(vec![Some(1), Some(1), Some(100_000)], 4).await,
+            vec![0, 5, 10, 310]
+        );
+    }
 
     fn tracker() -> AuthFailureTracker {
         AuthFailureTracker::new(DEAD_KEY_MIN_FAILURES, DEAD_KEY_MIN_DURATION)

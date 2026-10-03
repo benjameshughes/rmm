@@ -4,8 +4,15 @@ use std::path::PathBuf;
 /// Default interval for collecting and submitting metrics
 pub const DEFAULT_METRICS_INTERVAL_SECS: u64 = 60;
 
-/// Default interval for heartbeat (lightweight check-in)
-pub const DEFAULT_HEARTBEAT_INTERVAL_SECS: u64 = 30;
+/// Default interval for heartbeat (lightweight check-in); the server can
+/// change it in each heartbeat response
+pub const DEFAULT_HEARTBEAT_INTERVAL_SECS: u64 = 15;
+
+/// Shortest heartbeat interval the server may ask for
+pub const MIN_HEARTBEAT_INTERVAL_SECS: u64 = 5;
+
+/// Longest heartbeat interval the server may ask for
+pub const MAX_HEARTBEAT_INTERVAL_SECS: u64 = 300;
 
 /// Default interval for checking agent status with backend
 pub const DEFAULT_STATUS_CHECK_INTERVAL_SECS: u64 = 60;
@@ -84,6 +91,10 @@ pub struct Config {
     pub metrics_interval: u64,
     /// Heartbeat interval in seconds
     pub heartbeat_interval: u64,
+    /// Shortest heartbeat interval accepted from the server in seconds
+    pub heartbeat_interval_min: u64,
+    /// Longest heartbeat interval accepted from the server in seconds
+    pub heartbeat_interval_max: u64,
     /// Status check interval in seconds
     pub status_check_interval: u64,
     /// Enrollment poll interval in seconds
@@ -146,6 +157,8 @@ impl Default for Config {
             log_file,
             metrics_interval: DEFAULT_METRICS_INTERVAL_SECS,
             heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_SECS,
+            heartbeat_interval_min: MIN_HEARTBEAT_INTERVAL_SECS,
+            heartbeat_interval_max: MAX_HEARTBEAT_INTERVAL_SECS,
             status_check_interval: DEFAULT_STATUS_CHECK_INTERVAL_SECS,
             enrollment_poll_interval: DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS,
             update_check_interval: DEFAULT_UPDATE_CHECK_INTERVAL_SECS,

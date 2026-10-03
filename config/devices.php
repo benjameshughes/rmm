@@ -20,18 +20,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Online Status
+    | Heartbeat And Online Status
     |--------------------------------------------------------------------------
     |
-    | A device is online while it has reported within threshold_minutes.
+    | Agents heartbeat every interval_seconds; the server sends this value in
+    | each heartbeat reply, so changing it here retunes every agent without a
+    | release. A device is online until it misses missed_heartbeats in a row.
     | devices:check-offline runs every minute and announces devices that went
-    | quiet within the last announce_window_seconds past the threshold, so
-    | open pages flip to Offline over Reverb without a refresh.
+    | quiet within the last announce_window_seconds past that point, so open
+    | pages flip to Offline over Reverb without a refresh.
     |
     */
 
+    'heartbeat' => [
+        'interval_seconds' => 15,
+    ],
+
     'online' => [
-        'threshold_minutes' => 5,
+        'missed_heartbeats' => 3,
         'announce_window_seconds' => 120,
     ],
 
