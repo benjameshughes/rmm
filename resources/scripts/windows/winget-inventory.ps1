@@ -21,6 +21,35 @@ function Find-WinGet {
 
 $bootstrapLog = ''
 
+# Get-WinGetPackage refuses to run under Windows PowerShell 5.1 as SYSTEM
+# ("This cmdlet is not supported in Windows PowerShell"), so the inventory
+# runs under PowerShell 7: install it machine-wide with the winget CLI when
+# missing, then re-run this script under pwsh and pass its output through.
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+    $pwsh = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+
+    if (-not (Test-Path $pwsh)) {
+        $winget = Find-WinGet
+        if (-not $winget) {
+            Write-Output 'ATTENTION: PowerShell 7 is needed for the inventory and winget is not available to install it'
+            exit 1
+        }
+
+        Push-Location (Split-Path $winget)
+        $installLog = & $winget install --id Microsoft.PowerShell --exact --scope machine --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+        Pop-Location
+    }
+
+    if (-not (Test-Path $pwsh)) {
+        Write-Output 'ATTENTION: PowerShell 7 is needed for the inventory and could not be installed'
+        Write-Output $installLog
+        exit 1
+    }
+
+    & $pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $PSCommandPath
+    exit $LASTEXITCODE
+}
+
 if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
     $bootstrapLog += & {
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers
