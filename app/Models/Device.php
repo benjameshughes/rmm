@@ -116,6 +116,38 @@ final class Device extends Model
     }
 
     /**
+     * Approved devices that checked in recently and have not announced powering off: the query twin of isOnline.
+     */
+    public function scopeOnline(Builder $query): Builder
+    {
+        return $query->where('status', DeviceStatus::Active)
+            ->notPoweringOff()
+            ->where('last_seen', '>', self::onlineCutoff());
+    }
+
+    /**
+     * Approved devices whose powering off notice is still in force: the query twin of isPoweringOff.
+     */
+    public function scopePoweringOff(Builder $query): Builder
+    {
+        return $query->where('status', DeviceStatus::Active)
+            ->where('power_state', DevicePowerState::PoweringOff)
+            ->where('power_state_changed_at', '>', self::powerStateLapsesBefore(DevicePowerState::PoweringOff));
+    }
+
+    /**
+     * Approved devices that went quiet without a word.
+     */
+    public function scopeOffline(Builder $query): Builder
+    {
+        return $query->where('status', DeviceStatus::Active)
+            ->notPoweringOff()
+            ->where(fn (Builder $seenQuery): Builder => $seenQuery
+                ->whereNull('last_seen')
+                ->orWhere('last_seen', '<=', self::onlineCutoff()));
+    }
+
+    /**
      * Devices still carrying a power state that has outlived its window.
      */
     public function scopeWithLapsedPowerState(Builder $query): Builder

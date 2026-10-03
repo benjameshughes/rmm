@@ -42,13 +42,13 @@ it('refreshes the device list when a device changes', function (): void {
     $device = Device::factory()->active()->create(['last_seen' => now()->subHour()]);
 
     $component = Livewire::actingAs($this->user)->test(DevicesIndex::class)
-        ->assertSee('Offline');
+        ->assertSeeHtml('data-device-status="Offline"');
 
     $device->update(['last_seen' => now()]);
 
     $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
-        ->assertSee('Online')
-        ->assertDontSee('Offline');
+        ->assertSeeHtml('data-device-status="Online"')
+        ->assertDontSeeHtml('data-device-status="Offline"');
 });
 
 it('updates the pending list as devices enrol and get approved elsewhere', function (): void {

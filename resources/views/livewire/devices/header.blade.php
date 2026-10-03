@@ -2,7 +2,7 @@
     <div class="min-w-0 space-y-2">
         <div class="flex flex-wrap items-center gap-3">
             <flux:heading size="xl" level="1" class="truncate">{{ $device->hostname }}</flux:heading>
-            <flux:badge :color="$statusColor" size="lg" icon="signal" data-device-status>{{ $statusLabel }}</flux:badge>
+            <x-device.status-badge :label="$statusLabel" :color="$statusColor" size="lg" />
         </div>
 
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">

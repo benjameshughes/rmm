@@ -59,8 +59,8 @@ it('shows the offline badge for a stale device', function (): void {
 
     $this->actingAs($user)
         ->get('/devices')
-        ->assertSee('Offline')
-        ->assertDontSee('Online');
+        ->assertSeeHtml('data-device-status="Offline"')
+        ->assertDontSeeHtml('data-device-status="Online"');
 });
 
 it('keeps the group filter applied while searching', function (): void {

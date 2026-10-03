@@ -5,21 +5,27 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Actions\Device\BulkExecuteScript;
+use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
+use App\Enums\DeviceListFilter;
 use App\Livewire\Concerns\EntersScriptParameterValues;
+use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
+use App\Queries\DeviceListQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -27,9 +33,13 @@ use Livewire\WithPagination;
 final class Index extends Component
 {
     use EntersScriptParameterValues;
+    use WakesDevices;
     use WithPagination;
 
     public string $search = '';
+
+    #[Url]
+    public string $statusFilter = '';
 
     public string $groupFilter = '';
 
@@ -51,7 +61,39 @@ final class Index extends Component
     #[On('echo-private:devices,DeviceEnrolled')]
     #[On('echo-private:devices,DeviceUpdated')]
     #[On('echo-private:devices,LatestAgentVersionChanged')]
+    #[On('echo-private:devices,AlertChanged')]
     public function refreshDevices(): void {}
+
+    /**
+     * A hand-edited query string shows the whole fleet rather than erroring.
+     */
+    #[Computed]
+    public function listFilter(): ?DeviceListFilter
+    {
+        return DeviceListFilter::tryFrom($this->statusFilter);
+    }
+
+    /**
+     * The summary cards toggle: clicking the active one shows the whole fleet again.
+     */
+    public function filterByStatus(string $status): void
+    {
+        $this->statusFilter = $this->statusFilter === $status ? '' : $status;
+        unset($this->listFilter);
+        $this->resetPage();
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset('search', 'groupFilter', 'tagFilter', 'statusFilter');
+        unset($this->listFilter);
+        $this->resetPage();
+    }
+
+    public function wake(Device $device, WakeDevice $action): void
+    {
+        $this->wakeDevice($device, $action);
+    }
 
     public function updatingSearch(): void
     {
@@ -68,15 +110,20 @@ final class Index extends Component
         $this->resetPage();
     }
 
+    public function updatingStatusFilter(): void
+    {
+        $this->resetPage();
+    }
+
     public function updatedBulkScriptId(): void
     {
         $this->fillParameterValues();
     }
 
-    public function updatedSelectAll(): void
+    public function updatedSelectAll(DeviceListQueries $deviceList): void
     {
         $this->selectedDevices = $this->selectAll
-            ? $this->query()->pluck('id')->map(fn ($id) => (string) $id)->toArray()
+            ? $this->query($deviceList)->pluck('id')->map(fn ($id) => (string) $id)->toArray()
             : [];
     }
 
@@ -161,14 +208,16 @@ final class Index extends Component
         $this->runSystemScript($action, $device, 'windows-update');
     }
 
-    public function render(AgentVersionQueries $agentVersions): View
+    public function render(AgentVersionQueries $agentVersions, DeviceListQueries $deviceList): View
     {
-        $devices = $this->query()->paginate(12);
+        $summary = $deviceList->summary();
 
         return view('livewire.devices.index', [
-            'devices' => $devices,
+            'devices' => $this->query($deviceList)->paginate(config('devices.list.per_page')),
+            'summary' => $summary,
+            'isFiltered' => $this->search !== '' || $this->groupFilter !== '' || $this->tagFilter !== '' || $this->listFilter !== null,
             'latestAgentVersion' => $agentVersions->latest(),
-            'outdatedAgentCount' => $agentVersions->outdatedDevices()->count(),
+            'outdatedAgentCount' => $summary['outdated'],
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->orderBy('name')->get(),
@@ -203,10 +252,10 @@ final class Index extends Component
             ->each(fn (Device $device) => $this->authorize('runCommands', $device));
     }
 
-    protected function query(): Builder
+    protected function query(DeviceListQueries $deviceList): Builder
     {
-        return Device::query()
-            ->with(['latestMetric', 'group', 'tags'])
+        return $deviceList->rows()
+            ->when($this->listFilter !== null, fn (Builder $q) => $deviceList->filter($q, $this->listFilter))
             ->when($this->search !== '', fn (Builder $q) => $q->where(function (Builder $searchQuery): void {
                 $searchQuery->where('hostname', 'like', '%'.$this->search.'%')
                     ->orWhere('last_ip', 'like', '%'.$this->search.'%')

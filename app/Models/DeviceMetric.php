@@ -213,6 +213,29 @@ final class DeviceMetric extends Model
     }
 
     /**
+     * Whole percentages for the device list, where a decimal is noise.
+     */
+    public function cpuRoundedForHumans(): ?string
+    {
+        return $this->cpu === null ? null : number_format($this->cpu).'%';
+    }
+
+    public function ramRoundedForHumans(): ?string
+    {
+        return $this->ram === null ? null : number_format($this->ram).'%';
+    }
+
+    public function cpuBarColor(): string
+    {
+        return $this->loadBarColor($this->cpu);
+    }
+
+    public function ramBarColor(): string
+    {
+        return $this->loadBarColor($this->ram);
+    }
+
+    /**
      * How busy the processors are beyond a percentage: load average where the OS reports it, otherwise the CPU queue.
      */
     public function processorLoadForHumans(): ?string
@@ -250,6 +273,15 @@ final class DeviceMetric extends Model
         return Attribute::get(fn (): bool => $this->cpu_queue_length !== null
             || $this->swap_total_mib !== null
             || $this->disk_busy_percent !== null);
+    }
+
+    private function loadBarColor(?float $percent): string
+    {
+        return match (true) {
+            $percent > config('devices.load.critical_percent') => 'bg-red-500',
+            $percent > config('devices.load.warning_percent') => 'bg-amber-500',
+            default => 'bg-blue-500',
+        };
     }
 
     private function percentForHumans(?float $value): ?string

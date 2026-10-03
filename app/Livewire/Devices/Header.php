@@ -10,6 +10,7 @@ use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\ScriptType;
 use App\Livewire\Concerns\EntersScriptParameterValues;
+use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
 use App\Models\Script;
 use App\Queries\AgentVersionQueries;
@@ -26,6 +27,7 @@ use Livewire\Component;
 final class Header extends Component
 {
     use EntersScriptParameterValues;
+    use WakesDevices;
 
     public Device $device;
 
@@ -90,11 +92,7 @@ final class Header extends Component
 
     public function wake(WakeDevice $action): void
     {
-        $this->authorize('wake', $this->device);
-
-        $action($this->device);
-
-        Flux::toast(text: 'It shows Online once the agent checks in, usually within a minute or two.', heading: "Wake packet sent to {$this->device->hostname}", variant: 'success');
+        $this->wakeDevice($this->device, $action);
     }
 
     public function runScript(ExecuteScriptOnDevice $action, ValidateScriptParameterValues $validateParameters): void
