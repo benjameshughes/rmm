@@ -72,6 +72,7 @@ final class Device extends Model
             'last_seen' => 'datetime',
             'power_state' => DevicePowerState::class,
             'power_state_changed_at' => 'datetime',
+            'software_inventoried_at' => 'datetime',
             'disks' => 'array',
             'mac_addresses' => 'array',
             'status' => DeviceStatus::class,
@@ -186,6 +187,11 @@ final class Device extends Model
     public function commands(): HasMany
     {
         return $this->hasMany(DeviceCommand::class);
+    }
+
+    public function software(): HasMany
+    {
+        return $this->hasMany(DeviceSoftware::class);
     }
 
     public function pendingCommands(): HasMany
@@ -457,6 +463,14 @@ final class Device extends Model
                 },
             ];
         });
+    }
+
+    /**
+     * winget only exists on Windows, and monitor-only devices never run the inventory script.
+     */
+    public function hasSoftwareInventory(): bool
+    {
+        return $this->platform() === ScriptPlatform::Windows && ! $this->isMonitorOnly;
     }
 
     public function swapLabel(): string

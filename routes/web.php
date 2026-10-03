@@ -24,6 +24,8 @@ use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
+use App\Livewire\Software\Index as SoftwareIndex;
+use App\Livewire\Software\Show as SoftwareShow;
 use App\Livewire\Tags\Index as TagsIndex;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -66,6 +68,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('apps', DeviceApps::class)->name('apps');
         Route::get('details', DeviceDetails::class)->name('details');
     });
+
+    // Software
+    Route::get('software', SoftwareIndex::class)->name('software.index');
+    Route::get('software/package', SoftwareShow::class)->name('software.show');
 
     // Scripts
     Route::get('scripts', ScriptsIndex::class)->name('scripts.index');

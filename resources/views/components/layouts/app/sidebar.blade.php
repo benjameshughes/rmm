@@ -24,6 +24,7 @@
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
                     <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index', 'devices.show', 'devices.metrics', 'devices.commands', 'devices.apps', 'devices.details')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
                     <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>{{ __('Pending') }}</flux:navlist.item>
+                    <flux:navlist.item icon="squares-plus" :href="route('software.index')" :current="request()->routeIs('software.*')" wire:navigate>{{ __('Software') }}</flux:navlist.item>
                 </flux:navlist.group>
 
                 <flux:navlist.group :heading="__('Automation')" class="grid">
