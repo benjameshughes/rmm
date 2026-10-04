@@ -55,6 +55,10 @@ echo "Installed ${INSTALL_PATH}"
 
 "${INSTALL_PATH}" --url "${SERVER_URL}" install
 
+# Starting an already running service is a no-op, so an upgrade would leave
+# the old agent running until the next reboot; restart onto the new binary.
+systemctl restart benjh-rmm
+
 echo
 echo "Done. Next steps:"
 echo "  1. Open ${SERVER_URL}/devices/pending and approve $(hostname)."

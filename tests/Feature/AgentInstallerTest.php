@@ -115,3 +115,9 @@ it('skips the Netdata install when the pinned version is there and restarts it o
         ->toContain('if [ "$config_changed" -eq 1 ]; then')
         ->toContain('systemctl restart netdata');
 });
+
+it('restarts the Linux agent after installing so an upgrade runs the new binary', function (): void {
+    $script = $this->get('/agent/install.sh')->assertSuccessful()->getContent();
+
+    expect(strpos($script, 'systemctl restart benjh-rmm'))->toBeGreaterThan(strpos($script, '--url "${SERVER_URL}" install'));
+});
