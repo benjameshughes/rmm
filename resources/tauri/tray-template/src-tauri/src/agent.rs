@@ -303,8 +303,9 @@ impl Agent {
             }
         };
 
-        // Windows reads metrics from Netdata; other builds collect natively.
-        if cfg!(windows) && !collector.check_netdata_available().await {
+        // Every platform reads metrics from Netdata. Without it the agent still
+        // heartbeats and posts (Linux health included), just without metrics.
+        if !collector.check_netdata_available().await {
             warn!("Netdata is not available - metrics collection will be limited");
             warn!("Please ensure Netdata is installed and running");
         }

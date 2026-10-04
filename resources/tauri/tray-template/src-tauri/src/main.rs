@@ -10,9 +10,7 @@ mod enrollment;
 mod keep_awake;
 mod linux_health;
 mod linux_service;
-mod linux_stats;
 mod metrics;
-mod native_metrics;
 mod power;
 #[cfg(windows)]
 mod power_events;

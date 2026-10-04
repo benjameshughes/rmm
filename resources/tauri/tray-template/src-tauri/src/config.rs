@@ -61,9 +61,6 @@ pub const DEFAULT_ASLEEP_WATCHDOG_INTERVAL_SECS: u64 = 60;
 /// Only announce a boot when the machine has been up for less than this
 pub const DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS: u64 = 300;
 
-/// Apps reported by CPU and by memory (Linux agent)
-pub const DEFAULT_APPS_TOP_COUNT: usize = 10;
-
 /// Least time between apt update simulations (Linux agent)
 pub const DEFAULT_APT_CHECK_INTERVAL_SECS: u64 = 3600;
 
@@ -75,6 +72,11 @@ pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
 /// Netdata `group_by` that keeps each instance (volume, adapter, app) apart
 pub const NETDATA_GROUP_BY_INSTANCE: &str = "instance,dimension";
+
+/// Longest window of per-second Netdata history fetched per submission. A
+/// longer metrics interval only reports its last five minutes, so one round
+/// never pulls thousands of rows per context.
+pub const NETDATA_WINDOW_MAX_SECS: u64 = 300;
 
 /// Default base URL placeholder (replaced at build time)
 pub const DEFAULT_BASE_URL: &str = "https://rmm.fnstr.uk";
@@ -134,8 +136,6 @@ pub struct Config {
     pub asleep_watchdog_interval: u64,
     /// Most system uptime in seconds at which a starting agent announces a boot
     pub boot_notice_max_uptime: u64,
-    /// Apps reported by CPU and by memory (Linux agent)
-    pub apps_top_count: usize,
     /// Seconds between apt update simulations (Linux agent)
     pub apt_check_interval: u64,
     /// Timeout in seconds for read-only health query commands
@@ -189,7 +189,6 @@ impl Default for Config {
             restart_handover_grace: DEFAULT_RESTART_HANDOVER_GRACE_SECS,
             asleep_watchdog_interval: DEFAULT_ASLEEP_WATCHDOG_INTERVAL_SECS,
             boot_notice_max_uptime: DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS,
-            apps_top_count: DEFAULT_APPS_TOP_COUNT,
             apt_check_interval: DEFAULT_APT_CHECK_INTERVAL_SECS,
             health_command_timeout: DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS,
             skip_updates: false,

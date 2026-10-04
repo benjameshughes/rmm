@@ -1,6 +1,6 @@
 [package]
 name = "rmm"
-version = "0.7.1"
+version = "0.8.0"
 description = "RMM Agent - Remote Monitoring and Management Service"
 authors = ["Ben Hughes"]
 edition = "2021"
@@ -62,10 +62,6 @@ dirs = "6"
 
 # Base64 encoding for encrypted data
 base64 = "0.21"
-
-# Unix-specific (statvfs for inode usage on the Linux agent)
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
 
 # Windows-specific
 [target.'cfg(windows)'.dependencies]
