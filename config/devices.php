@@ -181,13 +181,18 @@ return [
     | Each report keeps the top_apps busiest apps by CPU plus the top_apps
     | biggest by memory. App rows are pruned after app_history_hours.
     |
+    | Agents from 0.8.0 send a window of per-second Netdata points with each
+    | report. Those points are kept as metric samples, so a spike shorter
+    | than a report survives, and pruned after sample_retention_hours.
+    |
     | The device Metrics tab charts each range averaged into buckets of
     | bucket_seconds, so a week is ~170 points rather than ~40,000 reports.
     | recent_commands is how many commands the Overview tab lists.
     |
-    | The agent reads its metrics from Netdata, which the installer leaves
+    | The agent reads its metrics from Netdata, which the Windows installer leaves
     | out to keep enrolment quick: the install script is queued on every
-    | Windows device when it is approved.
+    | Windows device when it is approved. Linux machines are monitor only and
+    | cannot be sent scripts, so the Linux agent installer installs it first.
     |
     */
 
@@ -195,6 +200,7 @@ return [
         'store_raw_payload' => (bool) env('DEVICE_METRICS_STORE_RAW_PAYLOAD', false),
         'top_apps' => 10,
         'app_history_hours' => 24,
+        'sample_retention_hours' => 48,
         'recent_commands' => 5,
         'netdata_install_script_slug' => 'install-netdata',
         'chart_ranges' => [

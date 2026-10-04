@@ -21,6 +21,8 @@ return [
 
     'linux_installer' => resource_path('scripts/installer/install.sh'),
 
+    'linux_netdata_installer' => resource_path('scripts/installer/install-netdata.sh'),
+
     'types' => [
         'ps1' => 'powershell',
         'cmd' => 'cmd',

@@ -59,6 +59,14 @@ function netdataWindowsFixture(): array
 }
 
 /**
+ * A 60-point window of one Netdata context captured from a Debian 13 LXC (qdrant-test, 4 Oct 2026).
+ */
+function netdataLinuxFixture(string $context): array
+{
+    return json_decode(file_get_contents(__DIR__."/Fixtures/netdata-linux-2026-10-04/{$context}.json"), true);
+}
+
+/**
  * Point Wake-on-LAN at a UDP socket on localhost so the test reads the real packets.
  *
  * @return resource

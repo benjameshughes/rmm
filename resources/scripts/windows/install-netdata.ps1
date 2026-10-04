@@ -2,6 +2,8 @@
 # every PC reports the same metric shapes. The agent installer leaves Netdata
 # out to keep enrolment quick; this is queued when the PC is approved. A PC
 # already running the pinned version is left alone, keeping its history.
+# Either way Netdata is kept listening on 127.0.0.1 only, with anonymous
+# statistics off; the service restarts only when its config had to change.
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
@@ -43,6 +45,46 @@ if (-not $isPinnedVersion) {
     if ($install.ExitCode -ne 0) {
         Write-Output "ATTENTION: the Netdata MSI failed with exit code $($install.ExitCode)"
         exit 1
+    }
+}
+
+$configDir = "$env:ProgramFiles\Netdata\etc\netdata"
+$configPath = Join-Path $configDir 'netdata.conf'
+$optOutPath = Join-Path $configDir '.opt-out-from-anonymous-statistics'
+$bindLine = '    bind to = 127.0.0.1'
+
+New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+
+if (-not (Test-Path $optOutPath)) {
+    New-Item -ItemType File -Path $optOutPath | Out-Null
+}
+
+# Any other `bind to` is dropped and ours goes straight under [web], adding
+# the section when missing, so the rest of an existing config is kept.
+$current = if (Test-Path $configPath) { [IO.File]::ReadAllText($configPath) } else { '' }
+$lines = @(if ($current.Trim()) { $current.TrimEnd() -split "`r?`n" | Where-Object { $_ -notmatch '^\s*bind to\s*=' } })
+$desired = [System.Collections.Generic.List[string]]::new()
+
+foreach ($line in $lines) {
+    $desired.Add($line)
+    if ($line.Trim() -eq '[web]') {
+        $desired.Add($bindLine)
+    }
+}
+
+if (-not $desired.Contains($bindLine)) {
+    $desired.Add('[web]')
+    $desired.Add($bindLine)
+}
+
+$config = ($desired -join "`r`n") + "`r`n"
+
+if ($config -ne $current) {
+    Write-Output 'Restricting Netdata to 127.0.0.1'
+    [IO.File]::WriteAllText($configPath, $config)
+
+    if ((Get-Service -Name 'netdata' -ErrorAction SilentlyContinue).Status -eq 'Running') {
+        Restart-Service -Name 'netdata' -Force
     }
 }
 

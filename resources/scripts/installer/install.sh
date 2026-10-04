@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ===================================================================
 #  BenJH RMM Linux Agent Installer (monitor only)
+#  - Installs the pinned Netdata release the agent reads its metrics from
 #  - Downloads the latest rmm-linux-x86_64 release and verifies its checksum
 #  - Installs it to /usr/local/bin/rmm and registers it with this panel
 #  The Linux agent is read-only: it reports metrics and never runs commands.
@@ -32,6 +33,12 @@ command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required (coreutils)"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
+
+# The panel inlines install-netdata.sh here, so there is one copy of it.
+cat > "${WORK_DIR}/install-netdata.sh" <<'NETDATA_INSTALLER'
+{NETDATA_INSTALLER}
+NETDATA_INSTALLER
+bash "${WORK_DIR}/install-netdata.sh"
 
 echo "Downloading ${ASSET} from the latest ${GITHUB_REPO} release..."
 curl -fsSL -o "${WORK_DIR}/${ASSET}" "${DOWNLOAD_BASE}/${ASSET}"

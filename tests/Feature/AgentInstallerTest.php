@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 
 pest()->use(RefreshDatabase::class);
 
@@ -79,4 +80,38 @@ it('shows the Linux monitor-only one-liner on the agent page', function (): void
         ->assertSee('Linux (monitor only)')
         ->assertSee('curl -fsSL '.route('agent.download.linux').' | sudo bash')
         ->assertSee('never runs commands');
+});
+
+it('installs the pinned Netdata on localhost before the Linux agent, never claiming it', function (): void {
+    $script = $this->get('/agent/install.sh')->assertSuccessful()->getContent();
+
+    expect($script)
+        ->not->toContain('{NETDATA_INSTALLER}')
+        ->toContain('NETDATA_VERSION="2.12.0"')
+        ->toContain('https://get.netdata.cloud/kickstart.sh')
+        ->toContain('--non-interactive')
+        ->toContain('--stable-channel')
+        ->toContain('--native-only')
+        ->toContain('--install-version "${NETDATA_VERSION}"')
+        ->toContain('--no-updates')
+        ->toContain('--disable-telemetry')
+        ->toContain('apt-mark hold netdata')
+        ->toContain('bind to = 127.0.0.1')
+        ->toContain('.opt-out-from-anonymous-statistics')
+        ->not->toContain('--claim');
+
+    expect(strpos($script, 'kickstart.sh'))->toBeLessThan(strpos($script, '"${INSTALL_PATH}" --url "${SERVER_URL}" install'));
+});
+
+it('skips the Netdata install when the pinned version is there and restarts it only when its config changes', function (): void {
+    $script = File::get(config('scripts.linux_netdata_installer'));
+
+    expect($script)
+        ->toStartWith('#!/usr/bin/env bash')
+        ->toContain('set -euo pipefail')
+        ->toContain('"ii ${NETDATA_VERSION}"*)')
+        ->toContain('already installed')
+        ->toContain('config_changed=1')
+        ->toContain('if [ "$config_changed" -eq 1 ]; then')
+        ->toContain('systemctl restart netdata');
 });

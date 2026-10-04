@@ -191,6 +191,11 @@ final class Device extends Model
         return $this->hasMany(DeviceMetric::class);
     }
 
+    public function metricSamples(): HasMany
+    {
+        return $this->hasMany(MetricSample::class);
+    }
+
     public function latestMetric(): HasOne
     {
         return $this->hasOne(DeviceMetric::class)->latestOfMany('recorded_at');

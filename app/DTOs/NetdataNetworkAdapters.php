@@ -79,7 +79,7 @@ final class NetdataNetworkAdapters
     {
         $errors = $this->byAdapter($this->errors, 'net_errors');
         $drops = $this->byAdapter($this->drops, 'net_drops');
-        $speed = $this->byAdapter($this->speed, 'net_speed');
+        $speed = $this->byAdapter($this->speed, 'net_speed', latest: true);
 
         return $this->byAdapter($this->throughput, 'net')
             ->reject(fn (Collection $dimensions, int|string $adapter): bool => Str::is($ignoredAdapterPatterns, (string) $adapter))
@@ -97,10 +97,14 @@ final class NetdataNetworkAdapters
             ->all();
     }
 
-    /** @return Collection<string, Collection<string, float>> adapter => dimension => value */
-    private function byAdapter(NetdataV3Metrics $response, string $prefix): Collection
+    /**
+     * Throughput, errors and drops are averaged over the window; link speed is state, so its newest point.
+     *
+     * @return Collection<string, Collection<string, float>> adapter => dimension => value
+     */
+    private function byAdapter(NetdataV3Metrics $response, string $prefix, bool $latest = false): Collection
     {
-        return $response->groupedDimensions($prefix)
+        return ($latest ? $response->groupedLatestDimensions($prefix) : $response->groupedDimensions($prefix))
             ->groupBy('instance')
             ->map(fn (Collection $dimensions): Collection => $dimensions->pluck('value', 'dimension'));
     }

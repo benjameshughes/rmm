@@ -20,9 +20,13 @@ use Illuminate\Support\Str;
 /**
  * Metrics are stamped with the time the server received them: an agent's own
  * timestamp follows the PC's clock, which can run minutes fast or slow.
+ * Agents from 0.8.0 send Netdata windows of per-second points on Windows and
+ * Linux alike; each report keeps their summary and the points as samples.
  */
 final class StoreDeviceMetrics
 {
+    public function __construct(private readonly RecordMetricSamples $recordMetricSamples) {}
+
     public function __invoke(Device $device, array $input, ?string $ip = null): DeviceMetric
     {
         if ($this->isRawNetdataFormat($input)) {
@@ -109,6 +113,7 @@ final class StoreDeviceMetrics
         $loadAverages = $loadParser->parseLoadAverages();
         $uptime = $uptimeParser->parseUptime();
         $swap = (new NetdataV3Metrics($input['netdata_swap'] ?? []))->parseSwap();
+        $processes = (new NetdataV3Metrics($input['netdata_processes'] ?? []))->parseProcesses();
 
         $metric = DeviceMetric::create([
             'device_id' => $device->id,
@@ -137,19 +142,37 @@ final class StoreDeviceMetrics
             'cpu_queue_length' => (new NetdataV3Metrics($input['netdata_cpu_queue'] ?? []))->parseCpuQueueLength(),
             'swap_used_mib' => $swap['used_mib'] ?? null,
             'swap_total_mib' => $swap['total_mib'] ?? null,
+            'processes_running' => $processes['running'],
+            'processes_blocked' => $processes['blocked'],
             'disk_busy_percent' => (new NetdataV3Metrics($input['netdata_disk_util'] ?? []))->parseBusiestDiskPercent(),
             'payload' => $this->rawPayload($input),
+            ...$this->linuxHealth($input['linux_health'] ?? null),
         ]);
 
-        $metric->recordDisks((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
+        $metric->recordDisks($this->netdataVolumes($input));
         $metric->recordNetworkInterfaces(NetdataNetworkAdapters::fromPayload($input)->rows(config('devices.network.ignored_interfaces')));
         $metric->recordApps((new NetdataAppUsage($input['netdata_apps_cpu'] ?? [], $input['netdata_apps_mem'] ?? []))->top(config('devices.metrics.top_apps')));
         $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input);
+        ($this->recordMetricSamples)($device, $input);
 
         MetricsReceived::dispatch($device, $metric);
         DeviceUpdated::dispatch($device, true, true);
 
         return $metric;
+    }
+
+    /**
+     * Disk space per volume, with the inode usage Linux reports for the same mount points.
+     *
+     * @return array<int, array<string, string|float|null>>
+     */
+    private function netdataVolumes(array $input): array
+    {
+        $inodes = (new NetdataV3Metrics($input['netdata_disk_inodes'] ?? []))->parseInodeUsage();
+
+        return collect((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')))
+            ->map(fn (array $volume): array => [...$volume, 'inode_usage_percent' => $inodes->get($volume['mount_point'])])
+            ->all();
     }
 
     /**

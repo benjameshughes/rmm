@@ -100,6 +100,8 @@ final class MetricsRequest extends FormRequest
             'netdata_apps_mem' => ['nullable', 'array'],
             'netdata_disk_util' => ['nullable', 'array'],
             'netdata_swap' => ['nullable', 'array'],
+            'netdata_processes' => ['nullable', 'array'],
+            'netdata_disk_inodes' => ['nullable', 'array'],
             'netdata_net_interfaces' => ['nullable', 'array'],
             'netdata_net_errors' => ['nullable', 'array'],
             'netdata_net_drops' => ['nullable', 'array'],
@@ -149,6 +151,8 @@ final class MetricsRequest extends FormRequest
             'linux_health.pending_security_updates.integer' => 'Pending security updates must be a whole number.',
             'linux_health.pending_security_updates.min' => 'Pending security updates cannot be negative.',
             'linux_health.checked_updates_at.date' => 'The update check time must be an RFC 3339 date.',
+            'netdata_processes.array' => 'Processes must be a raw Netdata response.',
+            'netdata_disk_inodes.array' => 'Disk inodes must be a raw Netdata response.',
         ];
     }
 }
