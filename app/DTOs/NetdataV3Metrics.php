@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\DTOs;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 /**
  * One `/api/v3/data` response. Agents from 0.8.0 query a window of
@@ -120,26 +119,6 @@ final class NetdataV3Metrics
             ->filter(fn (?float $value): bool => $value !== null);
     }
 
-    /** @return Collection<int, float> */
-    public function cpuUsageSeries(): Collection
-    {
-        return $this->series($this->cpuUsageFrom(...));
-    }
-
-    /** @return Collection<int, float> */
-    public function ramUsageSeries(): Collection
-    {
-        return $this->series($this->ramUsageFrom(...));
-    }
-
-    /** @return Collection<int, float> */
-    public function swapUsageSeries(): Collection
-    {
-        return $this->series(fn (array $dimensions): ?float => isset($dimensions['used'], $dimensions['free']) && $dimensions['used'] + $dimensions['free'] > 0
-            ? round($dimensions['used'] / ($dimensions['used'] + $dimensions['free']) * 100, 2)
-            : null);
-    }
-
     /**
      * One dimension's points as positive numbers: Netdata reports sent
      * traffic and blocked processes as negatives.
@@ -169,142 +148,6 @@ final class NetdataV3Metrics
     }
 
     /**
-     * Linux hides idle and Windows reports it, so busy time is every other dimension summed.
-     */
-    public function parseCpuUsage(): ?float
-    {
-        return $this->hasData() ? $this->cpuUsageFrom($this->getDimensionAverages()) : null;
-    }
-
-    /** @return array<string, float|null> */
-    public function getCpuDetails(): array
-    {
-        $dims = $this->getDimensionAverages();
-
-        $system = $dims['system'] ?? null;
-        $dpc = $dims['dpc'] ?? null;
-        if ($system !== null && $dpc !== null) {
-            $system += $dpc;
-        }
-
-        return [
-            'user' => $dims['user'] ?? null,
-            'system' => $system,
-            'nice' => $dims['nice'] ?? null,
-            'iowait' => $dims['iowait'] ?? null,
-            'irq' => $dims['irq'] ?? null,
-            'softirq' => $dims['softirq'] ?? null,
-            'steal' => $dims['steal'] ?? null,
-            'idle' => $dims['idle'] ?? null,
-        ];
-    }
-
-    /**
-     * Linux splits memory into free, used, cached and buffers; Windows only free and used.
-     */
-    public function parseRamUsage(): ?float
-    {
-        return $this->hasData() ? $this->ramUsageFrom($this->getDimensionAverages()) : null;
-    }
-
-    /** @return array<string, float|null> */
-    public function getMemoryDetails(): array
-    {
-        $dims = $this->getDimensionAverages();
-
-        $used = $dims['used'] ?? null;
-        $free = $dims['free'] ?? null;
-        $cached = $dims['cached'] ?? null;
-        $buffers = $dims['buffers'] ?? null;
-
-        $total = ($used !== null && $free !== null)
-            ? $used + $free + ($cached ?? 0) + ($buffers ?? 0)
-            : null;
-
-        return [
-            'used_mib' => $used,
-            'free_mib' => $free,
-            'cached_mib' => $cached,
-            'buffers_mib' => $buffers,
-            'available_mib' => $dims['available'] ?? null,
-            'total_mib' => $total,
-        ];
-    }
-
-    /** @return array<string, float|null> */
-    public function parseLoadAverages(): array
-    {
-        $dims = $this->getDimensionAverages();
-
-        return [
-            'load1' => $dims['load1'] ?? null,
-            'load5' => $dims['load5'] ?? null,
-            'load15' => $dims['load15'] ?? null,
-        ];
-    }
-
-    public function parseUptime(): ?float
-    {
-        return collect($this->getDimensionLatest())->first();
-    }
-
-    /**
-     * Running and blocked process counts at the newest point, from `system.processes`.
-     *
-     * @return array{running: int|null, blocked: int|null}
-     */
-    public function parseProcesses(): array
-    {
-        $latest = $this->getDimensionLatest();
-
-        return [
-            'running' => isset($latest['running']) ? (int) round(abs($latest['running'])) : null,
-            'blocked' => isset($latest['blocked']) ? (int) round(abs($latest['blocked'])) : null,
-        ];
-    }
-
-    /**
-     * Per-volume disk rows from a `disk.space` query grouped by instance and
-     * dimension. Responses grouped by dimension only average every volume
-     * together, so they yield nothing.
-     *
-     * @param  array<int, string>  $ignoredVolumePatterns
-     * @return array<int, array{mount_point: string, used_gb: float, available_gb: float, total_gb: float, usage_percent: float|null}>
-     */
-    public function parseDiskVolumes(array $ignoredVolumePatterns = []): array
-    {
-        return $this->groupedLatestDimensions('disk_space')
-            ->reject(fn (array $dimension): bool => Str::is($ignoredVolumePatterns, $dimension['instance']))
-            ->groupBy('instance')
-            ->map(fn (Collection $dimensions, string $volume): array => $this->diskVolumeRow(
-                $volume,
-                (float) ($dimensions->firstWhere('dimension', 'used')['value'] ?? 0),
-                (float) ($dimensions->firstWhere('dimension', 'avail')['value'] ?? 0),
-            ))
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Inode usage per mount point at the newest point, from a `disk.inodes`
-     * query grouped by instance and dimension. Like disk space, inodes
-     * reserved for root are left out, as `df` does.
-     *
-     * @return Collection<string, float> mount point => percent used
-     */
-    public function parseInodeUsage(): Collection
-    {
-        return $this->groupedLatestDimensions('disk_inodes')
-            ->groupBy('instance')
-            ->map(fn (Collection $dimensions): array => [
-                'used' => (float) ($dimensions->firstWhere('dimension', 'used')['value'] ?? 0),
-                'avail' => (float) ($dimensions->firstWhere('dimension', 'avail')['value'] ?? 0),
-            ])
-            ->filter(fn (array $inodes): bool => $inodes['used'] + $inodes['avail'] > 0)
-            ->map(fn (array $inodes): float => round($inodes['used'] / ($inodes['used'] + $inodes['avail']) * 100, 2));
-    }
-
-    /**
      * Dimensions of a query grouped by instance and dimension, averaged over
      * the window, whose ids look like `<dimension>,<prefix>.<instance><suffix>@<node>`.
      * Ungrouped ids (just `<dimension>`) never match, so averaged-together data is dropped.
@@ -325,63 +168,6 @@ final class NetdataV3Metrics
     public function groupedLatestDimensions(string $prefix, string $suffix = ''): Collection
     {
         return $this->grouped($this->getDimensionLatest(), $prefix, $suffix);
-    }
-
-    /**
-     * Windows has no load average; `system.processor_queue_length` is the
-     * nearest equivalent (threads waiting for a CPU).
-     */
-    public function parseCpuQueueLength(): ?float
-    {
-        return $this->getDimensionAverages()['threads'] ?? null;
-    }
-
-    /** @return array{used_mib: float, total_mib: float}|null */
-    public function parseSwap(): ?array
-    {
-        $averages = $this->getDimensionAverages();
-
-        if (! isset($averages['used'], $averages['free']) || $averages['used'] + $averages['free'] <= 0) {
-            return null;
-        }
-
-        return [
-            'used_mib' => round($averages['used'], 2),
-            'total_mib' => round($averages['used'] + $averages['free'], 2),
-        ];
-    }
-
-    /**
-     * Busy-time percentage of the busiest physical disk, from a `disk.util`
-     * query grouped by instance and dimension.
-     */
-    public function parseBusiestDiskPercent(): ?float
-    {
-        $busiest = $this->groupedDimensions('disk_util')
-            ->where('dimension', 'utilization')
-            ->max('value');
-
-        return $busiest === null ? null : max(0.0, min(100.0, round($busiest, 2)));
-    }
-
-    /**
-     * Machine-wide throughput from a `system.net` query. Netdata reports sent
-     * traffic as a negative number.
-     *
-     * @return array{received_kbps: float, sent_kbps: float}|null
-     */
-    public function parseNetworkTotals(): ?array
-    {
-        $averages = $this->getDimensionAverages();
-
-        if (! isset($averages['received'], $averages['sent'])) {
-            return null;
-        }
-
-        return [
-            'received_kbps' => round(abs($averages['received']), 2),
-            'sent_kbps' => round(abs($averages['sent']), 2),
-        ];
     }
 
     /** @return array<string, mixed> */
@@ -443,40 +229,6 @@ final class NetdataV3Metrics
                 : null)
             ->filter()
             ->values();
-    }
-
-    /** @param array<string, float> $dimensions */
-    private function cpuUsageFrom(array $dimensions): float
-    {
-        $busy = collect($dimensions)->reject(fn (float $value, string $name): bool => $name === 'idle')->sum();
-
-        return max(0.0, min(100.0, round($busy, 2)));
-    }
-
-    /** @param array<string, float> $dimensions */
-    private function ramUsageFrom(array $dimensions): ?float
-    {
-        $total = collect(['used', 'free', 'cached', 'buffers'])->sum(fn (string $name): float => $dimensions[$name] ?? 0.0);
-
-        if ($total <= 0) {
-            return null;
-        }
-
-        return max(0.0, min(100.0, round(($dimensions['used'] ?? 0.0) / $total * 100.0, 2)));
-    }
-
-    /** @return array{mount_point: string, used_gb: float, available_gb: float, total_gb: float, usage_percent: float|null} */
-    private function diskVolumeRow(string $volume, float $usedGb, float $availableGb): array
-    {
-        $totalGb = $usedGb + $availableGb;
-
-        return [
-            'mount_point' => $volume,
-            'used_gb' => round($usedGb, 2),
-            'available_gb' => round($availableGb, 2),
-            'total_gb' => round($totalGb, 2),
-            'usage_percent' => $totalGb > 0 ? round($usedGb / $totalGb * 100, 2) : null,
-        ];
     }
 
     /** @return array<string, mixed> */

@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-use App\DTOs\NetdataV3Metrics;
+use App\DTOs\NetdataDiskMetrics;
+use App\DTOs\NetdataSystemMetrics;
 use App\Livewire\Devices\Overview;
 use App\Models\Device;
 use App\Models\DeviceDiskMetric;
@@ -61,7 +62,7 @@ function networkTotals(): array
 }
 
 it('splits disk space into one row per volume', function (): void {
-    $volumes = (new NetdataV3Metrics(diskByVolume()))->parseDiskVolumes();
+    $volumes = (new NetdataDiskMetrics(diskByVolume()))->parseDiskVolumes();
 
     expect(collect($volumes)->pluck('mount_point')->all())
         ->toBe(['HarddiskVolume1', 'C:', 'HarddiskVolume4', 'HarddiskVolume5']);
@@ -76,20 +77,20 @@ it('splits disk space into one row per volume', function (): void {
 });
 
 it('skips ignored volumes such as recovery partitions', function (): void {
-    $volumes = (new NetdataV3Metrics(diskByVolume()))->parseDiskVolumes(config('devices.disk.ignored_volumes'));
+    $volumes = (new NetdataDiskMetrics(diskByVolume()))->parseDiskVolumes(config('devices.disk.ignored_volumes'));
 
     expect(collect($volumes)->pluck('mount_point')->all())->toBe(['C:']);
 });
 
 it('refuses disk data that netdata averaged across every volume', function (): void {
-    expect((new NetdataV3Metrics(diskAveragedAcrossVolumes()))->parseDiskVolumes())->toBe([]);
+    expect((new NetdataDiskMetrics(diskAveragedAcrossVolumes()))->parseDiskVolumes())->toBe([]);
 });
 
 it('reads machine-wide network throughput with sent as a positive number', function (): void {
-    expect((new NetdataV3Metrics(networkTotals()))->parseNetworkTotals())
+    expect((new NetdataSystemMetrics(networkTotals()))->parseNetworkTotals())
         ->toBe(['received_kbps' => 12.99, 'sent_kbps' => 4.99]);
 
-    expect((new NetdataV3Metrics(diskByVolume()))->parseNetworkTotals())->toBeNull();
+    expect((new NetdataSystemMetrics(diskByVolume()))->parseNetworkTotals())->toBeNull();
 });
 
 it('stores per-volume disk and network rows from a raw agent payload', function (): void {
@@ -135,7 +136,7 @@ it('stores no disk rows from an old agent that sends averaged disk data', functi
 it('shows reported volumes on the device page', function (): void {
     $device = Device::factory()->active()->create(['disks' => null]);
     $metric = DeviceMetric::factory()->create(['device_id' => $device->id, 'recorded_at' => now()]);
-    $metric->recordDisks((new NetdataV3Metrics(diskByVolume()))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
+    $metric->recordDisks((new NetdataDiskMetrics(diskByVolume()))->parseDiskVolumes(config('devices.disk.ignored_volumes')));
 
     Livewire::actingAs(User::factory()->create())
         ->test(Overview::class, ['device' => $device])

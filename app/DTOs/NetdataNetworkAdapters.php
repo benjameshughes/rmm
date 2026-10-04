@@ -64,7 +64,7 @@ final class NetdataNetworkAdapters
             return $this->parse($ignoredAdapterPatterns);
         }
 
-        $totals = $this->totals->parseNetworkTotals();
+        $totals = (new NetdataSystemMetrics($this->totals))->parseNetworkTotals();
 
         return $totals === null ? [] : [['interface' => 'total', ...$totals]];
     }

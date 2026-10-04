@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\DTOs\NetdataSystemMetrics;
 use App\DTOs\NetdataV3Metrics;
 use Illuminate\Support\Collection;
 
@@ -19,27 +20,6 @@ enum MetricSampleType: string
     case Swap = 'swap';
     case NetworkIn = 'network_in';
     case NetworkOut = 'network_out';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Cpu => 'CPU Usage',
-            self::Ram => 'RAM Usage',
-            self::Load => 'Load Average',
-            self::Swap => 'Swap Usage',
-            self::NetworkIn => 'Network In',
-            self::NetworkOut => 'Network Out',
-        };
-    }
-
-    public function unit(): string
-    {
-        return match ($this) {
-            self::Cpu, self::Ram, self::Swap => '%',
-            self::Load => '',
-            self::NetworkIn, self::NetworkOut => ' kbps',
-        };
-    }
 
     /**
      * The raw agent request key holding the Netdata context this series is read from.
@@ -64,10 +44,10 @@ enum MetricSampleType: string
     public function series(NetdataV3Metrics $response): Collection
     {
         return match ($this) {
-            self::Cpu => $response->cpuUsageSeries(),
-            self::Ram => $response->ramUsageSeries(),
+            self::Cpu => (new NetdataSystemMetrics($response))->cpuUsageSeries(),
+            self::Ram => (new NetdataSystemMetrics($response))->ramUsageSeries(),
             self::Load => $response->dimensionSeries('load1'),
-            self::Swap => $response->swapUsageSeries(),
+            self::Swap => (new NetdataSystemMetrics($response))->swapUsageSeries(),
             self::NetworkIn => $response->dimensionSeries('received'),
             self::NetworkOut => $response->dimensionSeries('sent'),
         };

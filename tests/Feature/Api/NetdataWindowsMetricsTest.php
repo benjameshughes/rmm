@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 use App\DTOs\NetdataAppUsage;
+use App\DTOs\NetdataDiskMetrics;
 use App\DTOs\NetdataNetworkAdapters;
-use App\DTOs\NetdataV3Metrics;
+use App\DTOs\NetdataSystemMetrics;
 use App\Models\Device;
 use App\Models\DeviceAppMetric;
 use App\Models\DeviceMetric;
@@ -47,23 +48,23 @@ function windowsAgentPayload(array $overrides = []): array
 }
 
 it('reads the processor queue length', function (): void {
-    expect((new NetdataV3Metrics(netdataWindowsFixture()['netdata_cpu_queue']))->parseCpuQueueLength())->toBe(0.265);
+    expect((new NetdataSystemMetrics(netdataWindowsFixture()['netdata_cpu_queue']))->parseCpuQueueLength())->toBe(0.265);
 });
 
 it('has no cpu queue for missing or linux load data', function (mixed $response): void {
-    expect((new NetdataV3Metrics($response))->parseCpuQueueLength())->toBeNull();
+    expect((new NetdataSystemMetrics($response))->parseCpuQueueLength())->toBeNull();
 })->with([
     'missing' => [[]],
     'load average' => [ungroupedResponse(['load1' => 0.5, 'load5' => 0.4, 'load15' => 0.3])],
 ]);
 
 it('reads page file usage', function (): void {
-    expect((new NetdataV3Metrics(netdataWindowsFixture()['netdata_swap']))->parseSwap())
+    expect((new NetdataSystemMetrics(netdataWindowsFixture()['netdata_swap']))->parseSwap())
         ->toBe(['used_mib' => 5474.98, 'total_mib' => 17096.73]);
 });
 
 it('has no page file for missing, partial or empty swap data', function (mixed $response): void {
-    expect((new NetdataV3Metrics($response))->parseSwap())->toBeNull();
+    expect((new NetdataSystemMetrics($response))->parseSwap())->toBeNull();
 })->with([
     'missing' => [[]],
     'only free' => [ungroupedResponse(['free' => 1024.0])],
@@ -75,12 +76,12 @@ it('reads the busiest physical disk', function (): void {
     $disks['view']['dimensions']['ids'][] = 'utilization,disk_util.Disk 1@5fb86e46-890a-af4f-afde-034c792a2a78';
     $disks['view']['dimensions']['sts']['avg'][] = 37.456;
 
-    expect((new NetdataV3Metrics(netdataWindowsFixture()['netdata_disk_util']))->parseBusiestDiskPercent())->toBe(0.81)
-        ->and((new NetdataV3Metrics($disks))->parseBusiestDiskPercent())->toBe(37.46);
+    expect((new NetdataDiskMetrics(netdataWindowsFixture()['netdata_disk_util']))->parseBusiestDiskPercent())->toBe(0.81)
+        ->and((new NetdataDiskMetrics($disks))->parseBusiestDiskPercent())->toBe(37.46);
 });
 
 it('has no disk busy figure for missing or averaged-together data', function (mixed $response): void {
-    expect((new NetdataV3Metrics($response))->parseBusiestDiskPercent())->toBeNull();
+    expect((new NetdataDiskMetrics($response))->parseBusiestDiskPercent())->toBeNull();
 })->with([
     'missing' => [[]],
     'ungrouped' => [ungroupedResponse(['utilization' => 4.2])],

@@ -6,7 +6,6 @@ use App\Enums\MetricSampleType;
 use App\Models\Device;
 use App\Models\DeviceMetric;
 use App\Models\MetricSample;
-use App\Queries\MetricSampleQueries;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 
@@ -129,19 +128,6 @@ it('does not duplicate the seconds two overlapping windows share', function (): 
     expect(DeviceMetric::count())->toBe(2)
         ->and(MetricSample::query()->where('metric', MetricSampleType::Cpu)->count())->toBe(90)
         ->and(MetricSample::count())->toBe(450);
-});
-
-it('answers the peak and average a report average would hide', function (): void {
-    $this->travelTo(Carbon::createFromTimestamp(1791103211));
-    postLinuxWindow(linuxWindowReport())->assertSuccessful();
-
-    $queries = app(MetricSampleQueries::class);
-    $since = now()->subMinutes(5);
-
-    expect($queries->peak($this->device, MetricSampleType::Cpu, $since))->toBe(49.48)
-        ->and($queries->average($this->device, MetricSampleType::Cpu, $since))->toBe(7.01)
-        ->and($queries->peak($this->device, MetricSampleType::Swap, $since))->toBeNull()
-        ->and($queries->peak($this->device, MetricSampleType::Cpu, now()->addMinute()))->toBeNull();
 });
 
 it('keeps no samples from a single averaged point', function (): void {

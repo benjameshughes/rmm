@@ -6,9 +6,10 @@ namespace App\Actions\Device;
 
 use App\DTOs\NetdataAppUsage;
 use App\DTOs\NetdataCpuMetric;
+use App\DTOs\NetdataDiskMetrics;
 use App\DTOs\NetdataNetworkAdapters;
 use App\DTOs\NetdataRamMetric;
-use App\DTOs\NetdataV3Metrics;
+use App\DTOs\NetdataSystemMetrics;
 use App\DTOs\TopApps;
 use App\Events\DeviceUpdated;
 use App\Events\MetricsReceived;
@@ -103,17 +104,17 @@ final class StoreDeviceMetrics
 
     private function handleRawNetdata(Device $device, array $input, ?string $ip): DeviceMetric
     {
-        $cpuParser = new NetdataV3Metrics($input['netdata_cpu'] ?? $input['netdata_metrics'] ?? []);
-        $ramParser = new NetdataV3Metrics($input['netdata_ram'] ?? $input['netdata_metrics'] ?? []);
-        $loadParser = new NetdataV3Metrics($input['netdata_load'] ?? []);
-        $uptimeParser = new NetdataV3Metrics($input['netdata_uptime'] ?? []);
+        $cpuParser = new NetdataSystemMetrics($input['netdata_cpu'] ?? $input['netdata_metrics'] ?? []);
+        $ramParser = new NetdataSystemMetrics($input['netdata_ram'] ?? $input['netdata_metrics'] ?? []);
+        $loadParser = new NetdataSystemMetrics($input['netdata_load'] ?? []);
+        $uptimeParser = new NetdataSystemMetrics($input['netdata_uptime'] ?? []);
 
         $cpuDetails = $cpuParser->getCpuDetails();
         $memoryDetails = $ramParser->getMemoryDetails();
         $loadAverages = $loadParser->parseLoadAverages();
         $uptime = $uptimeParser->parseUptime();
-        $swap = (new NetdataV3Metrics($input['netdata_swap'] ?? []))->parseSwap();
-        $processes = (new NetdataV3Metrics($input['netdata_processes'] ?? []))->parseProcesses();
+        $swap = (new NetdataSystemMetrics($input['netdata_swap'] ?? []))->parseSwap();
+        $processes = (new NetdataSystemMetrics($input['netdata_processes'] ?? []))->parseProcesses();
 
         $metric = DeviceMetric::create([
             'device_id' => $device->id,
@@ -139,12 +140,12 @@ final class StoreDeviceMetrics
             'memory_cached_mib' => $memoryDetails['cached_mib'],
             'memory_buffers_mib' => $memoryDetails['buffers_mib'],
             'memory_available_mib' => $memoryDetails['available_mib'],
-            'cpu_queue_length' => (new NetdataV3Metrics($input['netdata_cpu_queue'] ?? []))->parseCpuQueueLength(),
+            'cpu_queue_length' => (new NetdataSystemMetrics($input['netdata_cpu_queue'] ?? []))->parseCpuQueueLength(),
             'swap_used_mib' => $swap['used_mib'] ?? null,
             'swap_total_mib' => $swap['total_mib'] ?? null,
             'processes_running' => $processes['running'],
             'processes_blocked' => $processes['blocked'],
-            'disk_busy_percent' => (new NetdataV3Metrics($input['netdata_disk_util'] ?? []))->parseBusiestDiskPercent(),
+            'disk_busy_percent' => (new NetdataDiskMetrics($input['netdata_disk_util'] ?? []))->parseBusiestDiskPercent(),
             'payload' => $this->rawPayload($input),
             ...$this->linuxHealth($input['linux_health'] ?? null),
         ]);
@@ -168,9 +169,9 @@ final class StoreDeviceMetrics
      */
     private function netdataVolumes(array $input): array
     {
-        $inodes = (new NetdataV3Metrics($input['netdata_disk_inodes'] ?? []))->parseInodeUsage();
+        $inodes = (new NetdataDiskMetrics($input['netdata_disk_inodes'] ?? []))->parseInodeUsage();
 
-        return collect((new NetdataV3Metrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')))
+        return collect((new NetdataDiskMetrics($input['netdata_disk'] ?? []))->parseDiskVolumes(config('devices.disk.ignored_volumes')))
             ->map(fn (array $volume): array => [...$volume, 'inode_usage_percent' => $inodes->get($volume['mount_point'])])
             ->all();
     }
