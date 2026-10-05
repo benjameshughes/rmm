@@ -94,6 +94,15 @@ return [
             'timeout_seconds' => 60,
             'requires_admin' => true,
         ],
+        'remove-teams' => [
+            'name' => 'Remove Teams',
+            'description' => 'Remove Microsoft Teams and its Outlook add-in for every user, and stop Office reinstalling it',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/remove-teams.ps1',
+            'timeout_seconds' => 300,
+            'requires_admin' => true,
+        ],
         'log-off' => [
             'name' => 'Log Off',
             'description' => 'Log off every interactive user session',
