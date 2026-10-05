@@ -106,7 +106,7 @@
 
         <flux:card>
             <flux:heading size="sm" class="mb-4">Tags</flux:heading>
-            <flux:pillbox wire:model.live="selectedTagIds" placeholder="Select tags...">
+            <flux:pillbox wire:model.live="selectedTagIds" multiple placeholder="Select tags...">
                 @foreach($allTags as $tag)
                     <flux:pillbox.option value="{{ $tag->id }}">{{ $tag->name }}</flux:pillbox.option>
                 @endforeach

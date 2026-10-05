@@ -99,12 +99,12 @@ describe('Tag assignment', function (): void {
     });
 });
 
-it('picks tags with a pillbox so the chosen tags show by name', function (): void {
+it('picks tags with a multiple pillbox so it sends a list of tags, shown by name', function (): void {
     $device = Device::factory()->active()->create();
     $device->tags()->attach(Tag::factory()->create(['name' => 'endor']));
 
     Livewire::actingAs(User::factory()->create())
         ->test(Details::class, ['device' => $device])
-        ->assertSeeHtml('data-flux-pillbox')
-        ->assertSee('endor');
+        ->assertSee('endor')
+        ->tap(fn ($component) => expect($component->html())->toMatch('/<ui-pillbox[^>]*\\smultiple[\\s>=]/'));
 });
