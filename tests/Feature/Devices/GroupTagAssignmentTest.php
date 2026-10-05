@@ -98,3 +98,13 @@ describe('Tag assignment', function (): void {
             ->assertDontSee('NORMAL-01');
     });
 });
+
+it('picks tags with a pillbox so the chosen tags show by name', function (): void {
+    $device = Device::factory()->active()->create();
+    $device->tags()->attach(Tag::factory()->create(['name' => 'endor']));
+
+    Livewire::actingAs(User::factory()->create())
+        ->test(Details::class, ['device' => $device])
+        ->assertSeeHtml('data-flux-pillbox')
+        ->assertSee('endor');
+});
