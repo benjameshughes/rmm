@@ -85,6 +85,15 @@ return [
             'timeout_seconds' => 600,
             'requires_admin' => true,
         ],
+        'never-sleep' => [
+            'name' => 'Never Sleep',
+            'description' => 'Set the PC to never sleep and the screen to turn off after 60 minutes',
+            'category' => 'power',
+            'platform' => 'windows',
+            'file' => 'windows/never-sleep.ps1',
+            'timeout_seconds' => 60,
+            'requires_admin' => true,
+        ],
         'log-off' => [
             'name' => 'Log Off',
             'description' => 'Log off every interactive user session',
