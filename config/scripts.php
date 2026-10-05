@@ -103,6 +103,15 @@ return [
             'timeout_seconds' => 300,
             'requires_admin' => true,
         ],
+        'debloat-windows' => [
+            'name' => 'Debloat Windows',
+            'description' => 'Remove preinstalled consumer apps for every user, switch off widgets, AI features and ads, and stop suggested apps installing themselves. Safe to run daily',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/debloat-windows.ps1',
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
         'log-off' => [
             'name' => 'Log Off',
             'description' => 'Log off every interactive user session',
