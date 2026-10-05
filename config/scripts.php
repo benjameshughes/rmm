@@ -229,6 +229,15 @@ return [
             'timeout_seconds' => 120,
             'requires_admin' => false,
         ],
+        'system-inventory' => [
+            'name' => 'System Inventory',
+            'description' => 'Read the hardware, Windows, security, users, updates and third-party drivers, services and tasks, for the device System tab. Changes nothing',
+            'category' => 'info',
+            'platform' => 'windows',
+            'file' => 'windows/system-inventory.ps1',
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
         'installed-software' => [
             'name' => 'Installed Software',
             'description' => 'List installed applications with version, publisher and install date',

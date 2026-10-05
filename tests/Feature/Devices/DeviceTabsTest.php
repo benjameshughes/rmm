@@ -55,6 +55,7 @@ it('keeps the overview at the devices.show route everything links to', function 
         ->and(route('devices.metrics', $this->device))->toEndWith("/devices/{$this->device->id}/metrics")
         ->and(route('devices.commands', $this->device))->toEndWith("/devices/{$this->device->id}/commands")
         ->and(route('devices.apps', $this->device))->toEndWith("/devices/{$this->device->id}/apps")
+        ->and(route('devices.system', $this->device))->toEndWith("/devices/{$this->device->id}/system")
         ->and(route('devices.details', $this->device))->toEndWith("/devices/{$this->device->id}/details");
 });
 

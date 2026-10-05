@@ -15,6 +15,7 @@ use App\Livewire\Devices\Index as DevicesIndex;
 use App\Livewire\Devices\Metrics as DeviceMetrics;
 use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending as DevicesPending;
+use App\Livewire\Devices\System as DeviceSystem;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Create as ScriptsCreate;
 use App\Livewire\Scripts\Edit as ScriptsEdit;
@@ -66,6 +67,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('metrics', DeviceMetrics::class)->name('metrics');
         Route::get('commands', DeviceCommands::class)->name('commands');
         Route::get('apps', DeviceApps::class)->name('apps');
+        Route::get('system', DeviceSystem::class)->name('system');
         Route::get('details', DeviceDetails::class)->name('details');
     });
 

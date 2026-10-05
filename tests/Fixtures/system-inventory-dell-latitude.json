@@ -1,0 +1,129 @@
+{
+    "system": {
+        "manufacturer": "Dell Inc.",
+        "model": "Latitude 5440",
+        "serial_number": "7HQ2KZ3",
+        "sku": "0C0B",
+        "family": "Latitude",
+        "chassis_type": "Notebook",
+        "bios": {"vendor": "Dell Inc.", "version": "1.14.1", "release_date": "2024-06-11T00:00:00.0000000+01:00"},
+        "baseboard": {"manufacturer": "Dell Inc.", "product": "0N7J8T", "serial": "/7HQ2KZ3/CNCMK0042P01FX/"}
+    },
+    "cpu": {"name": "13th Gen Intel(R) Core(TM) i5-1345U", "sockets": 1, "cores": 10, "logical_processors": 12, "max_clock_mhz": 1600},
+    "memory": {
+        "total_gb": 16,
+        "slots_total": 2,
+        "modules": [
+            {"slot": "DIMM A", "bank": "BANK 0", "capacity_gb": 8, "speed_mhz": 3200, "manufacturer": "SK Hynix", "part_number": "HMAA1GS6CJR6N-XN", "serial": "4A1B2C3D"},
+            {"slot": "DIMM B", "bank": "BANK 1", "capacity_gb": 8, "speed_mhz": 3200, "manufacturer": "SK Hynix", "part_number": "HMAA1GS6CJR6N-XN", "serial": "4A1B2C3E"}
+        ]
+    },
+    "disks": [
+        {"model": "KIOXIA KBG50ZNV512G", "serial": "8E2PS1ABCDEF", "size_gb": 476.9, "media_type": "SSD", "bus_type": "NVMe", "health": "Healthy", "operational_status": "OK"}
+    ],
+    "volumes": [
+        {"drive": "C:", "label": "OS", "file_system": "NTFS", "size_gb": 475.7, "free_gb": 301.2}
+    ],
+    "gpus": [
+        {"name": "Intel(R) Iris(R) Xe Graphics", "driver_version": "31.0.101.4502", "driver_date": "2023-06-20T01:00:00.0000000+01:00", "resolution": "1920x1080"}
+    ],
+    "monitors": [
+        {"manufacturer": "DEL", "name": "DELL P2422H", "product_code": "A0C4", "serial": "CN0V1RXJ-FCC00-2BJ-3T1L", "year": 2022, "week": 18},
+        {"manufacturer": "AUO", "name": null, "product_code": "C49B", "serial": "0", "year": 2023, "week": 2}
+    ],
+    "printers": [
+        {"name": "HP LaserJet Pro M404dn", "driver": "HP Universal Printing PCL 6", "port": "192.168.10.40", "is_default": true, "is_shared": false, "is_network": true},
+        {"name": "Microsoft Print to PDF", "driver": "Microsoft Print To PDF", "port": "PORTPROMPT:", "is_default": false, "is_shared": false, "is_network": false}
+    ],
+    "usb_devices": [
+        {"name": "Logitech USB Receiver", "manufacturer": "Logitech", "class": "HIDClass", "status": "OK"},
+        {"name": "Integrated Webcam", "manufacturer": "Microsoft", "class": "Camera", "status": "OK"}
+    ],
+    "input_devices": {
+        "keyboards": [{"name": "Standard PS/2 Keyboard", "manufacturer": null}],
+        "pointing_devices": [{"name": "HID-compliant mouse", "manufacturer": "Microsoft"}]
+    },
+    "network_adapters": [
+        {"name": "Ethernet", "description": "Intel(R) Ethernet Connection (16) I219-LM", "mac_address": "A4-BB-6D-12-34-56", "link_speed": "1 Gbps", "status": "Up", "driver_version": "12.19.2.45", "driver_date": "2023-03-14", "driver_provider": "Intel"},
+        {"name": "Wi-Fi", "description": "Intel(R) Wi-Fi 6E AX211 160MHz", "mac_address": "D4-54-8B-AB-CD-EF", "link_speed": "0 bps", "status": "Disconnected", "driver_version": "23.40.0.4", "driver_date": "2024-02-01", "driver_provider": "Intel"}
+    ],
+    "battery": {"name": "DELL M033W33", "charge_percent": 87, "design_capacity_mwh": 54000, "full_charge_capacity_mwh": 47520, "health_percent": 88},
+    "windows": {
+        "caption": "Microsoft Windows 11 Pro",
+        "edition_id": "Professional",
+        "display_version": "23H2",
+        "build": "22631",
+        "ubr": 4317,
+        "architecture": "64-bit",
+        "install_date": "2024-01-15T09:30:12.0000000+00:00",
+        "last_boot": "2026-10-03T07:58:41.5000000+01:00",
+        "registered_owner": "IT",
+        "registered_organization": "Caecus Blinds",
+        "locale": "en-GB",
+        "timezone": "GMT Standard Time",
+        "time_source": "time.windows.com,0x9",
+        "domain": "WORKGROUP",
+        "workgroup": "WORKGROUP",
+        "is_domain_joined": false,
+        "activation": {"license_status": "Licensed", "channel": "OEM:DM", "description": "Windows(R) Operating System, OEM_DM channel"}
+    },
+    "security": {
+        "bitlocker": [
+            {"drive": "C:", "is_system_drive": true, "protection_status": "On", "conversion_status": "Fully encrypted"}
+        ],
+        "secure_boot": true,
+        "tpm": {"is_present": true, "is_enabled": true, "is_activated": true, "spec_version": "2.0"},
+        "defender": {"is_service_enabled": true, "is_real_time_enabled": true, "signature_updated_at": "2026-10-04T22:10:00.0000000+01:00", "signature_version": "1.419.212.0"},
+        "firewall": [
+            {"name": "Domain", "is_enabled": true},
+            {"name": "Private", "is_enabled": true},
+            {"name": "Public", "is_enabled": false}
+        ],
+        "uac": {"is_enabled": true, "consent_prompt_admin": 5},
+        "device_guard": {"vbs_status": "Running", "is_credential_guard_running": false}
+    },
+    "users": {
+        "local_users": [
+            {"name": "Administrator", "is_enabled": false, "last_logon": null, "password_last_set": null, "description": "Built-in account for administering the computer/domain"},
+            {"name": "itadmin", "is_enabled": true, "last_logon": "2026-09-30T14:02:00.0000000+01:00", "password_last_set": "2026-01-10T10:00:00.0000000+00:00", "description": null}
+        ],
+        "local_admins": [
+            {"name": "OFFICE-PC\\Administrator", "object_class": "User", "principal_source": "Local"},
+            {"name": "OFFICE-PC\\itadmin", "object_class": "User", "principal_source": "Local"}
+        ],
+        "logged_on": [
+            {"name": "OFFICE-PC\\sarah", "session_id": 1, "since": "2026-10-05T08:01:12.0000000+01:00"}
+        ],
+        "profiles": [
+            {"path": "C:\\Users\\sarah", "last_used": "2026-10-05T08:01:00.0000000+01:00", "is_loaded": true},
+            {"path": "C:\\Users\\itadmin", "last_used": "2026-09-30T14:02:00.0000000+01:00", "is_loaded": false}
+        ]
+    },
+    "updates": {
+        "hotfixes": [
+            {"id": "KB5043076", "installed_on": "2026-09-11T00:00:00.0000000+01:00", "description": "Security Update"},
+            {"id": "KB5042352", "installed_on": "2026-09-11T00:00:00.0000000+01:00", "description": "Update"}
+        ],
+        "pending_reboot": {"is_pending": true, "reasons": ["Windows Update"]}
+    },
+    "software_environment": {
+        "dotnet_framework": {"release": 533320, "version": "4.8.09032"},
+        "powershell_versions": ["5.1.22621.4249", "7.4.5"],
+        "optional_features": ["NetFx4-AdvSrvs", "Printing-PrintToPDFServices-Features", "SearchEngine-Client-Package"]
+    },
+    "drivers": [
+        {"device_name": "Intel(R) Iris(R) Xe Graphics", "provider": "Intel Corporation", "version": "31.0.101.4502", "date": "2023-06-20T01:00:00.0000000+01:00", "is_signed": true},
+        {"device_name": "Realtek Audio", "provider": "Realtek Semiconductor Corp.", "version": "6.0.9549.1", "date": "2023-08-01T01:00:00.0000000+01:00", "is_signed": true}
+    ],
+    "startup": [
+        {"name": "Teams", "command": "\"C:\\Users\\sarah\\AppData\\Local\\Microsoft\\Teams\\Update.exe\" --processStart \"Teams.exe\"", "location": "HKU\\S-1-5-21-1\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", "user": "OFFICE-PC\\sarah"}
+    ],
+    "services_non_microsoft": [
+        {"name": "DellTechHub", "display_name": "Dell TechHub", "state": "Running", "start_mode": "Auto"},
+        {"name": "rmm-agent", "display_name": "RMM Agent", "state": "Running", "start_mode": "Auto"}
+    ],
+    "scheduled_tasks_non_microsoft": [
+        {"path": "\\", "name": "GoogleUpdateTaskMachineCore", "state": "Ready"}
+    ],
+    "collected_at": "2026-10-05T09:15:02.1234567+01:00"
+}
