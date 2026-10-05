@@ -58,3 +58,18 @@ it('reads the package ID only from the environment and runs winget exactly and s
     'upgrade' => ['winget-upgrade', 'upgrade --id $packageId --exact --scope machine --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'],
     'uninstall' => ['winget-uninstall', 'uninstall --id $packageId --exact --silent --accept-source-agreements --disable-interactivity'],
 ]);
+
+it('accepts every inventory ID shape in the uninstall script but refuses quotes and control characters', function (string $packageId, bool $isAccepted): void {
+    preg_match("/-notmatch '([^']+)'/", file_get_contents(resource_path('scripts/windows/winget-uninstall.ps1')), $match);
+
+    expect((bool) preg_match('/'.$match[1].'/', $packageId))->toBe($isAccepted);
+})->with([
+    'winget id' => ['Mozilla.Firefox', true],
+    'arp id with spaces' => ['ARP\Machine\X86\Microsoft Copilot', true],
+    'arp id with brackets' => ['ARP\Machine\X64\Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.40.33810', true],
+    'msix id' => ['MSIX\Microsoft.WindowsCalculator_11.2405.2.0_x64__8wekyb3d8bbwe', true],
+    'arp guid id' => ['ARP\Machine\X64\{2BD7D1F1-1A23-4F5B-9E36-1E6F3A3C0D2A}', true],
+    'double quote' => ['Mozilla.Firefox" --force', false],
+    'newline' => ["Mozilla.Firefox\n--force", false],
+    'leading dash' => ['--force', false],
+]);

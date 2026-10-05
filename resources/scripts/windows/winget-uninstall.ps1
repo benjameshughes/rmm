@@ -5,7 +5,9 @@
 # `winget` on its PATH even when it is installed. The machine-wide copy lives
 # under WindowsApps; when App Installer is missing entirely, Microsoft's
 # WinGet module bootstraps it. ARP and MSIX IDs from the inventory contain
-# backslashes, so they are allowed here alongside ordinary winget IDs.
+# backslashes, spaces and brackets (ARP\Machine\X86\Microsoft Copilot), so
+# any printable text is allowed. Double quotes are refused: Windows
+# PowerShell can split an argument holding one into several.
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -19,7 +21,7 @@ if (-not $packageId) {
     exit 1
 }
 
-if ($packageId -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\\{}-]*$') {
+if ($packageId -notmatch '^[A-Za-z0-9][^"\x00-\x1f]*$') {
     Write-Output "ATTENTION: '$packageId' is not a valid package ID. Use the ID from the software inventory, for example Mozilla.Firefox"
     exit 1
 }
