@@ -121,3 +121,13 @@ it('restarts the Linux agent after installing so an upgrade runs the new binary'
 
     expect(strpos($script, 'systemctl restart benjh-rmm'))->toBeGreaterThan(strpos($script, '--url "${SERVER_URL}" install'));
 });
+
+it('waits for the freshly installed Windows service to finish starting before restarting it', function (): void {
+    $script = $this->get('/agent/install.ps1')->assertSuccessful()->getContent();
+
+    $wait = strpos($script, "(Get-Service -Name \$ServiceName).Status -ne 'Running'");
+
+    expect($wait)->not->toBeFalse()
+        ->and($wait)->toBeGreaterThan(strpos($script, '& $agentExe --url $ServerUrl'))
+        ->and(strpos($script, 'Restart-Service -Name $ServiceName -Force'))->toBeGreaterThan($wait);
+});

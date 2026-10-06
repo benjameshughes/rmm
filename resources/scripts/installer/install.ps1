@@ -119,7 +119,15 @@ if (-not $service) {
 $agentExe = $service.PathName.Trim('"')
 Log "Configuring server URL: $ServerUrl"
 & $agentExe --url $ServerUrl 2>&1 | ForEach-Object { Log "  $_" }
-Restart-Service -Name $ServiceName
+
+# The MSI starts the service, and a service that is still starting refuses to
+# stop ("Cannot stop BenJHRMM service"), so wait for it to finish before the
+# restart that makes it pick up the server URL.
+$startDeadline = (Get-Date).AddSeconds(60)
+while ((Get-Service -Name $ServiceName).Status -ne 'Running' -and (Get-Date) -lt $startDeadline) {
+    Start-Sleep -Seconds 1
+}
+Restart-Service -Name $ServiceName -Force
 
 Start-Sleep -Seconds 2
 if ((Get-Service -Name $ServiceName).Status -eq 'Running') {
