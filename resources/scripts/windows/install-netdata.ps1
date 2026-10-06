@@ -21,6 +21,26 @@ $installed = @(Get-ItemProperty -Path @(
 $isPinnedVersion = $installed.Count -gt 0 -and ($installed | Where-Object { $_.DisplayVersion -like "$($NetdataVersion.TrimStart('v'))*" })
 
 if (-not $isPinnedVersion) {
+    # Download before touching the installed Netdata, so a failed download
+    # leaves the PC as it was. GitHub downloads sometimes drop part way.
+    $msi = Join-Path $env:TEMP 'netdata.msi'
+    $msiUrl = "https://github.com/netdata/netdata/releases/download/$NetdataVersion/netdata-x64.msi"
+    Remove-Item $msi -Force -ErrorAction SilentlyContinue
+
+    foreach ($attempt in 1..3) {
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msi -UseBasicParsing -ErrorAction SilentlyContinue
+        if ((Test-Path $msi) -and (Get-Item $msi).Length -gt 1MB) {
+            break
+        }
+        Remove-Item $msi -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds (5 * $attempt)
+    }
+
+    if (-not (Test-Path $msi)) {
+        Write-Output "ATTENTION: could not download Netdata $NetdataVersion after 3 attempts; nothing was changed"
+        exit 1
+    }
+
     Stop-Service -Name 'netdata' -Force -ErrorAction SilentlyContinue
 
     $installed | ForEach-Object {
@@ -37,8 +57,6 @@ if (-not $isPinnedVersion) {
     }
 
     Write-Output "Installing Netdata $NetdataVersion"
-    $msi = Join-Path $env:TEMP 'netdata.msi'
-    Invoke-WebRequest -Uri "https://github.com/netdata/netdata/releases/download/$NetdataVersion/netdata-x64.msi" -OutFile $msi -UseBasicParsing
     $install = Start-Process 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn /norestart" -Wait -PassThru
     Remove-Item $msi -Force -ErrorAction SilentlyContinue
 

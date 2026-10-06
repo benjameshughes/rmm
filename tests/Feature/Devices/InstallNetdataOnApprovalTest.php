@@ -92,3 +92,14 @@ it('keeps windows netdata on localhost with anonymous statistics off, restarting
     expect(strpos($script, 'Restart-Service'))->toBeGreaterThan(strpos($script, 'if ($config -ne $current)'))
         ->and(strpos($script, 'bind to = 127.0.0.1'))->toBeGreaterThan(strpos($script, 'if ($install.ExitCode -ne 0)'));
 });
+
+it('downloads Netdata with retries before touching the installed one, and gives up cleanly', function (): void {
+    $script = file_get_contents(resource_path('scripts/windows/install-netdata.ps1'));
+
+    $download = strpos($script, 'foreach ($attempt in 1..3)');
+
+    expect($download)->not->toBeFalse()
+        ->and(strpos($script, "Stop-Service -Name 'netdata'"))->toBeGreaterThan($download)
+        ->and(strpos($script, '/x $($_.PSChildName)'))->toBeGreaterThan($download)
+        ->and($script)->toContain('could not download Netdata $NetdataVersion after 3 attempts; nothing was changed');
+});
