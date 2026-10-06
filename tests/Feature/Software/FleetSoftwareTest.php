@@ -90,7 +90,7 @@ it('serves the software pages behind auth and the device policy, with Software i
         ->assertSeeHtml('href="'.route('software.index').'" data-current');
 
     $this->actingAs($this->user)->get(route('software.show', ['id' => 'Google.Chrome']))->assertSuccessful();
-    $this->actingAs($this->user)->get(route('software.show', ['id' => 'Nobody.Has.This']))->assertNotFound();
+    $this->actingAs($this->user)->get(route('software.show', ['id' => 'Nobody.Has.This']))->assertSuccessful()->assertSee('No device has this app any more');
 
     Gate::before(fn (User $user, string $ability): ?bool => $ability === 'viewAny' ? false : null);
     $this->actingAs($this->user)->get(route('software.index'))->assertForbidden();

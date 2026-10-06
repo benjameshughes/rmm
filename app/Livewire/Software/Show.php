@@ -45,8 +45,6 @@ final class Show extends Component
     public function mount(): void
     {
         $this->authorize('viewAny', Device::class);
-
-        abort_unless($this->software->installsOf($this->packageId)->exists(), 404);
     }
 
     #[On('echo-private:devices,SoftwareInventorySynced')]
