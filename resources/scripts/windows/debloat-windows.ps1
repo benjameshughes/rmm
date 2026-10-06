@@ -143,19 +143,21 @@ function Set-MountedHive([string]$label, [string]$id, [string]$file) {
 
 $refused = @($apps | Where-Object { Test-Protected $_ })
 $removable = @($apps | Where-Object { -not (Test-Protected $_) })
-$provisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
-
 foreach ($name in $removable) {
     Get-AppxPackage -AllUsers -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
         Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
         $removed.Add("app $($_.Name)")
     }
+}
 
-    $provisioned | Where-Object { $_.DisplayName -eq $name } | ForEach-Object {
-        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -AllUsers -ErrorAction SilentlyContinue | Out-Null
+# Removing an app for all users usually deprovisions it too, so the provisioned
+# list is read after the removals: only what is genuinely left is touched.
+Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+    Where-Object { $removable -contains $_.DisplayName } |
+    ForEach-Object {
+        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -AllUsers -ErrorAction SilentlyContinue 2>$null | Out-Null
         $removed.Add("provisioned $($_.DisplayName)")
     }
-}
 
 foreach ($path in $machineSettings.Keys) {
     foreach ($name in $machineSettings[$path].Keys) {

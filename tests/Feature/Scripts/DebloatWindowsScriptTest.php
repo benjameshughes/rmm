@@ -105,3 +105,9 @@ it('never touches Defender, the Store or wildcard app names', function (string $
 it('keeps the script plain ASCII for Windows PowerShell 5.1', function (): void {
     expect(debloatScript())->not->toMatch('/[^\x00-\x7F]/');
 });
+
+it('reads the provisioned packages only after removing apps, since removing for all users usually deprovisions them', function (): void {
+    $script = file_get_contents(resource_path('scripts/windows/debloat-windows.ps1'));
+
+    expect(strpos($script, 'Get-AppxProvisionedPackage -Online'))->toBeGreaterThan(strpos($script, 'Remove-AppxPackage -Package'));
+});
