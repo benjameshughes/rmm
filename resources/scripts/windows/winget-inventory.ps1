@@ -53,10 +53,17 @@ if ($PSVersionTable.PSEdition -eq 'Desktop') {
     exit $LASTEXITCODE
 }
 
+# PowerShell 7 ships PSResourceGet. Its older Install-Module path needs the
+# NuGet provider (not found under PowerShell 7) and has run out of memory as
+# SYSTEM, so it is only the fallback.
 if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
     $bootstrapLog += & {
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers
-        Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers
+        if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Scope AllUsers -TrustRepository -Quiet
+        } else {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers
+            Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers
+        }
     } 2>&1 | Out-String
 }
 

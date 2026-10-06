@@ -73,3 +73,13 @@ it('accepts every inventory ID shape in the uninstall script but refuses quotes 
     'newline' => ["Mozilla.Firefox\n--force", false],
     'leading dash' => ['--force', false],
 ]);
+
+it('installs the WinGet module with PSResourceGet under PowerShell 7, keeping Install-Module only as the fallback', function (): void {
+    $script = file_get_contents(resource_path('scripts/windows/winget-inventory.ps1'));
+
+    $modern = strpos($script, 'Install-PSResource -Name Microsoft.WinGet.Client');
+
+    expect($modern)->not->toBeFalse()
+        ->and(strpos($script, 'Install-Module -Name Microsoft.WinGet.Client'))->toBeGreaterThan($modern)
+        ->and($script)->toContain('if (Get-Command Install-PSResource -ErrorAction SilentlyContinue)');
+});
