@@ -131,3 +131,14 @@ it('waits for the freshly installed Windows service to finish starting before re
         ->and($wait)->toBeGreaterThan(strpos($script, '& $agentExe --url $ServerUrl'))
         ->and(strpos($script, 'Restart-Service -Name $ServiceName -Force'))->toBeGreaterThan($wait);
 });
+
+it('installs the Visual C++ runtime the agent needs before the agent MSI, only when it is missing', function (): void {
+    $script = $this->get('/agent/install.ps1')->assertSuccessful()->getContent();
+
+    $check = strpos($script, 'Test-Path "$env:SystemRoot\System32\vcruntime140.dll"');
+
+    expect($check)->not->toBeFalse()
+        ->and($script)->toContain('https://aka.ms/vs/17/release/vc_redist.x64.exe')
+        ->toContain('/install /quiet /norestart')
+        ->and(strpos($script, 'Installing the agent...'))->toBeGreaterThan($check);
+});

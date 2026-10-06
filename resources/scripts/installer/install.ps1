@@ -85,6 +85,23 @@ Log "Existing agent cleanup complete."
 # STEP 2 — INSTALL THE AGENT
 # ===================================================================
 
+# The agent needs the Visual C++ runtime. Most PCs have it from some app, but a
+# lightly used one may not, and then the MSI fails with 1603 because the
+# agent cannot start to register its service.
+if (-not (Test-Path "$env:SystemRoot\System32\vcruntime140.dll")) {
+    Log "Installing the Visual C++ runtime..."
+    $vcRedist = Join-Path $env:TEMP "vc_redist.x64.exe"
+    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $vcRedist -UseBasicParsing
+    $vcInstall = Start-Process $vcRedist -ArgumentList "/install /quiet /norestart" -Wait -PassThru
+    Remove-Item $vcRedist -Force -ErrorAction SilentlyContinue
+
+    # 3010 = installed, restart pending; 1638 = a newer version is already there
+    if (@(0, 3010, 1638) -notcontains $vcInstall.ExitCode) {
+        Log "ERROR: The Visual C++ runtime failed to install (exit code $($vcInstall.ExitCode))"
+        exit 1
+    }
+}
+
 Log "Looking up the latest agent release..."
 $release = Invoke-RestMethod -Headers @{ 'User-Agent' = 'rmm-installer' } -Uri "https://api.github.com/repos/$GitHubRepo/releases/latest"
 $msiAsset = $release.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
