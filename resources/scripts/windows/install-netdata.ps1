@@ -24,7 +24,7 @@ if (-not $isPinnedVersion) {
     # Download before touching the installed Netdata, so a failed download
     # leaves the PC as it was. GitHub downloads sometimes drop part way.
     $msi = Join-Path $env:TEMP 'netdata.msi'
-    $msiUrl = "https://github.com/netdata/netdata/releases/download/$NetdataVersion/netdata-x64.msi"
+    $msiUrl = "https://github.com/netdata/netdata/releases/download/$NetdataVersion/netdata-$NetdataVersion-x64.msi"
     Remove-Item $msi -Force -ErrorAction SilentlyContinue
 
     foreach ($attempt in 1..3) {

@@ -103,3 +103,8 @@ it('downloads Netdata with retries before touching the installed one, and gives 
         ->and(strpos($script, '/x $($_.PSChildName)'))->toBeGreaterThan($download)
         ->and($script)->toContain('could not download Netdata $NetdataVersion after 3 attempts; nothing was changed');
 });
+
+it('downloads the versioned MSI, since GitHub has no unversioned asset on a release', function (): void {
+    expect(file_get_contents(resource_path('scripts/windows/install-netdata.ps1')))
+        ->toContain('releases/download/$NetdataVersion/netdata-$NetdataVersion-x64.msi');
+});
