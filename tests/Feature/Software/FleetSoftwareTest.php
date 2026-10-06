@@ -190,3 +190,47 @@ it('says a package is not in winget instead of claiming it is up to date', funct
         ->assertSee('Not in winget')
         ->assertDontSee('Up to date');
 });
+
+describe('fleet install and uninstall', function (): void {
+    it('installs a winget app only on inventoried Windows devices that do not have it', function (): void {
+        $has = pcWith([zip()]);
+        $missingOne = pcWith([chrome('130.0')]);
+        $missingTwo = pcWith([]);
+        $notInventoried = pcWith([], ['software_inventoried_at' => null]);
+        $server = Device::factory()->active()->monitorOnly()->create(['software_inventoried_at' => now()]);
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])
+            ->assertSee('Install where missing (2)')
+            ->call('installEverywhere')
+            ->assertDispatched('command-queued');
+
+        $commands = DeviceCommand::query()->with('script')->get();
+        expect($commands->pluck('device_id')->sort()->values()->all())->toBe(collect([$missingOne->id, $missingTwo->id])->sort()->values()->all())
+            ->and($commands->pluck('script.slug')->unique()->all())->toBe(['winget-install'])
+            ->and($commands->first()->parameters)->toBe(['PackageId' => '7zip.7zip']);
+    });
+
+    it('offers no install for apps winget does not know', function (): void {
+        pcWith([['package_id' => 'ARP\Machine\X64\Thing', 'name' => 'Thing', 'installed_version' => '1.0', 'source' => null]]);
+        pcWith([]);
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'ARP\Machine\X64\Thing'])
+            ->assertDontSeeHtml('data-install-everywhere')
+            ->call('installEverywhere')
+            ->assertNotFound();
+    });
+
+    it('uninstalls from every device that has it and nothing else', function (): void {
+        $first = pcWith([zip()]);
+        $second = pcWith([zip(), chrome('130.0')]);
+        pcWith([chrome('130.0')]);
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])
+            ->assertSee('Uninstall everywhere (2)')
+            ->call('uninstallEverywhere');
+
+        $commands = DeviceCommand::query()->with('script')->get();
+        expect($commands->pluck('device_id')->sort()->values()->all())->toBe(collect([$first->id, $second->id])->sort()->values()->all())
+            ->and($commands->pluck('script.slug')->unique()->all())->toBe(['winget-uninstall']);
+    });
+});

@@ -10,11 +10,21 @@
                 <flux:heading size="xl" level="1" class="truncate">{{ $package->name }}</flux:heading>
                 <flux:text class="mt-1 font-mono">{{ $package->package_id }}</flux:text>
             </div>
-            @if($upgradableCount > 0)
-                <flux:button variant="primary" icon="arrow-up-circle" wire:click="upgradeAllOutdated" wire:confirm="Upgrade {{ $package->name }} on {{ $upgradableCount }} {{ Str::plural('device', $upgradableCount) }}?">
-                    Upgrade on all outdated ({{ $upgradableCount }})
+            <div class="flex flex-wrap items-center gap-2">
+                @if($upgradableCount > 0)
+                    <flux:button variant="primary" icon="arrow-up-circle" wire:click="upgradeAllOutdated" wire:confirm="Upgrade {{ $package->name }} on {{ $upgradableCount }} {{ Str::plural('device', $upgradableCount) }}?">
+                        Upgrade on all outdated ({{ $upgradableCount }})
+                    </flux:button>
+                @endif
+                @if($package->source !== null && $missingCount > 0)
+                    <flux:button icon="arrow-down-tray" wire:click="installEverywhere" wire:confirm="Install {{ $package->name }} on the {{ $missingCount }} {{ Str::plural('device', $missingCount) }} that do not have it?" data-install-everywhere>
+                        Install where missing ({{ $missingCount }})
+                    </flux:button>
+                @endif
+                <flux:button variant="danger" icon="trash" wire:click="uninstallEverywhere" wire:confirm="Uninstall {{ $package->name }} from all {{ $installs->count() }} {{ Str::plural('device', $installs->count()) }}?" data-uninstall-everywhere>
+                    Uninstall everywhere ({{ $installs->count() }})
                 </flux:button>
-            @endif
+            </div>
         </div>
     </div>
 

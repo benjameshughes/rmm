@@ -15,6 +15,7 @@ use App\Queries\SoftwareQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -24,7 +25,8 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * One package across the fleet: who has which version, and upgrades for the ones behind.
+ * One package across the fleet: who has which version, upgrades for the ones behind,
+ * and installing it everywhere it is missing or removing it everywhere.
  */
 #[Layout('components.layouts.app')]
 final class Show extends Component
@@ -74,19 +76,43 @@ final class Show extends Component
 
     public function upgradeAllOutdated(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
-        $script = Script::findSystem(PackageAction::Upgrade->value);
-        $parameters = $validateParameters($script, ['PackageId' => $this->packageId], 'packageId');
         $devices = $this->installs
             ->filter(fn (DeviceSoftware $install): bool => $install->isUpgradable)
-            ->map(fn (DeviceSoftware $install): Device => $install->device)
-            ->each(fn (Device $device) => $this->authorize('runCommands', $device));
+            ->map(fn (DeviceSoftware $install): Device => $install->device);
+
+        $this->queueOnDevices(PackageAction::Upgrade, $devices, $action, $validateParameters);
+    }
+
+    public function installEverywhere(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
+    {
+        abort_if($this->installs->first()?->source === null, 404);
+
+        $this->queueOnDevices(PackageAction::Install, $this->software->devicesMissing($this->packageId)->get(), $action, $validateParameters);
+    }
+
+    public function uninstallEverywhere(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
+    {
+        $this->queueOnDevices(PackageAction::Uninstall, $this->installs->map(fn (DeviceSoftware $install): Device => $install->device), $action, $validateParameters);
+    }
+
+    /**
+     * Devices whose agent is too old for a parameterised script are skipped,
+     * so the toast says how many it was queued on.
+     *
+     * @param  BaseCollection<int, Device>  $devices
+     */
+    private function queueOnDevices(PackageAction $packageAction, BaseCollection $devices, BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
+    {
+        $script = Script::findSystem($packageAction->value);
+        $parameters = $validateParameters($script, ['PackageId' => $this->packageId], 'packageId');
+        $devices->each(fn (Device $device) => $this->authorize('runCommands', $device));
 
         $queued = $action($script, $devices, auth()->user(), $parameters);
         $this->dispatch('command-queued');
 
         Flux::toast(
-            text: $queued < $devices->count() ? 'Devices whose agent is older than '.config('agent.parameters_min_version').' were skipped. Update their agent first.' : 'Each device re-checks its software once the upgrade has run.',
-            heading: "Upgrade queued on {$queued} of {$devices->count()} ".Str::plural('device', $devices->count()),
+            text: $queued < $devices->count() ? 'Devices whose agent is older than '.config('agent.parameters_min_version').' were skipped. Update their agent first.' : 'Each device re-checks its software once it has run.',
+            heading: "{$packageAction->queuedHeading()} on {$queued} of {$devices->count()} ".Str::plural('device', $devices->count()),
             variant: $queued < $devices->count() ? 'warning' : 'success',
         );
     }
@@ -99,6 +125,7 @@ final class Show extends Component
             'installs' => $installs,
             'package' => $installs->first(),
             'upgradableCount' => $installs->filter(fn (DeviceSoftware $install): bool => $install->isUpgradable)->count(),
+            'missingCount' => $this->software->devicesMissing($this->packageId)->count(),
         ])->title($installs->first()?->name ?? 'Software');
     }
 }

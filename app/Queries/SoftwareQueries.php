@@ -81,6 +81,21 @@ final class SoftwareQueries
             ->orderBy('devices.hostname');
     }
 
+    /**
+     * Devices that take commands and have a software inventory, but no install of the package.
+     *
+     * @return Builder<Device>
+     */
+    public function devicesMissing(string $packageId): Builder
+    {
+        return Device::query()
+            ->where('status', DeviceStatus::Active)
+            ->acceptsCommands()
+            ->whereNotNull('software_inventoried_at')
+            ->whereDoesntHave('software', fn (Builder $softwareQuery): Builder => $softwareQuery->where('package_id', $packageId))
+            ->orderBy('hostname');
+    }
+
     private function onFleet(Builder $query): Builder
     {
         return $query
