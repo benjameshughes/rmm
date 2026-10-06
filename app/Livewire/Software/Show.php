@@ -55,6 +55,10 @@ final class Show extends Component
         unset($this->installs);
     }
 
+    #[On('echo-private:devices,CommandUpdated')]
+    #[On('command-queued')]
+    public function refreshCommands(): void {}
+
     /** @return Collection<int, DeviceSoftware> */
     #[Computed]
     public function installs(): Collection
@@ -121,11 +125,16 @@ final class Show extends Component
     {
         $installs = $this->installs;
 
+        if ($installs->isEmpty()) {
+            return view('livewire.software.removed')->title('Software');
+        }
+
         return view('livewire.software.show', [
             'installs' => $installs,
             'package' => $installs->first(),
             'upgradableCount' => $installs->filter(fn (DeviceSoftware $install): bool => $install->isUpgradable)->count(),
             'missingCount' => $this->software->devicesMissing($this->packageId)->count(),
+            'packageCommands' => $this->software->packageCommandsFor($this->packageId),
         ])->title($installs->first()?->name ?? 'Software');
     }
 }

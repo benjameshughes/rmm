@@ -49,10 +49,14 @@
                                 <flux:table.cell>
                                     @can('runCommands', $device)
                                         <div class="flex justify-end gap-1">
+                                            @if($packageCommands->has($package->package_id))
+                                                <x-device.commands.busy :command="$packageCommands->get($package->package_id)" />
+                                            @else
                                             @if($package->isUpgradable)
                                                 <flux:button size="sm" icon="arrow-up-circle" wire:click="upgradePackage({{ $package->id }})">Upgrade</flux:button>
                                             @endif
                                             <flux:button size="sm" variant="ghost" icon="trash" wire:click="uninstallPackage({{ $package->id }})" wire:confirm="Uninstall {{ $package->name }} from {{ $device->hostname }}?">Uninstall</flux:button>
+                                            @endif
                                         </div>
                                     @endcan
                                 </flux:table.cell>

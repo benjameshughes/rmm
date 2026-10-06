@@ -55,7 +55,11 @@
                             <flux:text size="sm">{{ $install->last_seen_at->diffForHumans() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            @if($install->isUpgradable)
+                            @if($packageCommands->has($install->device_id))
+                                <div class="flex justify-end">
+                                    <x-device.commands.busy :command="$packageCommands->get($install->device_id)" />
+                                </div>
+                            @elseif($install->isUpgradable)
                                 @can('runCommands', $install->device)
                                     <div class="flex justify-end">
                                         <flux:button size="sm" icon="arrow-up-circle" wire:click="upgrade({{ $install->id }})">Upgrade</flux:button>

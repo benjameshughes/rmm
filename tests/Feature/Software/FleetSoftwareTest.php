@@ -234,3 +234,42 @@ describe('fleet install and uninstall', function (): void {
             ->and($commands->pluck('script.slug')->unique()->all())->toBe(['winget-uninstall']);
     });
 });
+
+it('says the app is gone instead of erroring once the last install disappears', function (): void {
+    $device = pcWith([zip()]);
+    $page = Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])->assertSee('7-Zip');
+
+    $device->software()->delete();
+
+    $page->dispatch('echo-private:devices,SoftwareInventorySynced', [])
+        ->assertSuccessful()
+        ->assertSeeHtml('data-software-removed')
+        ->assertSee('7zip.7zip');
+});
+
+describe('package command status', function (): void {
+    it('swaps a row\'s buttons for the in-flight command on the package page until it finishes', function (): void {
+        $device = pcWith([chrome('129.0', true)]);
+        $page = Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'Google.Chrome'])
+            ->call('upgrade', $device->software()->sole()->id);
+
+        $command = DeviceCommand::sole();
+        $page->assertSee('Queued...')->assertSeeHtml("commandId: {$command->id}");
+
+        $command->markAsSent();
+        $command->markAsRunning();
+        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertSee('Running...');
+
+        $command->markAsCompleted('OK', 0);
+        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertDontSeeHtml('data-run-button-busy');
+    });
+
+    it('shows the in-flight uninstall on the device apps tab, only on that app\'s row', function (): void {
+        $device = pcWith([zip(), chrome('130.0')]);
+
+        Livewire::actingAs($this->user)->test(App\Livewire\Devices\Apps::class, ['device' => $device])
+            ->call('uninstallPackage', $device->software()->where('package_id', '7zip.7zip')->sole()->id)
+            ->assertSee('Queued...')
+            ->assertSee('Uninstall');
+    });
+});

@@ -1,0 +1,9 @@
+@props(['command', 'variant' => null])
+
+<flux:button size="sm" :variant="$variant" icon="loading" wire:click="$dispatch('show-command', { commandId: {{ $command->id }} })" data-run-button-busy>
+    @if($command->isPending())
+        Queued...
+    @else
+        Running...@if($command->startedForHumans()) started {{ $command->startedForHumans() }}@endif
+    @endif
+</flux:button>

@@ -8,6 +8,7 @@ use App\Enums\CommandStatus;
 use App\Events\CommandUpdated;
 use App\Models\Concerns\Auditable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -271,6 +272,14 @@ final class DeviceCommand extends Model
         $this->syncOriginal();
 
         return true;
+    }
+
+    /**
+     * Not finished yet: pending, sent or running.
+     */
+    public function scopeInFlight(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', collect(CommandStatus::cases())->filter->isTerminal()->all());
     }
 
     public function scopePending($query)

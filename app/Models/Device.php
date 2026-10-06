@@ -232,7 +232,7 @@ final class Device extends Model
      */
     public function inFlightCommands(): HasMany
     {
-        return $this->hasMany(DeviceCommand::class)->whereNotIn('status', collect(CommandStatus::cases())->filter->isTerminal()->all());
+        return $this->hasMany(DeviceCommand::class)->inFlight();
     }
 
     public function group(): BelongsTo

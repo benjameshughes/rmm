@@ -95,6 +95,7 @@ final class Apps extends Component
             'hasSoftwareInventory' => $hasSoftwareInventory,
             'lastChecked' => $this->device->software_inventoried_at === null ? null : 'Last checked '.$this->device->software_inventoried_at->diffForHumans().' by winget.',
             'software' => $hasSoftwareInventory ? $software->forDevice($this->device, $this->softwareSearch)->paginate(config('software.device_per_page')) : null,
+            'packageCommands' => $hasSoftwareInventory ? $software->packageCommandsOnDevice($this->device) : collect(),
             'inventoryCommand' => $hasSoftwareInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('software.inventory_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::Apps->pageTitle($this->device));
     }

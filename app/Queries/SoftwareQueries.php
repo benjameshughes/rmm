@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\DeviceStatus;
+use App\Enums\PackageAction;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\DeviceSoftware;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -94,6 +96,38 @@ final class SoftwareQueries
             ->whereNotNull('software_inventoried_at')
             ->whereDoesntHave('software', fn (Builder $softwareQuery): Builder => $softwareQuery->where('package_id', $packageId))
             ->orderBy('hostname');
+    }
+
+    /**
+     * The install, upgrade or uninstall still in flight for each of a device's packages.
+     *
+     * @return Collection<string, DeviceCommand> keyed by package ID
+     */
+    public function packageCommandsOnDevice(Device $device): Collection
+    {
+        return $this->inFlightPackageCommands()->where('device_id', $device->id)->get()
+            ->keyBy(fn (DeviceCommand $command): string => (string) ($command->parameters['PackageId'] ?? ''));
+    }
+
+    /**
+     * The install, upgrade or uninstall of one package still in flight on each device.
+     *
+     * @return Collection<int, DeviceCommand> keyed by device ID
+     */
+    public function packageCommandsFor(string $packageId): Collection
+    {
+        return $this->inFlightPackageCommands()->get()
+            ->filter(fn (DeviceCommand $command): bool => ($command->parameters['PackageId'] ?? null) === $packageId)
+            ->keyBy('device_id');
+    }
+
+    /** @return Builder<DeviceCommand> Oldest first, so keying keeps the newest */
+    private function inFlightPackageCommands(): Builder
+    {
+        return DeviceCommand::query()
+            ->inFlight()
+            ->whereRelation('script', fn (Builder $scriptQuery): Builder => $scriptQuery->whereIn('slug', collect(PackageAction::cases())->map->value))
+            ->oldest('id');
     }
 
     private function onFleet(Builder $query): Builder
