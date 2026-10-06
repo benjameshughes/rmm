@@ -64,6 +64,31 @@
                     <flux:button size="sm" wire:click="$set('showBulkScriptModal', true)" icon="code-bracket">
                         Run Script
                     </flux:button>
+                    <flux:dropdown>
+                        <flux:button size="sm" icon="folder" icon:trailing="chevron-down" data-bulk-group>Group</flux:button>
+                        <flux:menu>
+                            @foreach($groups as $group)
+                                <flux:menu.item wire:click="bulkAssignGroup({{ $group->id }})" wire:key="bulk-group-{{ $group->id }}">Move to {{ $group->name }}</flux:menu.item>
+                            @endforeach
+                            <flux:menu.separator />
+                            <flux:menu.item wire:click="bulkAssignGroup(null)" icon="x-mark">Remove from group</flux:menu.item>
+                        </flux:menu>
+                    </flux:dropdown>
+                    <flux:dropdown>
+                        <flux:button size="sm" icon="tag" icon:trailing="chevron-down" data-bulk-tags>Tags</flux:button>
+                        <flux:menu>
+                            <flux:menu.submenu heading="Add tag">
+                                @foreach($tags as $tag)
+                                    <flux:menu.item wire:click="bulkAddTag({{ $tag->id }})" wire:key="bulk-add-tag-{{ $tag->id }}">{{ $tag->name }}</flux:menu.item>
+                                @endforeach
+                            </flux:menu.submenu>
+                            <flux:menu.submenu heading="Remove tag">
+                                @foreach($tags as $tag)
+                                    <flux:menu.item wire:click="bulkRemoveTag({{ $tag->id }})" wire:key="bulk-remove-tag-{{ $tag->id }}">{{ $tag->name }}</flux:menu.item>
+                                @endforeach
+                            </flux:menu.submenu>
+                        </flux:menu>
+                    </flux:dropdown>
                     <flux:button size="sm" variant="ghost" wire:click="clearSelection">
                         Clear
                     </flux:button>

@@ -108,3 +108,48 @@ it('picks tags with a multiple pillbox so it sends a list of tags, shown by name
         ->assertSee('endor')
         ->tap(fn ($component) => expect($component->html())->toMatch('/<ui-pillbox[^>]*\\smultiple[\\s>=]/'));
 });
+
+describe('Bulk organising from the devices list', function (): void {
+    beforeEach(function (): void {
+        $this->user = User::factory()->create();
+        $this->pc = Device::factory()->active()->windows()->create();
+        $this->server = Device::factory()->active()->monitorOnly()->create();
+        $this->untouched = Device::factory()->active()->create();
+    });
+
+    it('moves every selected device, monitor-only included, into a group and back out', function (): void {
+        $group = DeviceGroup::factory()->create(['name' => 'Warehouse']);
+
+        $list = Livewire::actingAs($this->user)->test(Index::class)
+            ->set('selectedDevices', [$this->pc->id, $this->server->id])
+            ->assertSeeHtml('data-bulk-group')
+            ->call('bulkAssignGroup', $group->id);
+
+        expect($this->pc->fresh()->device_group_id)->toBe($group->id)
+            ->and($this->server->fresh()->device_group_id)->toBe($group->id)
+            ->and($this->untouched->fresh()->device_group_id)->toBeNull();
+
+        $list->call('bulkAssignGroup', null);
+
+        expect($this->pc->fresh()->device_group_id)->toBeNull();
+    });
+
+    it('adds a tag to every selected device without dropping their other tags, then removes it', function (): void {
+        $keep = Tag::factory()->create(['name' => 'endor']);
+        $added = Tag::factory()->create(['name' => 'office']);
+        $this->pc->tags()->attach($keep);
+
+        $list = Livewire::actingAs($this->user)->test(Index::class)
+            ->set('selectedDevices', [$this->pc->id, $this->server->id])
+            ->call('bulkAddTag', $added->id);
+
+        expect($this->pc->fresh()->tags->pluck('name')->sort()->values()->all())->toBe(['endor', 'office'])
+            ->and($this->server->fresh()->tags->pluck('name')->all())->toBe(['office'])
+            ->and($this->untouched->fresh()->tags)->toBeEmpty();
+
+        $list->call('bulkRemoveTag', $added->id);
+
+        expect($this->pc->fresh()->tags->pluck('name')->all())->toBe(['endor'])
+            ->and($this->server->fresh()->tags)->toBeEmpty();
+    });
+});

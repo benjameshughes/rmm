@@ -11,6 +11,7 @@ use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceListFilter;
 use App\Enums\DeviceListSort;
 use App\Livewire\Concerns\EntersScriptParameterValues;
+use App\Livewire\Concerns\OrganisesSelectedDevices;
 use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
 use App\Models\DeviceGroup;
@@ -35,6 +36,7 @@ use Livewire\WithPagination;
 final class Index extends Component
 {
     use EntersScriptParameterValues;
+    use OrganisesSelectedDevices;
     use WakesDevices;
     use WithPagination;
 
