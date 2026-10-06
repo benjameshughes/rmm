@@ -77,8 +77,8 @@ it('names each protected app only on the protected list', function (string $app)
     'Microsoft.ScreenSketch',
 ]);
 
-it('leaves the apps that still need a decision installed', function (string $app): void {
-    expect(debloatScript())->not->toContain($app);
+it('removes the apps Ben decided to bin', function (string $app): void {
+    expect(debloatScript())->toContain("'{$app}'");
 })->with([
     'Microsoft.MicrosoftStickyNotes',
     'MicrosoftCorporationII.QuickAssist',
@@ -90,6 +90,29 @@ it('leaves the apps that still need a decision installed', function (string $app
     'DellInc.DellSupportAssistforPCs',
 ]);
 
+it('removes desktop SupportAssist by MSI but never Dell Command Update', function (): void {
+    expect(debloatScript())
+        ->toContain("\$desktopApps = @('Dell SupportAssist*')")
+        ->toContain('/x $($_.PSChildName) /qn /norestart')
+        ->not->toContain('Command | Update*');
+});
+
+it('blocks OneDrive sync by policy rather than uninstalling it', function (): void {
+    expect(debloatScript())
+        ->toContain('DisableFileSyncNGSC = 1')
+        ->not->toContain('OneDriveSetup.exe');
+});
+
+it('switches off Bing in Start search, the Copilot button and setup nags for every profile', function (string $setting): void {
+    expect(debloatScript())->toContain($setting);
+})->with([
+    'BingSearchEnabled = 0',
+    'DisableSearchBoxSuggestions = 1',
+    'ShowCopilotButton = 0',
+    'ScoobeSystemSettingEnabled = 0',
+    'Windows.SystemToast.Suggested',
+]);
+
 it('never touches Defender, the Store or wildcard app names', function (string $forbidden): void {
     expect(debloatScript())->not->toContain($forbidden);
 })->with([
@@ -99,7 +122,6 @@ it('never touches Defender, the Store or wildcard app names', function (string $
     '*Xbox*',
     '*Copilot*',
     'DiagTrack',
-    'OneDrive',
 ]);
 
 it('keeps the script plain ASCII for Windows PowerShell 5.1', function (): void {

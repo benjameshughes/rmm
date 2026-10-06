@@ -1,8 +1,9 @@
-# Removes preinstalled consumer apps for every user and stops Windows
-# provisioning them for new users, sets the machine policies that switch off
+# Removes preinstalled consumer apps (and Dell SupportAssist) for every user and
+# stops Windows provisioning them for new users, blocks OneDrive sync, sets the machine policies that switch off
 # widgets, search highlights, AI features, feedback nags and Edge promotions,
 # and turns off the per-user suggestion and silent app install switches in
-# every profile plus the Default profile new users are copied from.
+# every profile plus the Default profile new users are copied from, including
+# Bing results in Start search and the Copilot taskbar button.
 #
 # Safe to run daily: only what differs is changed, so a clean run changes
 # nothing. Names are matched exactly, never by wildcard, and anything on the
@@ -32,8 +33,15 @@ $apps = @(
     'Microsoft.Office.OneNote', 'SpotifyAB.SpotifyMusic', 'BytedancePte.Ltd.TikTok', 'king.com.CandyCrushSaga',
     'king.com.CandyCrushSodaSaga', 'king.com.BubbleWitch3Saga', 'Disney.37853FC22B2CE', '4DF9E0F8.Netflix',
     'AmazonVideo.PrimeVideo', 'Amazon.com.Amazon', 'Facebook.Instagram', 'FACEBOOK.FACEBOOK', 'LinkedInforWindows',
-    'Duolingo-LearnLanguagesforFree', 'AdobeSystemsIncorporated.AdobePhotoshopExpress', 'DellInc.DellMobileConnect'
+    'Duolingo-LearnLanguagesforFree', 'AdobeSystemsIncorporated.AdobePhotoshopExpress', 'DellInc.DellMobileConnect',
+    'Microsoft.MicrosoftStickyNotes', 'MicrosoftCorporationII.QuickAssist', 'Microsoft.Todos', 'Microsoft.MicrosoftOfficeHub',
+    'Microsoft.OutlookForWindows', 'Microsoft.YourPhone', 'MicrosoftWindows.CrossDevice',
+    'DellInc.DellSupportAssistforPCs', 'DellInc.DellDigitalDelivery'
 )
+
+# Dell SupportAssist also installs as desktop MSIs (the app, its remediation
+# service and the OS recovery plugin). Dell Command | Update is left alone.
+$desktopApps = @('Dell SupportAssist*')
 
 $machineSettings = [ordered]@{
     'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' = @{ AllowNewsAndInterests = 0 }
@@ -53,6 +61,7 @@ $machineSettings = [ordered]@{
         UserFeedbackAllowed = 0; PersonalizationReportingEnabled = 0; HubsSidebarEnabled = 0; NewTabPageBingChatEnabled = 0
     }
     'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' = @{ CreateDesktopShortcutDefault = 0 }
+    'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' = @{ DisableFileSyncNGSC = 1 }
 }
 
 $userSettings = [ordered]@{
@@ -63,7 +72,13 @@ $userSettings = [ordered]@{
         'SubscribedContent-338389Enabled' = 0; 'SubscribedContent-338393Enabled' = 0; 'SubscribedContent-353694Enabled' = 0
         'SubscribedContent-353696Enabled' = 0; 'SubscribedContent-353698Enabled' = 0
     }
-    'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' = @{ Start_IrisRecommendations = 0; ShowSyncProviderNotifications = 0 }
+    'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' = @{
+        Start_IrisRecommendations = 0; ShowSyncProviderNotifications = 0; Start_AccountNotifications = 0; ShowCopilotButton = 0
+    }
+    'Software\Microsoft\Windows\CurrentVersion\Search' = @{ BingSearchEnabled = 0 }
+    'Software\Policies\Microsoft\Windows\Explorer' = @{ DisableSearchBoxSuggestions = 1 }
+    'Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement' = @{ ScoobeSystemSettingEnabled = 0 }
+    'Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.Suggested' = @{ Enabled = 0 }
 }
 
 $tasks = @(
@@ -149,6 +164,22 @@ foreach ($name in $removable) {
         $removed.Add("app $($_.Name)")
     }
 }
+
+# Win32_Product is avoided on purpose: querying it makes Windows Installer
+# consistency-check (and sometimes repair) every MSI on the machine.
+Get-ItemProperty -Path @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    ) -ErrorAction SilentlyContinue |
+    Where-Object { $displayName = $_.DisplayName; $_.PSChildName -match '^\{[0-9A-Fa-f-]+\}$' -and @($desktopApps | Where-Object { $displayName -like $_ }).Count -gt 0 } |
+    ForEach-Object {
+        $uninstall = Start-Process 'msiexec.exe' -ArgumentList "/x $($_.PSChildName) /qn /norestart" -Wait -PassThru
+        if (@(0, 1605, 3010) -contains $uninstall.ExitCode) {
+            $removed.Add("desktop app $($_.DisplayName)")
+        } else {
+            $failed.Add("$($_.DisplayName) uninstall exited $($uninstall.ExitCode)")
+        }
+    }
 
 # Removing an app for all users usually deprovisions it too, so the provisioned
 # list is read after the removals: only what is genuinely left is touched.
