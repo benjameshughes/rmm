@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\DTOs\InFlightCommands;
 use App\Enums\ApiKeyState;
 use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
@@ -230,6 +231,14 @@ final class Device extends Model
     /**
      * Commands queued, handed to the agent or running: everything not yet finished.
      */
+    /**
+     * What the device is running or about to run, from the loaded in-flight commands.
+     */
+    public function inFlight(): InFlightCommands
+    {
+        return InFlightCommands::from($this->inFlightCommands, $this);
+    }
+
     public function inFlightCommands(): HasMany
     {
         return $this->hasMany(DeviceCommand::class)->inFlight();

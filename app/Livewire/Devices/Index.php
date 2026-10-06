@@ -95,6 +95,7 @@ final class Index extends Component
         }
     }
 
+    #[On('echo-private:devices,CommandUpdated')]
     #[On('echo-private:devices,DeviceEnrolled')]
     #[On('echo-private:devices,LatestAgentVersionChanged')]
     #[On('echo-private:devices,AlertChanged')]

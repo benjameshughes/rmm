@@ -276,6 +276,20 @@ final class DeviceCommand extends Model
     }
 
     /**
+     * One short line for a list: "Queued: Restart", "Running Restart", "Uninstalling...".
+     */
+    public function activityLabel(): string
+    {
+        $packageAction = $this->packageAction();
+
+        return match (true) {
+            $this->isPending() => 'Queued: '.($packageAction?->label() ?? $this->displayName()),
+            $packageAction !== null => $packageAction->inProgressLabel().'...',
+            default => 'Running '.$this->displayName(),
+        };
+    }
+
+    /**
      * The software change this command makes, when it is one.
      */
     public function packageAction(): ?PackageAction

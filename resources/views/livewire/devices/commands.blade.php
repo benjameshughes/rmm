@@ -33,5 +33,4 @@
         </flux:table>
     </flux:card>
 
-    <livewire:commands.detail />
 </x-device.shell>

@@ -56,5 +56,4 @@
         </div>
     </div>
 
-    <livewire:commands.detail />
 </x-device.shell>

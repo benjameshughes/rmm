@@ -270,3 +270,62 @@ it('keeps the query count flat as the fleet grows, whichever column is sorted', 
 
     expect($queriesFor())->toBe($few);
 })->with(['hostname', 'status', 'disk']);
+
+describe('what each device is doing', function (): void {
+    it('shows each row\'s queued or running command, whoever queued it, and clears it live', function (): void {
+        App\Models\Script::factory()->create(['name' => 'Flush DNS']);
+        $device = Device::factory()->active()->windows()->create(['last_seen' => now()]);
+        $idle = Device::factory()->active()->windows()->create(['last_seen' => now()]);
+        $command = App\Models\DeviceCommand::factory()->create([
+            'device_id' => $device->id,
+            'script_id' => App\Models\Script::query()->where('name', 'Flush DNS')->value('id'),
+            'status' => App\Enums\CommandStatus::Pending,
+            'queued_by' => User::factory()->create()->id,
+        ]);
+
+        $list = Livewire::actingAs(User::factory()->create())->test(Index::class)
+            ->assertSee('Queued: Flush DNS')
+            ->assertSeeHtml("commandId: {$command->id}");
+
+        $command->markAsSent();
+        $command->markAsRunning();
+        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id])
+            ->assertSee('Running Flush DNS');
+
+        $command->markAsCompleted('done', 0);
+        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id])
+            ->assertDontSeeHtml('data-device-activity');
+
+        expect($idle->inFlight()->current())->toBeNull();
+    });
+
+    it('keeps the list query count flat however many devices have commands in flight', function (): void {
+        $user = User::factory()->create();
+        $queriesFor = function () use ($user): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            Livewire::actingAs($user)->test(Index::class);
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+
+        Device::factory()->active()->windows()->count(2)->create()
+            ->each(fn (Device $device) => App\Models\DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => App\Enums\CommandStatus::Pending]));
+        $few = $queriesFor();
+
+        Device::factory()->active()->windows()->count(6)->create()
+            ->each(fn (Device $device) => App\Models\DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => App\Enums\CommandStatus::Pending]));
+
+        expect($queriesFor())->toBe($few);
+    });
+});
+
+it('mounts the command detail flyout on every page, once', function (string $routeName): void {
+    $device = Device::factory()->active()->windows()->create();
+    $url = in_array($routeName, ['devices.index', 'software.index'], true) ? route($routeName) : route($routeName, $device);
+
+    $html = $this->actingAs(User::factory()->create())->get($url)->assertSuccessful()->getContent();
+
+    expect(substr_count($html, '&quot;name&quot;:&quot;commands.detail&quot;'))->toBe(1);
+})->with(['devices.index', 'software.index', 'devices.apps', 'devices.system', 'devices.show']);

@@ -58,6 +58,22 @@ final class InFlightCommands
         return $this->pending->first();
     }
 
+    /**
+     * What the device is doing now, or failing that what it does next.
+     */
+    public function current(): ?DeviceCommand
+    {
+        return $this->running ?? $this->nextPending();
+    }
+
+    /**
+     * How many more are in flight behind the current one.
+     */
+    public function behindCurrent(): int
+    {
+        return max(0, $this->pending->count() + ($this->running === null ? 0 : 1) - 1);
+    }
+
     public function queuedForHumans(): string
     {
         return $this->pending->count().' queued';

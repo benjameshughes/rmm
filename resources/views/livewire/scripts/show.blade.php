@@ -148,7 +148,6 @@
         </flux:card>
     @endif
 
-    <livewire:commands.detail />
 
     <div>
         <flux:button as="a" variant="ghost" :href="route('scripts.index')" wire:navigate>

@@ -8,9 +8,12 @@
         <x-device.list.identity :device="$device" :show-group="false" />
     </flux:table.cell>
     <flux:table.cell>
-        <div class="flex flex-wrap items-center gap-1">
-            <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
-            <x-device.monitor-only-badge :device="$device" />
+        <div class="flex flex-col items-start gap-1">
+            <div class="flex flex-wrap items-center gap-1">
+                <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
+                <x-device.monitor-only-badge :device="$device" />
+            </div>
+            <x-device.list.activity :in-flight="$device->inFlight()" />
         </div>
     </flux:table.cell>
     <flux:table.cell class="hidden xl:table-cell">

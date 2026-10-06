@@ -22,7 +22,7 @@ final class DeviceListQueries
      */
     public function rows(): Builder
     {
-        return Device::query()->with(['latestMetric.diskMetrics', 'group', 'tags']);
+        return Device::query()->with(['latestMetric.diskMetrics', 'group', 'tags', 'inFlightCommands.script']);
     }
 
     /**

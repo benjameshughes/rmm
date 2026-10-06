@@ -150,6 +150,7 @@
         {{ $slot }}
 
         <x-modal.confirm />
+        <livewire:commands.detail />
 
         <flux:toast />
 
