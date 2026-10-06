@@ -22,6 +22,15 @@ enum PackageAction: string
         };
     }
 
+    public function inProgressLabel(): string
+    {
+        return match ($this) {
+            self::Install => 'Installing',
+            self::Upgrade => 'Upgrading',
+            self::Uninstall => 'Uninstalling',
+        };
+    }
+
     public function queuedHeading(): string
     {
         return match ($this) {

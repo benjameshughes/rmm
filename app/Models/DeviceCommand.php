@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CommandStatus;
+use App\Enums\PackageAction;
 use App\Events\CommandUpdated;
 use App\Models\Concerns\Auditable;
 use Carbon\CarbonInterface;
@@ -272,6 +273,14 @@ final class DeviceCommand extends Model
         $this->syncOriginal();
 
         return true;
+    }
+
+    /**
+     * The software change this command makes, when it is one.
+     */
+    public function packageAction(): ?PackageAction
+    {
+        return PackageAction::tryFrom((string) $this->script?->slug);
     }
 
     /**

@@ -125,6 +125,7 @@ final class SoftwareQueries
     private function inFlightPackageCommands(): Builder
     {
         return DeviceCommand::query()
+            ->with('script')
             ->inFlight()
             ->whereRelation('script', fn (Builder $scriptQuery): Builder => $scriptQuery->whereIn('slug', collect(PackageAction::cases())->map->value))
             ->oldest('id');

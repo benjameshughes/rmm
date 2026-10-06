@@ -254,11 +254,11 @@ describe('package command status', function (): void {
             ->call('upgrade', $device->software()->sole()->id);
 
         $command = DeviceCommand::sole();
-        $page->assertSee('Queued...')->assertSeeHtml("commandId: {$command->id}");
+        $page->assertSee('Queued: Upgrade')->assertSeeHtml("commandId: {$command->id}");
 
         $command->markAsSent();
         $command->markAsRunning();
-        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertSee('Running...');
+        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertSee('Upgrading...');
 
         $command->markAsCompleted('OK', 0);
         $page->dispatch('echo-private:devices,CommandUpdated', [])->assertDontSeeHtml('data-run-button-busy');
@@ -269,7 +269,7 @@ describe('package command status', function (): void {
 
         Livewire::actingAs($this->user)->test(App\Livewire\Devices\Apps::class, ['device' => $device])
             ->call('uninstallPackage', $device->software()->where('package_id', '7zip.7zip')->sole()->id)
-            ->assertSee('Queued...')
+            ->assertSee('Queued: Uninstall')
             ->assertSee('Uninstall');
     });
 });
