@@ -55,17 +55,17 @@ it('renders the shared confirm modal once on authenticated pages', function (): 
         ->and($html)->toContain('x-on:confirm-action.window');
 });
 
-it('asks before restarting or powering off the selected devices, and still runs them', function (): void {
+it('asks before restarting or powering off the ticked devices, counted in the browser, and still runs them', function (): void {
     $devices = Device::factory()->active()->count(2)->create();
 
     $page = Livewire::actingAs($this->user)->test(Index::class)
         ->set('selectedDevices', $devices->pluck('id')->map(fn (int $id): string => (string) $id)->all());
 
     expect(confirmTrigger($page->html(), 'bulkRestart()'))
-        ->toContain("message: 'Restart 2 devices?'")
+        ->toContain("message: 'Restart ' + devices + '?'")
         ->not->toContain('danger: true')
         ->and(confirmTrigger($page->html(), 'bulkPowerOff()'))
-        ->toContain("message: 'Power off 2 devices?'")
+        ->toContain("message: 'Power off ' + devices + '?'")
         ->toContain('danger: true');
 
     $page->call('bulkRestart')->assertDispatched('command-queued');

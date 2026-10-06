@@ -1,7 +1,7 @@
 @use('App\Enums\DeviceListFilter')
 @use('App\Enums\DeviceListSort')
 
-<div class="space-y-6">
+<div class="space-y-6" x-data x-bind:class="{ 'pb-20': $wire.selectedDevices.length > 0 }">
     <div class="flex items-center justify-between">
         <flux:heading size="xl">Devices</flux:heading>
         <flux:button as="a" :href="route('devices.pending')" wire:navigate>
@@ -49,53 +49,6 @@
             <flux:button variant="ghost" size="sm" icon="x-mark" wire:click="clearFilters">Clear filters</flux:button>
         @endif
     </div>
-
-    @if(count($selectedDevices) > 0)
-        <flux:card class="!bg-blue-50 dark:!bg-blue-900/20 !border-blue-200 dark:!border-blue-800">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <flux:text class="font-medium">{{ count($selectedDevices) }} {{ Str::plural('device', count($selectedDevices)) }} selected</flux:text>
-                <div class="flex flex-wrap items-center gap-2">
-                    <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Restart devices', message: {{ Js::from('Restart '.count($selectedDevices).' devices?') }}, confirm: 'Restart', action: () => $wire.bulkRestart() })" icon="arrow-path">
-                        Restart All
-                    </flux:button>
-                    <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Power off devices', message: {{ Js::from('Power off '.count($selectedDevices).' devices?') }}, confirm: 'Power off', danger: true, action: () => $wire.bulkPowerOff() })" icon="power" variant="danger">
-                        Power Off All
-                    </flux:button>
-                    <flux:button size="sm" wire:click="$set('showBulkScriptModal', true)" icon="code-bracket">
-                        Run Script
-                    </flux:button>
-                    <flux:dropdown>
-                        <flux:button size="sm" icon="folder" icon:trailing="chevron-down" data-bulk-group>Group</flux:button>
-                        <flux:menu>
-                            @foreach($groups as $group)
-                                <flux:menu.item wire:click="bulkAssignGroup({{ $group->id }})" wire:key="bulk-group-{{ $group->id }}">Move to {{ $group->name }}</flux:menu.item>
-                            @endforeach
-                            <flux:menu.separator />
-                            <flux:menu.item wire:click="bulkAssignGroup(null)" icon="x-mark">Remove from group</flux:menu.item>
-                        </flux:menu>
-                    </flux:dropdown>
-                    <flux:dropdown>
-                        <flux:button size="sm" icon="tag" icon:trailing="chevron-down" data-bulk-tags>Tags</flux:button>
-                        <flux:menu>
-                            <flux:menu.submenu heading="Add tag">
-                                @foreach($tags as $tag)
-                                    <flux:menu.item wire:click="bulkAddTag({{ $tag->id }})" wire:key="bulk-add-tag-{{ $tag->id }}">{{ $tag->name }}</flux:menu.item>
-                                @endforeach
-                            </flux:menu.submenu>
-                            <flux:menu.submenu heading="Remove tag">
-                                @foreach($tags as $tag)
-                                    <flux:menu.item wire:click="bulkRemoveTag({{ $tag->id }})" wire:key="bulk-remove-tag-{{ $tag->id }}">{{ $tag->name }}</flux:menu.item>
-                                @endforeach
-                            </flux:menu.submenu>
-                        </flux:menu>
-                    </flux:dropdown>
-                    <flux:button size="sm" variant="ghost" wire:click="clearSelection">
-                        Clear
-                    </flux:button>
-                </div>
-            </div>
-        </flux:card>
-    @endif
 
     <flux:card class="p-0! sm:p-0! overflow-x-auto">
         @if($devices->isEmpty())
@@ -157,4 +110,6 @@
             </div>
         </div>
     </flux:modal>
+
+    <x-device.list.bulk-bar :groups="$groups" :tags="$tags" />
 </div>

@@ -127,3 +127,39 @@ it('requires authentication for bulk actions', function (): void {
 
     expect($device->commands()->count())->toBe(0);
 });
+
+it('keeps ticking devices in the browser until an action runs', function (): void {
+    $device = Device::factory()->active()->create();
+
+    Livewire::actingAs(User::factory()->create())
+        ->test(Index::class)
+        ->assertSeeHtml('wire:model="selectedDevices" value="'.$device->id.'"')
+        ->assertDontSeeHtml('wire:model.live="selectedDevices"');
+});
+
+it('renders the floating bulk bar driven by the ticked count, without a server-rendered card', function (): void {
+    Device::factory()->active()->create();
+
+    Livewire::actingAs(User::factory()->create())
+        ->test(Index::class)
+        ->assertSeeHtml('data-bulk-bar')
+        ->assertSeeHtml('x-show="count > 0"')
+        ->assertSeeHtml('$wire.selectedDevices.length')
+        ->assertSeeHtml('data-bulk-group')
+        ->assertSeeHtml('data-bulk-tags')
+        ->assertDontSeeHtml('!bg-blue-50');
+});
+
+it('selects every matching device across pages from the header checkbox', function (): void {
+    config(['devices.list.per_page' => 1]);
+    $devices = Device::factory()->active()->count(2)->create();
+
+    Livewire::actingAs(User::factory()->create())
+        ->test(Index::class)
+        ->set('selectAll', true)
+        ->assertSet('selectedDevices', fn (array $selected): bool => collect($selected)->sort()->values()->all() === $devices->pluck('id')->map(fn (int $id): string => (string) $id)->sort()->values()->all())
+        ->call('nextPage')
+        ->assertCount('selectedDevices', 2)
+        ->set('selectAll', false)
+        ->assertSet('selectedDevices', []);
+});

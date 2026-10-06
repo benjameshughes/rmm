@@ -2,7 +2,7 @@
 
 <flux:table.row {{ $attributes }}>
     <flux:table.cell>
-        <flux:checkbox wire:model.live="selectedDevices" value="{{ $device->id }}" />
+        <flux:checkbox wire:model="selectedDevices" value="{{ $device->id }}" />
     </flux:table.cell>
     <flux:table.cell>
         <x-device.list.identity :device="$device" :show-group="false" />
