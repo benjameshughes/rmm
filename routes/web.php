@@ -16,6 +16,7 @@ use App\Livewire\Devices\Metrics as DeviceMetrics;
 use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending as DevicesPending;
 use App\Livewire\Devices\System as DeviceSystem;
+use App\Livewire\Hardware\Index as HardwareIndex;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Create as ScriptsCreate;
 use App\Livewire\Scripts\Edit as ScriptsEdit;
@@ -74,6 +75,9 @@ Route::middleware(['auth'])->group(function () {
     // Software
     Route::get('software', SoftwareIndex::class)->name('software.index');
     Route::get('software/package', SoftwareShow::class)->name('software.show');
+
+    // Hardware
+    Route::get('hardware', HardwareIndex::class)->name('hardware.index');
 
     // Scripts
     Route::get('scripts', ScriptsIndex::class)->name('scripts.index');

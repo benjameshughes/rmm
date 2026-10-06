@@ -1,7 +1,7 @@
-@props(['device', 'showGroup' => true])
+@props(['device', 'showGroup' => true, 'href' => null])
 
 <div {{ $attributes->class('min-w-0 space-y-1') }}>
-    <a href="{{ route('devices.show', $device) }}" wire:navigate class="block truncate font-semibold text-zinc-800 hover:underline dark:text-white">{{ $device->hostname }}</a>
+    <a href="{{ $href ?? route('devices.show', $device) }}" wire:navigate class="block truncate font-semibold text-zinc-800 hover:underline dark:text-white">{{ $device->hostname }}</a>
     <flux:text size="xs" class="truncate">
         {{ $device->operatingSystem() ?? 'Unknown OS' }}
         @if($device->last_ip)

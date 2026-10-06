@@ -27,6 +27,7 @@ final class SystemInventorySynced implements ShouldBroadcast, ShouldDispatchAfte
     public function broadcastOn(): array
     {
         return [
+            new PrivateChannel('devices'),
             new PrivateChannel("devices.{$this->deviceId}"),
         ];
     }

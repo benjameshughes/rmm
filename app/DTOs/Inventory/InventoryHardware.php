@@ -18,6 +18,42 @@ final class InventoryHardware
         private readonly array $data,
     ) {}
 
+    public function processorName(): ?string
+    {
+        return $this->textAt('cpu.name');
+    }
+
+    /**
+     * The physical disks' combined size and media, such as "477 GB SSD".
+     */
+    public function diskSummary(): ?string
+    {
+        $disks = $this->rows('disks');
+        $sizes = $disks->map(fn (array $disk): mixed => $disk['size_gb'] ?? null)->filter(fn (mixed $size): bool => is_numeric($size));
+        $mediaTypes = $disks
+            ->map(fn (array $disk): ?string => $this->text($disk['media_type'] ?? null))
+            ->filter(fn (?string $mediaType): bool => $mediaType !== null && $mediaType !== 'Unspecified')
+            ->unique()
+            ->implode('/');
+
+        return $sizes->isEmpty() ? null : $this->joined(' ', number_format((float) $sizes->sum()).' GB', $mediaTypes === '' ? null : $mediaTypes);
+    }
+
+    /**
+     * How many monitors and the models that report a name, such as "2 · DELL P2422H".
+     */
+    public function monitorSummary(): ?string
+    {
+        $monitors = $this->rows('monitors');
+        $names = $monitors
+            ->map(fn (array $monitor): ?string => $this->text($monitor['name'] ?? null))
+            ->filter()
+            ->unique()
+            ->implode(', ');
+
+        return $monitors->isEmpty() ? null : $this->joined(' · ', (string) $monitors->count(), $names === '' ? null : $names);
+    }
+
     public function memorySummary(): ?string
     {
         $slotsTotal = $this->textAt('memory.slots_total');
