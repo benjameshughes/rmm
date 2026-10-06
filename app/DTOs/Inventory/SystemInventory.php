@@ -117,7 +117,7 @@ final class SystemInventory
     {
         $lastBoot = $this->carbon(data_get($this->data, 'windows.last_boot'));
 
-        return $lastBoot === null ? null : $lastBoot->format('j M Y, H:i').' · up '.$lastBoot->diffForHumans(syntax: true, parts: 2);
+        return $lastBoot === null ? null : $lastBoot->inDisplayTimezone()->format('j M Y, H:i').' · up '.$lastBoot->diffForHumans(syntax: true, parts: 2);
     }
 
     /**

@@ -49,7 +49,7 @@ it('labels and colours a device from its power state', function (array $attribut
     expect($device->statusLabel())->toBe($label)
         ->and($device->statusColor())->toBe($color);
 })->with([
-    'powering off' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->setTime(17, 30)], 'Powering off since 17:30', 'amber'],
+    'powering off' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now('Europe/London')->setTime(17, 30)->utc()], 'Off since 17:30', 'amber'],
     'powering on' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], 'Powering on', 'sky'],
     'powered on then went quiet' => [fn (): array => ['last_seen' => now()->subHour(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subHour()], 'Offline', 'red'],
 ]);
@@ -68,7 +68,7 @@ it('shows the power state badges on the device list', function (): void {
     Device::factory()->active()->poweringOn()->create();
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertSee('Powering off since')
+        ->assertSee('Off since')
         ->assertSee('Powering on');
 });
 
@@ -76,7 +76,7 @@ it('shows the power state badge on the device page and flips it when the device 
     $device = Device::factory()->active()->poweringOff()->create(['last_seen' => now()]);
 
     $page = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
-        ->assertSee('Powering off since');
+        ->assertSee('Off since');
 
     app(RecordDevicePowerEvent::class)($device->fresh(), DevicePowerState::PoweringOn, PowerEventReason::Resume);
 
@@ -189,7 +189,7 @@ describe('a powering off notice that never ends in a wake', function (): void {
         ]);
 
         expect($device->isPoweringOff)->toBeTrue()
-            ->and($device->statusLabel())->toStartWith('Powering off since');
+            ->and($device->statusLabel())->toStartWith('Off since');
     });
 
     it('is settled by the every-minute job and broadcast', function (): void {
@@ -250,4 +250,19 @@ it('agrees between the model and the query on which devices are holding powering
     'within the hold' => [fn (): array => ['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], true],
     'past the hold' => [fn (): array => ['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()->subMinute()], false],
     'powered on with no time' => [['power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => null], false],
+]);
+
+it('says when a device went off in UK time, summer and winter, while storing UTC', function (string $storedUtc, string $label): void {
+    $this->travelTo(Illuminate\Support\Carbon::parse($storedUtc, 'UTC')->addMinutes(5));
+    $device = Device::factory()->active()->create([
+        'last_seen' => Illuminate\Support\Carbon::parse($storedUtc, 'UTC'),
+        'power_state' => DevicePowerState::PoweringOff,
+        'power_state_changed_at' => Illuminate\Support\Carbon::parse($storedUtc, 'UTC'),
+    ]);
+
+    expect($device->statusLabel())->toBe($label)
+        ->and($device->getRawOriginal('power_state_changed_at'))->toBe($storedUtc);
+})->with([
+    'BST, the morning this was found' => ['2026-10-06 09:42:10', 'Off since 10:42'],
+    'GMT, after the clocks go back' => ['2026-12-01 09:42:10', 'Off since 09:42'],
 ]);

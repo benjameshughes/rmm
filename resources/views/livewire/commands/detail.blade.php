@@ -26,11 +26,11 @@
                     </div>
                     <div>
                         <dt class="text-zinc-500 dark:text-zinc-400">Queued</dt>
-                        <dd class="font-medium">{{ $command->queued_at?->format('d M H:i:s') ?? '—' }}</dd>
+                        <dd class="font-medium">{{ $command->queued_at?->inDisplayTimezone()->format('d M H:i:s') ?? '—' }}</dd>
                     </div>
                     <div>
                         <dt class="text-zinc-500 dark:text-zinc-400">Finished</dt>
-                        <dd class="font-medium">{{ $command->completed_at?->format('d M H:i:s') ?? '—' }}</dd>
+                        <dd class="font-medium">{{ $command->completed_at?->inDisplayTimezone()->format('d M H:i:s') ?? '—' }}</dd>
                     </div>
                     <div>
                         <dt class="text-zinc-500 dark:text-zinc-400">Took</dt>

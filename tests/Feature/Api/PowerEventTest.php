@@ -211,7 +211,7 @@ describe('clearing on check-in', function (): void {
         $device->refresh();
         expect($device->power_state)->toBe(DevicePowerState::PoweringOff)
             ->and($device->isOnline)->toBeFalse()
-            ->and($device->statusLabel())->toStartWith('Powering off');
+            ->and($device->statusLabel())->toStartWith('Off since');
     })->with([
         'heartbeat' => ['/api/heartbeat', []],
         'metrics' => ['/api/metrics', ['cpu' => ['usage_percent' => 10]]],

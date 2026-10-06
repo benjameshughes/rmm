@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Device;
+use Carbon\Carbon;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -24,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+
+        Carbon::macro('inDisplayTimezone', fn (): Carbon => $this->copy()->setTimezone(config('app.display_timezone')));
     }
 
     /**

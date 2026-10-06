@@ -102,7 +102,7 @@ it('shows the status prominently with the model label and colour', function (arr
     'online' => [fn (): array => ['last_seen' => now()], 'Online', 'green'],
     'offline' => [fn (): array => ['last_seen' => now()->subHour()], 'Offline', 'red'],
     'powering on' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOn, 'power_state_changed_at' => now()], 'Powering on', 'sky'],
-    'powering off' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()->setTime(17, 30)], 'Powering off since 17:30', 'amber'],
+    'powering off' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now('Europe/London')->setTime(17, 30)->utc()], 'Off since 17:30', 'amber'],
 ]);
 
 it('shows when the device was last seen, its IP, OS and agent', function (): void {

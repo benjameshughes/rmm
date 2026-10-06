@@ -408,7 +408,7 @@ final class Device extends Model
     {
         return match (true) {
             ! $this->status->isApproved() => $this->status->label(),
-            $this->isPoweringOff => DevicePowerState::PoweringOff->label().($this->power_state_changed_at ? ' since '.$this->power_state_changed_at->format('H:i') : ''),
+            $this->isPoweringOff => 'Off'.($this->power_state_changed_at ? ' since '.$this->power_state_changed_at->inDisplayTimezone()->format('H:i') : ''),
             $this->isPoweringOn => DevicePowerState::PoweringOn->label(),
             $this->isOnline => 'Online',
             default => 'Offline',
@@ -440,7 +440,7 @@ final class Device extends Model
 
     public function lastSeenAt(): ?string
     {
-        return $this->last_seen?->format('j M Y, H:i');
+        return $this->last_seen?->inDisplayTimezone()->format('j M Y, H:i');
     }
 
     public function lastSeenForHumans(): string

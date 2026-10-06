@@ -58,7 +58,7 @@ it('agrees between the model and the list filters on who is online, asleep or of
         ->all();
 
     expect($matches)->toBe([$scope])
-        ->and($device->statusLabel())->toStartWith(['online' => 'Online', 'poweringOff' => 'Powering off', 'offline' => 'Offline'][$scope]);
+        ->and($device->statusLabel())->toStartWith(['online' => 'Online', 'poweringOff' => 'Off since', 'offline' => 'Offline'][$scope]);
 })->with([
     'checked in' => [fn (): array => ['last_seen' => now()], 'online'],
     'announced sleep' => [fn (): array => ['last_seen' => now(), 'power_state' => DevicePowerState::PoweringOff, 'power_state_changed_at' => now()], 'poweringOff'],

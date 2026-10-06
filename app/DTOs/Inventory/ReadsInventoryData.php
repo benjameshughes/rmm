@@ -63,12 +63,12 @@ trait ReadsInventoryData
 
     protected function date(mixed $value): ?string
     {
-        return $this->carbon($value)?->format('j M Y');
+        return $this->carbon($value)?->inDisplayTimezone()->format('j M Y');
     }
 
     protected function dateTime(mixed $value): ?string
     {
-        return $this->carbon($value)?->format('j M Y, H:i');
+        return $this->carbon($value)?->inDisplayTimezone()->format('j M Y, H:i');
     }
 
     protected function gigabytes(mixed $value): ?string
