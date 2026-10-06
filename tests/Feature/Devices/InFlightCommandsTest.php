@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
-use App\Livewire\Devices\Overview;
+use App\Livewire\Devices\InFlight;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Script;
@@ -35,14 +35,14 @@ it('stays hidden when nothing is in flight, however recent the history', functio
     commandOn($this->device, CommandStatus::Completed, 'Clear Temp', ['queued_at' => now()->subMinute(), 'completed_at' => now()]);
     commandOn($this->device, CommandStatus::Cancelled, 'Never Ran');
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->assertDontSeeHtml('data-in-flight');
 });
 
 it('shows what is running and when it started, opening its detail on click', function (CommandStatus $status, string $timestamp): void {
     $command = commandOn($this->device, $status, 'Defrag C', [$timestamp => now()->subMinutes(3)]);
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->assertSeeHtml('data-in-flight-running')
         ->assertSee('Running')
         ->assertSee('Defrag C')
@@ -58,7 +58,7 @@ it('counts queued commands and names the next one', function (): void {
     commandOn($this->device, CommandStatus::Pending, 'Second In Line', ['queued_at' => now()]);
     commandOn($this->device, CommandStatus::Pending, 'First In Line', ['queued_at' => now()->subMinute()]);
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->assertSeeHtml('data-in-flight-pending')
         ->assertSee('2 queued')
         ->assertSee('next: First In Line')
@@ -69,7 +69,7 @@ it('says queued work is waiting for the device to wake when it is not online', f
     $this->device->forceFill($attributes)->save();
     commandOn($this->device, CommandStatus::Pending, 'Patch Tuesday');
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device->fresh()])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device->fresh()])
         ->assertSee('1 queued')
         ->assertSee('waiting for the device to wake');
 })->with([
@@ -80,10 +80,10 @@ it('says queued work is waiting for the device to wake when it is not online', f
 it('offers Cancel on the next queued command only to whoever queued it', function (): void {
     $mine = commandOn($this->device, CommandStatus::Pending, 'Mine');
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->assertSeeHtml("cancelCommand({$mine->id})");
 
-    Livewire::actingAs(User::factory()->create())->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs(User::factory()->create())->test(InFlight::class, ['device' => $this->device])
         ->assertSee('next: Mine')
         ->assertDontSeeHtml("cancelCommand({$mine->id})");
 });
@@ -91,7 +91,7 @@ it('offers Cancel on the next queued command only to whoever queued it', functio
 it('cancels the next queued command from the strip and hides it', function (): void {
     $command = commandOn($this->device, CommandStatus::Pending, 'Second Thoughts');
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->call('cancelCommand', $command->id)
         ->assertDontSeeHtml('data-in-flight');
 
@@ -102,12 +102,12 @@ it('never shows the strip for monitor-only devices', function (): void {
     $server = Device::factory()->monitorOnly()->active()->create(['last_seen' => now()]);
     commandOn($server, CommandStatus::Pending, 'Left Over From Before');
 
-    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $server])
+    Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $server])
         ->assertDontSeeHtml('data-in-flight');
 });
 
 it('appears and clears live as commands are queued and finish', function (): void {
-    $overview = Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+    $overview = Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device])
         ->assertDontSeeHtml('data-in-flight');
 
     $command = commandOn($this->device, CommandStatus::Pending, 'Live One');
@@ -127,11 +127,11 @@ it('appears and clears live as commands are queued and finish', function (): voi
         ->assertDontSeeHtml('data-in-flight');
 });
 
-it('keeps the overview query count flat however many commands are in flight', function (): void {
+it('keeps the in-flight strip query count flat however many commands are in flight', function (): void {
     $queriesFor = function (): int {
         DB::flushQueryLog();
         DB::enableQueryLog();
-        Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device]);
+        Livewire::actingAs($this->user)->test(InFlight::class, ['device' => $this->device]);
         DB::disableQueryLog();
 
         return count(DB::getQueryLog());
@@ -146,3 +146,12 @@ it('keeps the overview query count flat however many commands are in flight', fu
 
     expect($many)->toBe($few);
 });
+
+it('shows the strip on every device tab, not just the overview', function (string $routeName): void {
+    commandOn($this->device, CommandStatus::Pending, 'Queued Elsewhere');
+
+    $this->actingAs($this->user)->get(route($routeName, $this->device))
+        ->assertSuccessful()
+        ->assertSeeHtml('data-in-flight')
+        ->assertSee('Queued Elsewhere');
+})->with(['devices.show', 'devices.system', 'devices.commands']);

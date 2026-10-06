@@ -1,6 +1,4 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Overview">
-    <x-device.commands.in-flight :in-flight="$inFlight" />
-
     <x-device.stats.summary :metric="$metric" :disk="$fullestDisk" />
 
     @if($openAlerts->isNotEmpty())

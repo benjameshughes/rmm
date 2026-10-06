@@ -60,7 +60,8 @@ it('explains the missing inventory and runs it on request', function (): void {
         ->assertSee('Run now')
         ->call('refreshInventory')
         ->assertDispatched('command-queued')
-        ->assertSee('Inventory queued');
+        ->assertSee('Queued...')
+        ->assertSeeHtml('data-run-button-busy');
 
     expect($this->device->commands()->sole()->script_id)->toBe(Script::findSystem('winget-inventory')->id);
 });
@@ -69,7 +70,7 @@ it('does not queue a second inventory while one is waiting', function (): void {
     $apps = Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device]);
 
     $apps->call('refreshInventory');
-    $apps->call('refreshInventory')->assertSee('Inventory running...');
+    $apps->call('refreshInventory')->assertSee('Queued...');
 
     expect($this->device->commands()->count())->toBe(1);
 });

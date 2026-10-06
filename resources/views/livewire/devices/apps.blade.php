@@ -7,14 +7,14 @@
                     <flux:heading>No inventory yet</flux:heading>
                     <flux:text class="max-w-md">The software inventory runs winget on the device and lists every installed app with its version and any update waiting.</flux:text>
                     @can('runCommands', $device)
-                        <flux:button size="sm" variant="primary" icon="play" wire:click="refreshInventory" :disabled="$isInventoryRunning">{{ $isInventoryRunning ? 'Inventory queued' : 'Run now' }}</flux:button>
+                        <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" variant="primary">Run now</x-device.commands.run-button>
                     @endcan
                 </div>
             @else
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <flux:input wire:model.live.debounce.300ms="softwareSearch" placeholder="Search apps..." icon="magnifying-glass" class="max-w-sm" />
                     @can('runCommands', $device)
-                        <flux:button size="sm" icon="arrow-path" wire:click="refreshInventory" :disabled="$isInventoryRunning" data-refresh-inventory>{{ $isInventoryRunning ? 'Inventory running...' : 'Refresh inventory' }}</flux:button>
+                        <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" icon="arrow-path" data-refresh-inventory>Refresh inventory</x-device.commands.run-button>
                     @endcan
                 </div>
 

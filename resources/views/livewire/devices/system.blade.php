@@ -10,7 +10,7 @@
                 <flux:heading>No inventory yet</flux:heading>
                 <flux:text class="max-w-md">The system inventory reads the hardware, Windows, security settings, users, updates and third-party extras from the device. It changes nothing.</flux:text>
                 @can('runCommands', $device)
-                    <flux:button size="sm" variant="primary" icon="play" wire:click="refreshInventory" :disabled="$isInventoryRunning">{{ $isInventoryRunning ? 'Inventory queued' : 'Run now' }}</flux:button>
+                    <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" variant="primary">Run now</x-device.commands.run-button>
                 @endcan
             </div>
         </x-dashboard.section>
@@ -18,7 +18,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
             <flux:text size="sm">{{ $collected }}</flux:text>
             @can('runCommands', $device)
-                <flux:button size="sm" icon="arrow-path" wire:click="refreshInventory" :disabled="$isInventoryRunning" data-refresh-inventory>{{ $isInventoryRunning ? 'Inventory running...' : 'Run now' }}</flux:button>
+                <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" icon="arrow-path" data-refresh-inventory>Run now</x-device.commands.run-button>
             @endcan
         </div>
 

@@ -58,7 +58,7 @@ final class System extends Component
             'hardware' => $inventory?->hardware(),
             'software' => $inventory?->software(),
             'collected' => $this->device->system_inventoried_at === null ? null : 'Collected '.$this->device->system_inventoried_at->diffForHumans().'.',
-            'isInventoryRunning' => $hasSystemInventory && $this->device->inFlightCommands()->whereRelation('script', 'slug', config('inventory.system_slug'))->exists(),
+            'inventoryCommand' => $hasSystemInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('inventory.system_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::System->pageTitle($this->device));
     }
 }

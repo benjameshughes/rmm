@@ -92,7 +92,8 @@ it('explains the missing inventory and runs it on request', function (): void {
         ->assertSee('Run now')
         ->call('refreshInventory')
         ->assertDispatched('command-queued')
-        ->assertSee('Inventory queued');
+        ->assertSee('Queued...')
+        ->assertSeeHtml('data-run-button-busy');
 
     expect($this->device->commands()->sole()->script_id)->toBe(Script::findSystem('system-inventory')->id);
 });
@@ -102,7 +103,7 @@ it('does not queue a second inventory while one is waiting', function (): void {
     $system = Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device]);
 
     $system->call('refreshInventory');
-    $system->call('refreshInventory')->assertSee('Inventory running...');
+    $system->call('refreshInventory')->assertSee('Queued...');
 
     expect($this->device->commands()->count())->toBe(1);
 });
@@ -138,4 +139,26 @@ it('refreshes when a new inventory lands', function (): void {
 
     $system->dispatch("echo-private:devices.{$this->device->id},SystemInventorySynced", ['deviceId' => $this->device->id])
         ->assertSee('7HQ2KZ3');
+});
+
+it('ties the Run now button to the inventory command, from queued to running and back', function (): void {
+    inventoried($this->device);
+    $system = Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertDontSeeHtml('data-run-button-busy');
+
+    $system->call('refreshInventory')->assertSee('Queued...');
+
+    $command = $this->device->commands()->sole();
+    $command->markAsSent();
+    $command->markAsRunning();
+
+    $system->dispatch("echo-private:devices.{$this->device->id},CommandUpdated", ['commandId' => $command->id])
+        ->assertSee('Running...')
+        ->assertSeeHtml("commandId: {$command->id}");
+
+    $command->markAsCompleted('{}', 0);
+
+    $system->dispatch("echo-private:devices.{$this->device->id},CommandUpdated", ['commandId' => $command->id])
+        ->assertDontSeeHtml('data-run-button-busy')
+        ->assertSee('Run now');
 });
