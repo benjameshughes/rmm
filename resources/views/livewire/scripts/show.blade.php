@@ -160,14 +160,14 @@
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Execute Script</flux:heading>
-                <flux:text class="mt-2">Run "{{ $script->name }}" on a device.</flux:text>
+                <flux:text class="mt-2">Run "{{ $script->name }}" on one or more devices.</flux:text>
             </div>
 
-            <flux:select wire:model="selectedDeviceId" label="Device" placeholder="Select a device..." variant="listbox" searchable>
+            <flux:pillbox wire:model="selectedDeviceIds" multiple searchable label="Devices" placeholder="Select devices...">
                 @foreach($availableDevices as $device)
-                    <flux:select.option value="{{ $device->id }}">{{ $device->hostname }}</flux:select.option>
+                    <flux:pillbox.option value="{{ $device->id }}">{{ $device->hostname }}</flux:pillbox.option>
                 @endforeach
-            </flux:select>
+            </flux:pillbox>
 
             <x-script.parameter-inputs :parameters="$this->parameterFields" />
 
@@ -175,7 +175,7 @@
 
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="$set('showExecuteModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button wire:click="executeOnDevice" variant="primary" icon="play">Execute</flux:button>
+                <flux:button wire:click="executeOnDevices" variant="primary" icon="play">Execute</flux:button>
             </div>
         </div>
     </flux:modal>

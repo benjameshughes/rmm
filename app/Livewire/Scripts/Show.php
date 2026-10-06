@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Livewire\Scripts;
 
-use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceStatus;
 use App\Livewire\Concerns\CancelsCommands;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\Script;
+use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -26,9 +27,8 @@ final class Show extends Component
 
     public bool $showExecuteModal = false;
 
-    public string $deviceSearch = '';
-
-    public ?int $selectedDeviceId = null;
+    /** @var array<int, int|string> */
+    public array $selectedDeviceIds = [];
 
     public function mount(Script $script): void
     {
@@ -39,19 +39,25 @@ final class Show extends Component
     #[On('echo-private:devices,CommandUpdated')]
     public function refreshExecutions(): void {}
 
-    public function executeOnDevice(ExecuteScriptOnDevice $action, ValidateScriptParameterValues $validateParameters): void
+    /**
+     * Devices that cannot run it (monitor-only, or on an agent too old for a
+     * parameterised script) are skipped, so the toast says how many it queued on.
+     */
+    public function executeOnDevices(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
-        abort_unless($this->selectedDeviceId !== null, 422);
+        abort_if($this->selectedDeviceIds === [], 422);
 
-        $device = Device::findOrFail($this->selectedDeviceId);
-        $this->authorize('runCommands', $device);
+        $devices = Device::query()->whereIn('id', $this->selectedDeviceIds)->get()
+            ->each(fn (Device $device) => $this->authorize('runCommands', $device));
 
-        $action($this->script, $device, auth()->user(), parameters: $this->validatedParameterValues($validateParameters, $this->script));
+        $queued = $action($this->script, $devices, auth()->user(), $this->validatedParameterValues($validateParameters, $this->script));
 
         $this->showExecuteModal = false;
-        $this->reset('selectedDeviceId', 'deviceSearch');
+        $this->reset('selectedDeviceIds');
         $this->fillParameterValues();
         $this->dispatch('command-queued');
+
+        Flux::toast(text: "Queued on {$queued} of {$devices->count()} ".str('device')->plural($devices->count()).'.', heading: "{$this->script->name} queued", variant: 'success');
     }
 
     protected function parameterScript(): ?Script
@@ -70,9 +76,7 @@ final class Show extends Component
         $availableDevices = Device::query()
             ->where('status', DeviceStatus::Active)
             ->acceptsCommands()
-            ->when($this->deviceSearch !== '', fn ($q) => $q->where('hostname', 'like', '%'.$this->deviceSearch.'%'))
             ->orderBy('hostname')
-            ->limit(20)
             ->get();
 
         return view('livewire.scripts.show', [

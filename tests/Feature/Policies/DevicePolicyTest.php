@@ -105,8 +105,8 @@ it('gates running a script from the script page through the policy', function ()
 
     Livewire::actingAs($this->user)
         ->test(ScriptsShow::class, ['script' => Script::factory()->create()])
-        ->set('selectedDeviceId', $device->id)
-        ->call('executeOnDevice')
+        ->set('selectedDeviceIds', [$device->id])
+        ->call('executeOnDevices')
         ->assertForbidden();
 
     expect(DeviceCommand::query()->count())->toBe(0);

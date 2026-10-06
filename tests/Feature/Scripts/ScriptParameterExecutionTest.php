@@ -156,10 +156,10 @@ it('queues with values from the script page', function (): void {
     Livewire::actingAs($this->user)
         ->test(ScriptShow::class, ['script' => $this->script])
         ->assertSet('parameterValues.Force', true)
-        ->set('selectedDeviceId', $device->id)
+        ->set('selectedDeviceIds', [$device->id])
         ->set('parameterValues.PackageId', 'Git.Git')
         ->set('parameterValues.Force', false)
-        ->call('executeOnDevice')
+        ->call('executeOnDevices')
         ->assertHasNoErrors();
 
     expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => 'Git.Git', 'Force' => 'false']);

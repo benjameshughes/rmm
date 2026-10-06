@@ -46,8 +46,8 @@ it('executes a script on a device', function (): void {
 
     Livewire::actingAs($user)
         ->test(Show::class, ['script' => $script])
-        ->set('selectedDeviceId', $device->id)
-        ->call('executeOnDevice')
+        ->set('selectedDeviceIds', [$device->id])
+        ->call('executeOnDevices')
         ->assertDispatched('command-queued');
 
     $command = DeviceCommand::where('script_id', $script->id)->first();
@@ -64,7 +64,24 @@ it('requires authentication to execute', function (): void {
     $device = Device::factory()->active()->create();
 
     Livewire::test(Show::class, ['script' => $script])
-        ->set('selectedDeviceId', $device->id)
-        ->call('executeOnDevice')
+        ->set('selectedDeviceIds', [$device->id])
+        ->call('executeOnDevices')
         ->assertForbidden();
+});
+
+it('runs one script on several devices at once and says how many it queued on', function (): void {
+    $user = User::factory()->create();
+    $script = Script::factory()->create(['name' => 'Flush DNS']);
+    $devices = Device::factory()->active()->windows()->count(3)->create();
+
+    Livewire::actingAs($user)
+        ->test(Show::class, ['script' => $script])
+        ->set('selectedDeviceIds', $devices->pluck('id')->all())
+        ->call('executeOnDevices')
+        ->assertDispatched('command-queued')
+        ->assertDispatched('toast-show', fn (string $name, array $params): bool => $params['slots']['text'] === 'Queued on 3 of 3 devices.')
+        ->assertSet('selectedDeviceIds', []);
+
+    expect(DeviceCommand::where('script_id', $script->id)->pluck('device_id')->sort()->values()->all())
+        ->toBe($devices->pluck('id')->sort()->values()->all());
 });
