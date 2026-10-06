@@ -117,7 +117,7 @@ it('upgrades the package on one device', function (): void {
 
     expect($device->commands()->sole())
         ->script_id->toBe(Script::findSystem('winget-upgrade')->id)
-        ->parameters->toBe(['PackageId' => 'Google.Chrome']);
+        ->parameters->toBe(['PackageId' => 'Google.Chrome', 'CloseApp' => 'false']);
 });
 
 it('upgrades on every outdated device, skipping old agents and saying so', function (): void {
@@ -132,7 +132,7 @@ it('upgrades on every outdated device, skipping old agents and saying so', funct
             && $params['dataset']['variant'] === 'warning');
 
     expect(DeviceCommand::query()->pluck('device_id')->sort()->values()->all())->toBe([$first->id, $second->id])
-        ->and(DeviceCommand::query()->get()->every(fn (DeviceCommand $command): bool => $command->parameters === ['PackageId' => 'Google.Chrome']))->toBeTrue()
+        ->and(DeviceCommand::query()->get()->every(fn (DeviceCommand $command): bool => $command->parameters === ['PackageId' => 'Google.Chrome', 'CloseApp' => 'false']))->toBeTrue()
         ->and($oldAgent->commands()->count() + $current->commands()->count())->toBe(0);
 });
 
@@ -271,5 +271,46 @@ describe('package command status', function (): void {
             ->call('uninstallPackage', $device->software()->where('package_id', '7zip.7zip')->sole()->id)
             ->assertSee('Queued: Uninstall')
             ->assertSee('Uninstall');
+    });
+});
+
+describe('closing the app first', function (): void {
+    it('passes Close the app first through to uninstall everywhere and per-row upgrades, off by default', function (): void {
+        $device = pcWith([chrome('129.0', true)]);
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'Google.Chrome'])
+            ->assertSeeHtml('data-close-app-first')
+            ->call('upgrade', $device->software()->sole()->id);
+
+        expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => 'Google.Chrome', 'CloseApp' => 'false']);
+        DeviceCommand::query()->delete();
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'Google.Chrome'])
+            ->set('closeAppFirst', true)
+            ->call('uninstallEverywhere');
+
+        expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => 'Google.Chrome', 'CloseApp' => 'true']);
+    });
+
+    it('still installs with only a package ID, since install has no app to close', function (): void {
+        pcWith([zip()]);
+        pcWith([]);
+
+        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])
+            ->set('closeAppFirst', true)
+            ->call('installEverywhere')
+            ->assertHasNoErrors();
+
+        expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => '7zip.7zip']);
+    });
+
+    it('passes it from the device apps tab too', function (): void {
+        $device = pcWith([zip()]);
+
+        Livewire::actingAs($this->user)->test(App\Livewire\Devices\Apps::class, ['device' => $device])
+            ->set('closeAppFirst', true)
+            ->call('uninstallPackage', $device->software()->sole()->id);
+
+        expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => '7zip.7zip', 'CloseApp' => 'true']);
     });
 });

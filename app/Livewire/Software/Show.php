@@ -35,6 +35,8 @@ final class Show extends Component
     #[Url(as: 'id')]
     public string $packageId = '';
 
+    public bool $closeAppFirst = false;
+
     private SoftwareQueries $software;
 
     public function boot(SoftwareQueries $software): void
@@ -70,7 +72,7 @@ final class Show extends Component
         abort_unless($install?->isUpgradable, 404);
         $this->authorize('runCommands', $install->device);
 
-        $action(PackageAction::Upgrade, $install->device, $this->packageId, auth()->user());
+        $action(PackageAction::Upgrade, $install->device, $this->packageId, auth()->user(), closeAppFirst: $this->closeAppFirst);
         $this->dispatch('command-queued');
 
         Flux::toast(text: "{$install->name} on {$install->device->hostname}.", heading: PackageAction::Upgrade->queuedHeading(), variant: 'success');
@@ -106,7 +108,7 @@ final class Show extends Component
     private function queueOnDevices(PackageAction $packageAction, BaseCollection $devices, BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
         $script = Script::findSystem($packageAction->value);
-        $parameters = $validateParameters($script, ['PackageId' => $this->packageId], 'packageId');
+        $parameters = $validateParameters($script, ['PackageId' => $this->packageId, ...($packageAction->canCloseApp() ? ['CloseApp' => $this->closeAppFirst] : [])], 'packageId');
         $devices->each(fn (Device $device) => $this->authorize('runCommands', $device));
 
         $queued = $action($script, $devices, auth()->user(), $parameters);

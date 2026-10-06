@@ -17,17 +17,17 @@ function softwareScript(string $slug): string
     return File::get(resource_path("scripts/windows/{$slug}.ps1"));
 }
 
-it('syncs the inventory, upgrade and uninstall scripts', function (string $slug, bool $takesPackageId): void {
+it('syncs the inventory, upgrade and uninstall scripts', function (string $slug, array $parameters): void {
     $script = Script::findSystem($slug);
 
     expect($script->category)->toBe(ScriptCategory::Updates)
         ->and($script->requires_admin)->toBeTrue()
         ->and($script->platform->value)->toBe('windows')
-        ->and($script->parameters->pluck('name')->all())->toBe($takesPackageId ? ['PackageId'] : []);
+        ->and($script->parameters->pluck('name')->all())->toBe($parameters);
 })->with([
-    'inventory' => ['winget-inventory', false],
-    'upgrade' => ['winget-upgrade', true],
-    'uninstall' => ['winget-uninstall', true],
+    'inventory' => ['winget-inventory', []],
+    'upgrade' => ['winget-upgrade', ['PackageId', 'CloseApp']],
+    'uninstall' => ['winget-uninstall', ['PackageId', 'CloseApp']],
 ]);
 
 it('keeps the software scripts plain ASCII for Windows PowerShell 5.1', function (string $slug): void {
@@ -83,3 +83,13 @@ it('installs the WinGet module with PSResourceGet under PowerShell 7, keeping In
         ->and(strpos($script, 'Install-Module -Name Microsoft.WinGet.Client'))->toBeGreaterThan($modern)
         ->and($script)->toContain('if (Get-Command Install-PSResource -ErrorAction SilentlyContinue)');
 });
+
+it('closes processes named after the package before winget runs, only when asked', function (string $slug): void {
+    $script = softwareScript($slug);
+
+    $close = strpos($script, "if (\"\$env:RMM_CloseApp\" -eq 'true')");
+
+    expect($close)->not->toBeFalse()
+        ->and(strpos($script, 'Push-Location (Split-Path $winget)'))->toBeGreaterThan($close)
+        ->and($script)->toContain("\$appName = (\$packageId -split '[\\\\.]')[-1]");
+})->with(['winget-upgrade', 'winget-uninstall']);

@@ -14,7 +14,10 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <flux:input wire:model.live.debounce.300ms="softwareSearch" placeholder="Search apps..." icon="magnifying-glass" class="max-w-sm" />
                     @can('runCommands', $device)
-                        <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" icon="arrow-path" data-refresh-inventory>Refresh inventory</x-device.commands.run-button>
+                        <div class="flex flex-wrap items-center gap-4">
+                            <flux:checkbox wire:model="closeAppFirst" label="Close the app first" description="For uninstalls and upgrades that hang while the app is open" data-close-app-first />
+                            <x-device.commands.run-button :command="$inventoryCommand" action="refreshInventory" icon="arrow-path" data-refresh-inventory>Refresh inventory</x-device.commands.run-button>
+                        </div>
                     @endcan
                 </div>
 

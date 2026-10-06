@@ -28,6 +28,8 @@ final class Apps extends Component
     #[Url(as: 'q')]
     public string $softwareSearch = '';
 
+    public bool $closeAppFirst = false;
+
     public function mount(Device $device): void
     {
         $this->authorize('view', $device);
@@ -80,7 +82,7 @@ final class Apps extends Component
 
         $package = $this->device->software()->findOrFail($softwareId);
         abort_if($packageAction === PackageAction::Upgrade && ! $package->isUpgradable, 422);
-        $action($packageAction, $this->device, $package->package_id, auth()->user());
+        $action($packageAction, $this->device, $package->package_id, auth()->user(), closeAppFirst: $this->closeAppFirst);
         $this->dispatch('command-queued');
 
         Flux::toast(text: "{$package->name} on {$this->device->hostname}. The list refreshes once it has run.", heading: $packageAction->queuedHeading(), variant: 'success');

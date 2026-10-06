@@ -53,6 +53,14 @@ if (-not $winget) {
 }
 
 # winget.exe resolves its runtime DLLs from its own folder when run as SYSTEM.
+# Some uninstallers (Slack's, for one) wait for the app to close, which nobody
+# can do when this runs as SYSTEM. With CloseApp set, processes named after the
+# last part of the package ID (SlackTechnologies.Slack -> slack) are closed first.
+if ("$env:RMM_CloseApp" -eq 'true') {
+    $appName = ($packageId -split '[\\.]')[-1]
+    Get-Process -Name $appName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
 Push-Location (Split-Path $winget)
 $output = & $winget upgrade --id $packageId --exact --scope machine --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
 $exitCode = $LASTEXITCODE

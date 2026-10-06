@@ -11,6 +11,7 @@
                 <flux:text class="mt-1 font-mono">{{ $package->package_id }}</flux:text>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+                <flux:checkbox wire:model="closeAppFirst" label="Close the app first" class="me-2" data-close-app-first />
                 @if($upgradableCount > 0)
                     <flux:button variant="primary" icon="arrow-up-circle" x-on:click="$dispatch('confirm-action', { heading: 'Upgrade everywhere', message: {{ Js::from('Upgrade '.$package->name.' on '.$upgradableCount.' '.Str::plural('device', $upgradableCount).'?') }}, confirm: 'Upgrade', action: () => $wire.upgradeAllOutdated() })">
                         Upgrade on all outdated ({{ $upgradableCount }})

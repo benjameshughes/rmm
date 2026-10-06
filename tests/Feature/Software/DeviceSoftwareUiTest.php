@@ -85,7 +85,7 @@ it('upgrades a winget package and uninstalls any package with its ID as the para
 
     expect($this->device->commands()->sole())
         ->script_id->toBe(Script::findSystem($slug)->id)
-        ->parameters->toBe(['PackageId' => 'Mozilla.Firefox'])
+        ->parameters->toBe(['PackageId' => 'Mozilla.Firefox', 'CloseApp' => 'false'])
         ->status->toBe(CommandStatus::Pending);
 })->with([
     'upgrade' => ['upgradePackage', 'winget-upgrade', ['is_update_available' => true, 'latest_version' => '131.0']],

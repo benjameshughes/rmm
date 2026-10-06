@@ -22,6 +22,14 @@ enum PackageAction: string
         };
     }
 
+    /**
+     * Whether its script can close the app first (an install has nothing to close).
+     */
+    public function canCloseApp(): bool
+    {
+        return $this !== self::Install;
+    }
+
     public function inProgressLabel(): string
     {
         return match ($this) {

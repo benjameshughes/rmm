@@ -170,6 +170,7 @@ return [
             'requires_admin' => true,
             'parameters' => [
                 ['name' => 'PackageId', 'label' => 'Package ID', 'type' => 'text', 'required' => true],
+                ['name' => 'CloseApp', 'label' => 'Close the app first', 'type' => 'boolean', 'required' => false],
             ],
         ],
         'winget-uninstall' => [
@@ -182,6 +183,7 @@ return [
             'requires_admin' => true,
             'parameters' => [
                 ['name' => 'PackageId', 'label' => 'Package ID', 'type' => 'text', 'required' => true],
+                ['name' => 'CloseApp', 'label' => 'Close the app first', 'type' => 'boolean', 'required' => false],
             ],
         ],
         'update-agent' => [
