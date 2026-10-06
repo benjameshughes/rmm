@@ -24,7 +24,7 @@
             <flux:callout.heading>{{ $outdatedAgentCount }} {{ Str::plural('device', $outdatedAgentCount) }} running an old agent (latest {{ $latestAgentVersion }})</flux:callout.heading>
 
             <x-slot name="actions">
-                <flux:button size="sm" wire:click="updateOutdatedAgents" wire:confirm="Update the agent on {{ $outdatedAgentCount }} {{ Str::plural('device', $outdatedAgentCount) }}?" icon="arrow-path">
+                <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Update agents', message: {{ Js::from('Update the agent on '.$outdatedAgentCount.' '.Str::plural('device', $outdatedAgentCount).'?') }}, confirm: 'Update', action: () => $wire.updateOutdatedAgents() })" icon="arrow-path">
                     Update all
                 </flux:button>
             </x-slot>
@@ -55,10 +55,10 @@
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <flux:text class="font-medium">{{ count($selectedDevices) }} {{ Str::plural('device', count($selectedDevices)) }} selected</flux:text>
                 <div class="flex flex-wrap items-center gap-2">
-                    <flux:button size="sm" wire:click="bulkRestart" wire:confirm="Restart {{ count($selectedDevices) }} devices?" icon="arrow-path">
+                    <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Restart devices', message: {{ Js::from('Restart '.count($selectedDevices).' devices?') }}, confirm: 'Restart', action: () => $wire.bulkRestart() })" icon="arrow-path">
                         Restart All
                     </flux:button>
-                    <flux:button size="sm" wire:click="bulkPowerOff" wire:confirm="Power off {{ count($selectedDevices) }} devices?" icon="power" variant="danger">
+                    <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Power off devices', message: {{ Js::from('Power off '.count($selectedDevices).' devices?') }}, confirm: 'Power off', danger: true, action: () => $wire.bulkPowerOff() })" icon="power" variant="danger">
                         Power Off All
                     </flux:button>
                     <flux:button size="sm" wire:click="$set('showBulkScriptModal', true)" icon="code-bracket">

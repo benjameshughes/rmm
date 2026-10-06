@@ -18,7 +18,7 @@
                 <div class="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2">
                     <flux:badge :color="$tag->color ?? 'zinc'">{{ $tag->name }}</flux:badge>
                     <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ $tag->devices_count }} devices</flux:text>
-                    <flux:button size="sm" variant="ghost" wire:click="delete({{ $tag->id }})" wire:confirm="Delete tag '{{ $tag->name }}'?" icon="x-mark" square class="!p-0.5" />
+                    <flux:button size="sm" variant="ghost" x-on:click="$dispatch('confirm-action', { heading: 'Delete tag', message: {{ Js::from('Delete tag \''.$tag->name.'\'?') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $tag->id }}) })" icon="x-mark" square class="!p-0.5" />
                 </div>
             @empty
                 <div class="w-full text-center py-8 text-zinc-500 dark:text-zinc-400">No tags yet. Create one to label your devices.</div>

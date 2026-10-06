@@ -125,12 +125,11 @@ describe('power menu', function (): void {
     beforeEach(fn () => app(SyncSystemScripts::class)());
 
     it('queues the right system script from each power menu item', function (string $method, string $slug, ?string $confirm): void {
-        $page = Livewire::actingAs($this->user)->test(Header::class, ['device' => $this->device])
-            ->assertSeeHtml("wire:click=\"{$method}\"");
+        $page = Livewire::actingAs($this->user)->test(Header::class, ['device' => $this->device]);
 
         $confirm === null
-            ? $page->assertDontSeeHtml("wire:click=\"{$method}\" wire:confirm")
-            : $page->assertSeeHtml("wire:click=\"{$method}\" wire:confirm=\"{$confirm}");
+            ? $page->assertSeeHtml("wire:click=\"{$method}\"")->assertDontSeeHtml("\$wire.{$method}()")
+            : $page->assertSeeHtml("\$wire.{$method}()")->assertSee($confirm)->assertDontSeeHtml("wire:click=\"{$method}\"");
 
         $page->call($method)->assertDispatched('command-queued');
 

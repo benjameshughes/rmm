@@ -12,16 +12,16 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 @if($upgradableCount > 0)
-                    <flux:button variant="primary" icon="arrow-up-circle" wire:click="upgradeAllOutdated" wire:confirm="Upgrade {{ $package->name }} on {{ $upgradableCount }} {{ Str::plural('device', $upgradableCount) }}?">
+                    <flux:button variant="primary" icon="arrow-up-circle" x-on:click="$dispatch('confirm-action', { heading: 'Upgrade everywhere', message: {{ Js::from('Upgrade '.$package->name.' on '.$upgradableCount.' '.Str::plural('device', $upgradableCount).'?') }}, confirm: 'Upgrade', action: () => $wire.upgradeAllOutdated() })">
                         Upgrade on all outdated ({{ $upgradableCount }})
                     </flux:button>
                 @endif
                 @if($package->source !== null && $missingCount > 0)
-                    <flux:button icon="arrow-down-tray" wire:click="installEverywhere" wire:confirm="Install {{ $package->name }} on the {{ $missingCount }} {{ Str::plural('device', $missingCount) }} that do not have it?" data-install-everywhere>
+                    <flux:button icon="arrow-down-tray" x-on:click="$dispatch('confirm-action', { heading: 'Install everywhere', message: {{ Js::from('Install '.$package->name.' on the '.$missingCount.' '.Str::plural('device', $missingCount).' that do not have it?') }}, confirm: 'Install', action: () => $wire.installEverywhere() })" data-install-everywhere>
                         Install where missing ({{ $missingCount }})
                     </flux:button>
                 @endif
-                <flux:button variant="danger" icon="trash" wire:click="uninstallEverywhere" wire:confirm="Uninstall {{ $package->name }} from all {{ $installs->count() }} {{ Str::plural('device', $installs->count()) }}?" data-uninstall-everywhere>
+                <flux:button variant="danger" icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Uninstall everywhere', message: {{ Js::from('Uninstall '.$package->name.' from all '.$installs->count().' '.Str::plural('device', $installs->count()).'?') }}, confirm: 'Uninstall', danger: true, action: () => $wire.uninstallEverywhere() })" data-uninstall-everywhere>
                     Uninstall everywhere ({{ $installs->count() }})
                 </flux:button>
             </div>

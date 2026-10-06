@@ -149,6 +149,8 @@
 
         {{ $slot }}
 
+        <x-modal.confirm />
+
         <flux:toast />
 
         @fluxScripts

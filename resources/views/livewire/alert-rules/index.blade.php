@@ -50,7 +50,7 @@
                                     <flux:button size="sm" variant="ghost" wire:click="edit({{ $rule->id }})" icon="pencil-square">
                                         Edit
                                     </flux:button>
-                                    <flux:button size="sm" variant="ghost" wire:click="delete({{ $rule->id }})" wire:confirm="Delete rule '{{ $rule->name }}'?" icon="trash">
+                                    <flux:button size="sm" variant="ghost" x-on:click="$dispatch('confirm-action', { heading: 'Delete rule', message: {{ Js::from('Delete rule \''.$rule->name.'\'?') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $rule->id }}) })" icon="trash">
                                         Delete
                                     </flux:button>
                                 </div>

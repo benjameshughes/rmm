@@ -223,9 +223,9 @@ describe('the device pages', function (): void {
             ->assertDontSeeHtml('wire:click="wake"')
             ->assertDontSeeHtml('showCommandModal\', true')
             ->assertDontSeeHtml('showScriptModal\', true')
-            ->assertDontSeeHtml('wire:click="restart"')
-            ->assertDontSeeHtml('wire:click="powerOff"')
-            ->assertDontSeeHtml('wire:click="logOff"');
+            ->assertDontSeeHtml('$wire.restart()')
+            ->assertDontSeeHtml('$wire.powerOff()')
+            ->assertDontSeeHtml('$wire.logOff()');
     });
 
     it('keeps the controls and drops the badge for a full agent', function (): void {
@@ -234,7 +234,7 @@ describe('the device pages', function (): void {
         Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
             ->assertDontSeeHtml('data-monitor-only')
             ->assertSeeHtml('wire:click="wake"')
-            ->assertSeeHtml('wire:click="restart"')
+            ->assertSeeHtml('$wire.restart()')
             ->assertSeeHtml('showCommandModal\', true')
             ->assertSeeHtml('showScriptModal\', true');
     });

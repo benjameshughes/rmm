@@ -96,8 +96,8 @@ it('only offers Upgrade for winget packages with an update, and refuses it other
     $package = installed($this->device, $attributes);
 
     $apps = Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device])
-        ->assertSeeHtml("wire:click=\"uninstallPackage({$package->id})\"")
-        ->assertSeeHtml('wire:confirm="Uninstall');
+        ->assertSeeHtml("\$wire.uninstallPackage({$package->id})")
+        ->assertSee('from OFFICE-PC?');
 
     $isUpgradable
         ? $apps->assertSeeHtml("wire:click=\"upgradePackage({$package->id})\"")

@@ -25,7 +25,7 @@
                     <flux:badge size="sm" color="amber" icon="moon">waiting for the device to wake</flux:badge>
                 @endif
                 @can('cancel', $inFlight->nextPending())
-                    <flux:button size="sm" variant="ghost" icon="x-circle" wire:click="cancelCommand({{ $inFlight->nextPending()->id }})" wire:confirm="Cancel this command before it runs?">Cancel</flux:button>
+                    <flux:button size="sm" variant="ghost" icon="x-circle" x-on:click="$dispatch('confirm-action', { heading: 'Cancel command', message: 'Cancel this command before it runs?', confirm: 'Cancel command', danger: true, action: () => $wire.cancelCommand({{ $inFlight->nextPending()->id }}) })">Cancel</flux:button>
                 @endcan
             </div>
         @endif

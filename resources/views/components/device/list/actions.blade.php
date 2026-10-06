@@ -20,8 +20,8 @@
             @can('runCommands', $device)
                 <flux:menu.separator />
 
-                <flux:menu.item icon="arrow-path" wire:click="restart({{ $device->id }})" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?">Restart</flux:menu.item>
-                <flux:menu.item icon="power" variant="danger" wire:click="powerOff({{ $device->id }})" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?">Power Off</flux:menu.item>
+                <flux:menu.item icon="arrow-path" x-on:click="$dispatch('confirm-action', { heading: 'Restart device', message: {{ Js::from('Are you sure you want to restart '.$device->hostname.'?') }}, confirm: 'Restart', action: () => $wire.restart({{ $device->id }}) })">Restart</flux:menu.item>
+                <flux:menu.item icon="power" variant="danger" x-on:click="$dispatch('confirm-action', { heading: 'Power off device', message: {{ Js::from('Are you sure you want to power off '.$device->hostname.'?') }}, confirm: 'Power off', danger: true, action: () => $wire.powerOff({{ $device->id }}) })">Power Off</flux:menu.item>
                 <flux:menu.item icon="arrow-down-tray" wire:click="checkForUpdates({{ $device->id }})">Check for Updates</flux:menu.item>
             @endcan
         </flux:menu>

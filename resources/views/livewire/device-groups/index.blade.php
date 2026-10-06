@@ -37,7 +37,7 @@
                                 <flux:button size="sm" variant="ghost" wire:click="edit({{ $group->id }})" icon="pencil-square">
                                     Edit
                                 </flux:button>
-                                <flux:button size="sm" variant="ghost" wire:click="delete({{ $group->id }})" wire:confirm="Delete group '{{ $group->name }}'? Devices in this group will be unassigned." icon="trash">
+                                <flux:button size="sm" variant="ghost" x-on:click="$dispatch('confirm-action', { heading: 'Delete group', message: {{ Js::from('Delete group \''.$group->name.'\'? Devices in this group will be unassigned.') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $group->id }}) })" icon="trash">
                                     Delete
                                 </flux:button>
                             </div>

@@ -55,7 +55,7 @@
                                             @if($package->isUpgradable)
                                                 <flux:button size="sm" icon="arrow-up-circle" wire:click="upgradePackage({{ $package->id }})">Upgrade</flux:button>
                                             @endif
-                                            <flux:button size="sm" variant="ghost" icon="trash" wire:click="uninstallPackage({{ $package->id }})" wire:confirm="Uninstall {{ $package->name }} from {{ $device->hostname }}?">Uninstall</flux:button>
+                                            <flux:button size="sm" variant="ghost" icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Uninstall app', message: {{ Js::from('Uninstall '.$package->name.' from '.$device->hostname.'?') }}, confirm: 'Uninstall', danger: true, action: () => $wire.uninstallPackage({{ $package->id }}) })">Uninstall</flux:button>
                                             @endif
                                         </div>
                                     @endcan

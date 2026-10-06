@@ -58,7 +58,7 @@
                                 <flux:button size="sm" variant="ghost" wire:click="edit({{ $task->id }})" icon="pencil-square">
                                     Edit
                                 </flux:button>
-                                <flux:button size="sm" variant="ghost" wire:click="delete({{ $task->id }})" wire:confirm="Delete schedule '{{ $task->name }}'?" icon="trash">
+                                <flux:button size="sm" variant="ghost" x-on:click="$dispatch('confirm-action', { heading: 'Delete schedule', message: {{ Js::from('Delete schedule \''.$task->name.'\'?') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $task->id }}) })" icon="trash">
                                     Delete
                                 </flux:button>
                             </div>

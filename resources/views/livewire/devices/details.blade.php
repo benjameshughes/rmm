@@ -27,7 +27,7 @@
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-zinc-500 dark:text-zinc-400">Enrolment</dt>
                         <dd>
-                            <flux:button size="xs" variant="danger" icon="arrow-path" wire:click="resetEnrolment" wire:confirm="Reset enrolment for {{ $device->hostname }}? The current key stops working immediately. Run 'rmm reenroll' on the device, then approve it again.">
+                            <flux:button size="xs" variant="danger" icon="arrow-path" x-on:click="$dispatch('confirm-action', { heading: 'Reset enrolment', message: {{ Js::from('Reset enrolment for '.$device->hostname.'? The current key stops working immediately. Run \'rmm reenroll\' on the device, then approve it again.') }}, confirm: 'Reset', danger: true, action: () => $wire.resetEnrolment() })">
                                 Reset enrolment
                             </flux:button>
                         </dd>

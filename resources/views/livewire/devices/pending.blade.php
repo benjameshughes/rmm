@@ -37,7 +37,7 @@
                     <td class="px-4 py-2">
                         <div class="flex gap-2">
                             @if ($hostnameAlreadyEnrolled)
-                                <flux:button size="xs" variant="primary" wire:click="approve({{ $device->id }})" wire:confirm="Another device is already enrolled as {{ $device->hostname }}. Approve this one anyway?" wire:loading.attr="disabled">
+                                <flux:button size="xs" variant="primary" x-on:click="$dispatch('confirm-action', { heading: 'Approve duplicate', message: {{ Js::from('Another device is already enrolled as '.$device->hostname.'. Approve this one anyway?') }}, confirm: 'Approve anyway', action: () => $wire.approve({{ $device->id }}) })" wire:loading.attr="disabled">
                                     <span wire:loading.remove wire:target="approve({{ $device->id }})">Approve</span>
                                     <span wire:loading wire:target="approve({{ $device->id }})">...</span>
                                 </flux:button>

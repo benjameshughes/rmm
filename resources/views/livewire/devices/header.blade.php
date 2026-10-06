@@ -39,9 +39,9 @@
                 <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
 
                 <flux:menu>
-                    <flux:menu.item wire:click="restart" wire:confirm="Are you sure you want to restart {{ $device->hostname }}?" icon="arrow-path">Restart</flux:menu.item>
-                    <flux:menu.item wire:click="powerOff" wire:confirm="Are you sure you want to power off {{ $device->hostname }}?" icon="power" variant="danger">Power Off</flux:menu.item>
-                    <flux:menu.item wire:click="logOff" wire:confirm="Log the signed-in user off {{ $device->hostname }}? Unsaved work is lost." icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
+                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Restart device', message: {{ Js::from('Are you sure you want to restart '.$device->hostname.'?') }}, confirm: 'Restart', action: () => $wire.restart() })" icon="arrow-path">Restart</flux:menu.item>
+                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Power off device', message: {{ Js::from('Are you sure you want to power off '.$device->hostname.'?') }}, confirm: 'Power off', danger: true, action: () => $wire.powerOff() })" icon="power" variant="danger">Power Off</flux:menu.item>
+                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Log off user', message: {{ Js::from('Log the signed-in user off '.$device->hostname.'? Unsaved work is lost.') }}, confirm: 'Log off', action: () => $wire.logOff() })" icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
 
                     <flux:menu.separator />
 

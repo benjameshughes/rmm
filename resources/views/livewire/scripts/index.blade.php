@@ -71,7 +71,7 @@
                                             <flux:menu.item icon="pencil-square" :href="route('scripts.edit', $script)" wire:navigate>
                                                 Edit
                                             </flux:menu.item>
-                                            <flux:menu.item icon="trash" wire:click="delete({{ $script->id }})" wire:confirm="Delete '{{ $script->name }}'? This cannot be undone." variant="danger">
+                                            <flux:menu.item icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Delete script', message: {{ Js::from('Delete \''.$script->name.'\'? This cannot be undone.') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $script->id }}) })" variant="danger">
                                                 Delete
                                             </flux:menu.item>
                                         </flux:menu>
