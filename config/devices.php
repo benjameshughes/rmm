@@ -171,6 +171,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Page File And Swap Thresholds
+    |--------------------------------------------------------------------------
+    |
+    | Used percentages at which the Overview colours the page file (Windows)
+    | or swap (Linux) bar as filling up or full. A full page file starves
+    | Windows of commit memory and apps start crashing.
+    |
+    */
+
+    'swap' => [
+        'warning_percent' => 70,
+        'critical_percent' => 90,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Metrics Storage
     |--------------------------------------------------------------------------
     |

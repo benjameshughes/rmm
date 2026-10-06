@@ -50,10 +50,19 @@ final class MetricChart
     /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
     public static function cpuAndMemory(Collection $rows): self
     {
-        return self::make('CPU & RAM', self::percentFormat(), $rows, [
-            ['field' => 'cpu', 'label' => 'CPU', 'color' => 'text-sky-500 dark:text-sky-400', 'swatch' => 'bg-sky-500'],
-            ['field' => 'ram', 'label' => 'RAM', 'color' => 'text-violet-500 dark:text-violet-400', 'swatch' => 'bg-violet-500'],
-        ]);
+        return self::make('CPU & RAM', self::percentFormat(), $rows, [self::cpuSeries(), self::memorySeries()]);
+    }
+
+    /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
+    public static function cpu(Collection $rows): self
+    {
+        return self::make('CPU', self::percentFormat(), $rows, [self::cpuSeries()]);
+    }
+
+    /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
+    public static function memory(Collection $rows): self
+    {
+        return self::make('RAM', self::percentFormat(), $rows, [self::memorySeries()]);
     }
 
     /** @param  Collection<int, array<string, mixed>>  $rows  From DeviceMetricQueries::performance */
@@ -114,5 +123,17 @@ final class MetricChart
     private static function percentFormat(): array
     {
         return ['style' => 'unit', 'unit' => 'percent', 'maximumFractionDigits' => 1];
+    }
+
+    /** @return array{field: string, label: string, color: string, swatch: string} */
+    private static function cpuSeries(): array
+    {
+        return ['field' => 'cpu', 'label' => 'CPU', 'color' => 'text-sky-500 dark:text-sky-400', 'swatch' => 'bg-sky-500'];
+    }
+
+    /** @return array{field: string, label: string, color: string, swatch: string} */
+    private static function memorySeries(): array
+    {
+        return ['field' => 'ram', 'label' => 'RAM', 'color' => 'text-violet-500 dark:text-violet-400', 'swatch' => 'bg-violet-500'];
     }
 }

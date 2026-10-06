@@ -26,6 +26,23 @@ final class InventoryUsers
         return is_array($this->data['local_admins'] ?? null) ? $this->rows('local_admins')->count() : null;
     }
 
+    /**
+     * Who was signed in when the inventory ran; null when the sessions could not be read.
+     */
+    public function signedInForHumans(): ?string
+    {
+        if (! is_array($this->data['logged_on'] ?? null)) {
+            return null;
+        }
+
+        $names = $this->rows('logged_on')
+            ->map(fn (array $session): ?string => $this->text($session['name'] ?? null))
+            ->filter()
+            ->unique();
+
+        return $names->isEmpty() ? 'Nobody' : $names->implode(', ');
+    }
+
     public function localUsers(): InventoryTable
     {
         return $this->table('local_users', [

@@ -270,6 +270,17 @@ final class DeviceMetric extends Model
         return $this->loadBarColor($this->ram);
     }
 
+    public function pageFileBarColor(): string
+    {
+        $percent = $this->pageFilePercent();
+
+        return match (true) {
+            $percent >= config('devices.swap.critical_percent') => 'bg-red-500',
+            $percent >= config('devices.swap.warning_percent') => 'bg-amber-500',
+            default => 'bg-blue-500',
+        };
+    }
+
     /**
      * How busy the processors are beyond a percentage: load average where the OS reports it, otherwise the CPU queue.
      */

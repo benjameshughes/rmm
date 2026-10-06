@@ -542,6 +542,11 @@ final class Device extends Model
         return $this->platform() === ScriptPlatform::Windows && ! $this->isMonitorOnly;
     }
 
+    public function systemInventoryCollectedForHumans(): ?string
+    {
+        return $this->system_inventoried_at === null ? null : 'Collected '.$this->system_inventoried_at->diffForHumans().'.';
+    }
+
     public function swapLabel(): string
     {
         return $this->platform()->swapLabel();

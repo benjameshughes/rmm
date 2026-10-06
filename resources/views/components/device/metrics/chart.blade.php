@@ -1,4 +1,4 @@
-@props(['chart', 'timeFormat', 'title' => null, 'empty' => 'Not enough reports in this range to draw a chart yet.'])
+@props(['chart', 'timeFormat', 'title' => null, 'empty' => 'Not enough reports in this range to draw a chart yet.', 'compact' => false])
 
 <div {{ $attributes->class('space-y-3') }}>
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -16,7 +16,7 @@
 
     @if($chart->isDrawable())
         <flux:chart :value="$chart->points()">
-            <flux:chart.viewport class="aspect-[3/1] min-h-40">
+            <flux:chart.viewport :class="$compact ? 'h-36' : 'aspect-[3/1] min-h-40'">
                 <flux:chart.svg>
                     @foreach($chart->series as $line)
                         <flux:chart.line :field="$line['field']" class="{{ $line['color'] }}" curve="none" />
@@ -44,7 +44,7 @@
             </flux:chart.tooltip>
         </flux:chart>
     @else
-        <div class="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700">
+        <div @class(['flex items-center justify-center rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700', 'h-36' => $compact, 'min-h-40' => ! $compact])>
             <flux:text size="sm" class="max-w-md text-center">{{ $chart->emptyMessage ?? $empty }}</flux:text>
         </div>
     @endif

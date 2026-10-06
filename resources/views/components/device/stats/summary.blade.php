@@ -1,24 +1,19 @@
-@props(['metric' => null, 'disk' => null])
+@props(['metric' => null, 'disk' => null, 'swapLabel' => 'Page File', 'missingSwap' => '—'])
 
-<div {{ $attributes->class('grid gap-4 sm:grid-cols-2 lg:grid-cols-4') }}>
-    <flux:card>
-        <x-device.stats.stat label="CPU Usage" :value="$metric?->cpuForHumans()" :detail="$metric?->processorLoadForHumans()" />
-    </flux:card>
+<div {{ $attributes->class('grid grid-cols-2 gap-4 xl:grid-cols-5') }}>
+    <x-device.stats.usage-card label="CPU Usage" :value="$metric?->cpuForHumans()" :detail="$metric?->processorLoadForHumans()" :percent="$metric?->cpu" :color="$metric?->cpuBarColor()" />
 
-    <flux:card>
-        <x-device.stats.stat label="RAM Usage" :value="$metric?->ramForHumans()" :detail="$metric?->memoryUsageForHumans()" />
-    </flux:card>
+    <x-device.stats.usage-card label="RAM Usage" :value="$metric?->ramForHumans()" :detail="$metric?->memoryUsageForHumans()" :percent="$metric?->ram" :color="$metric?->ramBarColor()" />
 
-    <flux:card class="space-y-2">
-        @if($disk && $disk['usedPercent'] !== null)
-            <x-device.stats.stat :label="'Disk '.$disk['name']" :value="$disk['usedForHumans']" :detail="$disk['freeForHumans']" />
-            <x-device.usage-bar :percent="$disk['usedPercent']" :color="$disk['barColor']" />
-        @else
-            <x-device.stats.stat label="Disk" />
-        @endif
-    </flux:card>
+    <x-device.stats.usage-card :label="$swapLabel" :value="$metric ? ($metric->pageFilePercentForHumans() ?? $missingSwap) : null" :detail="$metric?->pageFileForHumans()" :percent="$metric?->pageFilePercent()" :color="$metric?->pageFileBarColor()" data-swap-usage />
 
-    <flux:card>
+    @if($disk && $disk['usedPercent'] !== null)
+        <x-device.stats.usage-card :label="'Disk '.$disk['name']" :value="$disk['usedForHumans']" :detail="$disk['freeForHumans']" :percent="$disk['usedPercent']" :color="$disk['barColor']" />
+    @else
+        <x-device.stats.usage-card label="Disk" />
+    @endif
+
+    <flux:card class="col-span-2 xl:col-span-1">
         <x-device.stats.stat label="Uptime" :value="$metric?->uptimeForHumans()" />
     </flux:card>
 </div>

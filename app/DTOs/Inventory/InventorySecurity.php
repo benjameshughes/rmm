@@ -46,6 +46,25 @@ final class InventorySecurity
     }
 
     /**
+     * One badge each for BitLocker, Secure Boot, Defender and the firewall, for the Overview tab.
+     *
+     * @return Collection<int, InventoryCheck>
+     */
+    public function summary(): Collection
+    {
+        return collect([
+            $this->systemDriveEncryption(),
+            $this->secureBoot(),
+            match ($this->isDefenderProtecting()) {
+                true => new InventoryCheck('Defender', 'On', 'green'),
+                false => new InventoryCheck('Defender', 'Off', 'red'),
+                null => new InventoryCheck('Defender', 'Not reporting', 'zinc'),
+            },
+            $this->firewallSummary(),
+        ]);
+    }
+
+    /**
      * @return Collection<int, InventoryCheck>
      */
     public function bitlocker(): Collection
@@ -77,6 +96,31 @@ final class InventorySecurity
             : new InventoryCheck($this->text($profile['name'] ?? null) ?? 'Profile', 'Off', 'red'));
     }
 
+    private function systemDriveEncryption(): InventoryCheck
+    {
+        return match ($this->isSystemDriveProtected()) {
+            true => new InventoryCheck('BitLocker', 'On', 'green'),
+            false => new InventoryCheck('BitLocker', 'Off', 'red'),
+            null => new InventoryCheck('BitLocker', 'Not available', 'zinc'),
+        };
+    }
+
+    /**
+     * Every profile on is green, every profile off is red, and a partial firewall names the profiles that are off.
+     */
+    private function firewallSummary(): InventoryCheck
+    {
+        $profiles = $this->firewall();
+        $off = $profiles->filter(fn (InventoryCheck $profile): bool => $profile->value === 'Off');
+
+        return match (true) {
+            $profiles->isEmpty() => new InventoryCheck('Firewall', 'Not reporting', 'zinc'),
+            $off->isEmpty() => new InventoryCheck('Firewall', 'On', 'green'),
+            $off->count() === $profiles->count() => new InventoryCheck('Firewall', 'Off', 'red'),
+            default => new InventoryCheck('Firewall', $off->pluck('label')->implode(', ').' off', 'amber'),
+        };
+    }
+
     private function secureBoot(): InventoryCheck
     {
         return match (data_get($this->data, 'secure_boot')) {
@@ -99,11 +143,19 @@ final class InventorySecurity
 
     private function defender(): InventoryCheck
     {
-        return match (true) {
-            ! is_array(data_get($this->data, 'defender')) => new InventoryCheck('Defender', 'Not reporting', 'zinc'),
-            data_get($this->data, 'defender.is_real_time_enabled') === true => new InventoryCheck('Defender', 'Real-time protection on', 'green'),
-            default => new InventoryCheck('Defender', 'Real-time protection off', 'red'),
+        return match ($this->isDefenderProtecting()) {
+            true => new InventoryCheck('Defender', 'Real-time protection on', 'green'),
+            false => new InventoryCheck('Defender', 'Real-time protection off', 'red'),
+            null => new InventoryCheck('Defender', 'Not reporting', 'zinc'),
         };
+    }
+
+    /**
+     * Whether real-time protection is on; null when Defender did not report at all.
+     */
+    private function isDefenderProtecting(): ?bool
+    {
+        return is_array(data_get($this->data, 'defender')) ? data_get($this->data, 'defender.is_real_time_enabled') === true : null;
     }
 
     private function defenderSignatures(): ?InventoryCheck

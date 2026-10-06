@@ -1,8 +1,13 @@
-@props(['disks' => null])
+@props(['disks' => null, 'busy' => null])
 
-@if(filled($disks))
+@if(filled($disks) || $busy)
     <flux:card {{ $attributes }}>
-        <flux:heading size="sm" class="mb-4">Disk Storage</flux:heading>
+        <div class="mb-4 flex items-center justify-between gap-4">
+            <flux:heading size="sm">Disk Storage</flux:heading>
+            @if($busy)
+                <flux:text size="sm" data-disk-busy>{{ $busy }} busy</flux:text>
+            @endif
+        </div>
         <div class="space-y-4">
             @foreach($disks as $disk)
                 <div wire:key="disk-{{ $disk['name'] }}">

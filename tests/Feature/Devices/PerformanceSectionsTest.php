@@ -36,11 +36,11 @@ it('spreads performance, network adapters and top apps across the tabs for a win
 
     Livewire::actingAs($user)
         ->test(Overview::class, ['device' => $device])
-        ->assertSee('Performance right now')
+        ->assertSeeHtml('data-swap-usage')
         ->assertSee('Page File')
         ->assertSee('32.0%')
         ->assertSee('5.3 GB / 16.7 GB')
-        ->assertSee('0.8%');
+        ->assertSee('0.8% busy');
 
     Livewire::actingAs($user)
         ->test(Details::class, ['device' => $device])
@@ -68,7 +68,7 @@ it('keeps load average and hides the windows sections for a linux device', funct
         ->assertSee('Load Average 1.50 · 1.25 / 1.00')
         ->assertDontSee('CPU Queue');
 
-    Livewire::actingAs($user)->test(Overview::class, ['device' => $device])->assertDontSee('Performance right now');
+    Livewire::actingAs($user)->test(Overview::class, ['device' => $device])->assertSeeHtml('data-swap-usage');
     Livewire::actingAs($user)->test(Details::class, ['device' => $device])->assertDontSee('Network Adapters');
     Livewire::actingAs($user)->test(Apps::class, ['device' => $device])->assertDontSee('Top Apps');
 });
@@ -147,7 +147,7 @@ it('renders the top apps component from its props', function (): void {
     $this->blade('<x-device.top-apps :apps="$apps" />', ['apps' => null])->assertDontSee('Top Apps');
 });
 
-it('renders the performance and summary components from a metric', function (): void {
+it('renders the summary component from a metric, with the page file as a usage bar', function (): void {
     $metric = DeviceMetric::factory()->make([
         'cpu' => 12.5,
         'load1' => null,
@@ -157,20 +157,32 @@ it('renders the performance and summary components from a metric', function (): 
         'disk_busy_percent' => 55.55,
     ]);
 
-    $this->blade('<x-device.stats.performance :metric="$metric" />', ['metric' => $metric])
-        ->assertSee('Performance right now')
-        ->assertDontSee('CPU Queue')
-        ->assertSee('25.0%')
-        ->assertSee('512.0 MB / 2.0 GB')
-        ->assertSee('55.6%');
-
     $this->blade('<x-device.stats.summary :metric="$metric" />', ['metric' => $metric])
         ->assertSee('12.5%')
         ->assertSee('CPU Queue 3.00 threads waiting')
-        ->assertDontSee('Load Average');
+        ->assertDontSee('Load Average')
+        ->assertSee('Page File')
+        ->assertSee('25.0%')
+        ->assertSee('512.0 MB / 2.0 GB')
+        ->assertSee('style="width: 25.0%"', false);
 
     $this->blade('<x-device.stats.summary :metric="$metric" />', ['metric' => null])
         ->assertSee('CPU Usage')
         ->assertDontSee('CPU Queue')
         ->assertSee('—');
+});
+
+it('colours the page file bar from the configured thresholds', function (float $usedMib, string $barColor): void {
+    expect(DeviceMetric::factory()->make(['swap_used_mib' => $usedMib, 'swap_total_mib' => 1000.0])->pageFileBarColor())->toBe($barColor);
+})->with([
+    'comfortable' => [300.0, 'bg-blue-500'],
+    'filling up' => [750.0, 'bg-amber-500'],
+    'full' => [990.0, 'bg-red-500'],
+]);
+
+it('shows how busy the disks are on the disk storage card', function (): void {
+    $disks = collect([['name' => 'C:', 'mountPoint' => null, 'usedPercent' => 50.0, 'usedForHumans' => '50.0%', 'freeForHumans' => null, 'barColor' => 'bg-blue-500', 'inodeForHumans' => null, 'inodeColor' => '']]);
+
+    $this->blade('<x-device.disk-storage :disks="$disks" busy="42.0%" />', ['disks' => $disks])->assertSee('42.0% busy');
+    $this->blade('<x-device.disk-storage :disks="$disks" />', ['disks' => $disks])->assertDontSee('busy');
 });

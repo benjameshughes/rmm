@@ -58,10 +58,10 @@ describe('overview', function (): void {
 
         Livewire::actingAs($this->user)->test(Overview::class, ['device' => $device])
             ->assertSee('Load Average 0.50')
-            ->assertSee('Performance right now')
+            ->assertSeeHtml('data-swap-usage')
             ->assertSee('Swap')
             ->assertSee('25.0%')
-            ->assertSee('12.5%')
+            ->assertSee('12.5% busy')
             ->assertDontSee('Page File')
             ->assertDontSee('CPU Queue');
     });

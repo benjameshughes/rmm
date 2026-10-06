@@ -65,6 +65,23 @@ final class SystemInventory
     }
 
     /**
+     * The handful of facts a sysadmin wants on the device's Overview tab.
+     *
+     * @return array<string, string>
+     */
+    public function glance(): array
+    {
+        return $this->facts([
+            'Model' => $this->joined(' ', $this->textAt('system.manufacturer'), $this->textAt('system.model')),
+            'Service tag' => $this->textAt('system.serial_number'),
+            'Processor' => $this->textAt('cpu.name'),
+            'Windows' => $this->joined(' · ', $this->textAt('windows.display_version'), $this->windowsBuild()),
+            'Domain' => $this->domain(),
+            'Signed in' => $this->users()->signedInForHumans(),
+        ]);
+    }
+
+    /**
      * The values stored in their own columns so the fleet can be queried and sorted on them.
      *
      * @return array{manufacturer: ?string, model: ?string, serial_number: ?string, total_ram_gb: ?float, windows_edition: ?string, windows_build: ?string, is_bitlocker_on: ?bool, is_secure_boot: ?bool, local_admin_count: ?int}
