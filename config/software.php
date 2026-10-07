@@ -39,6 +39,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Installing By ID
+    |--------------------------------------------------------------------------
+    |
+    | A package ID typed in for a bulk install must match the same pattern the
+    | winget-install script checks, so a bad ID is refused before it is
+    | queued on every device. The picker suggests this many known IDs.
+    |
+    */
+
+    'package_id_pattern' => '/^[A-Za-z0-9][A-Za-z0-9._+-]*$/',
+    'package_id_max_length' => 128,
+    'install_suggestions' => 8,
+
+    /*
+    |--------------------------------------------------------------------------
     | Hidden Runtimes
     |--------------------------------------------------------------------------
     |

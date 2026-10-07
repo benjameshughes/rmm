@@ -62,10 +62,10 @@ it('asks before restarting or powering off the ticked devices, counted in the br
         ->set('selectedDevices', $devices->pluck('id')->map(fn (int $id): string => (string) $id)->all());
 
     expect(confirmTrigger($page->html(), 'bulkRestart()'))
-        ->toContain("message: 'Restart ' + devices + '?'")
+        ->toContain("message: 'Restart ' + countLabel + '?'")
         ->not->toContain('danger: true')
         ->and(confirmTrigger($page->html(), 'bulkPowerOff()'))
-        ->toContain("message: 'Power off ' + devices + '?'")
+        ->toContain("message: 'Power off ' + countLabel + '?'")
         ->toContain('danger: true');
 
     $page->call('bulkRestart')->assertDispatched('command-queued');

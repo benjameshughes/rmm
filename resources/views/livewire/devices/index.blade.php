@@ -112,4 +112,6 @@
     </flux:modal>
 
     <x-device.list.bulk-bar :groups="$groups" :tags="$tags" />
+
+    <livewire:software.install-software />
 </div>

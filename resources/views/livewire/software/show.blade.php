@@ -17,9 +17,9 @@
                         Upgrade on all outdated ({{ $upgradableCount }})
                     </flux:button>
                 @endif
-                @if($package->source !== null && $missingCount > 0)
-                    <flux:button icon="arrow-down-tray" x-on:click="$dispatch('confirm-action', { heading: 'Install everywhere', message: {{ Js::from('Install '.$package->name.' on the '.$missingCount.' '.Str::plural('device', $missingCount).' that do not have it?') }}, confirm: 'Install', action: () => $wire.installEverywhere() })" data-install-everywhere>
-                        Install where missing ({{ $missingCount }})
+                @if($package->source !== null)
+                    <flux:button icon="arrow-down-tray" x-on:click="$dispatch('open-install-software', { packageId: {{ Js::from($package->package_id) }} })" data-install-more>
+                        Install on more devices
                     </flux:button>
                 @endif
                 <flux:button variant="danger" icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Uninstall everywhere', message: {{ Js::from('Uninstall '.$package->name.' from all '.$installs->count().' '.Str::plural('device', $installs->count()).'?') }}, confirm: 'Uninstall', danger: true, action: () => $wire.uninstallEverywhere() })" data-uninstall-everywhere>
@@ -73,4 +73,6 @@
             </flux:table.rows>
         </flux:table>
     </flux:card>
+
+    <livewire:software.install-software />
 </div>

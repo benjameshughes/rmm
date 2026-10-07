@@ -6,9 +6,14 @@ namespace App\Livewire\Devices;
 
 use App\Actions\Software\QueuePackageAction;
 use App\Actions\Software\RefreshSoftwareInventory;
+use App\DTOs\Software\PackageCommandPlan;
+use App\DTOs\Software\SoftwareFilters;
 use App\Enums\DeviceTab;
 use App\Enums\PackageAction;
+use App\Enums\SoftwareSource;
+use App\Livewire\Concerns\QueuesSelectedPackageCommands;
 use App\Models\Device;
+use App\Models\DeviceSoftware;
 use App\Queries\SoftwareQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -21,6 +26,7 @@ use Livewire\WithPagination;
 #[Layout('components.layouts.app')]
 final class Apps extends Component
 {
+    use QueuesSelectedPackageCommands;
     use WithPagination;
 
     public Device $device;
@@ -28,7 +34,16 @@ final class Apps extends Component
     #[Url(as: 'q')]
     public string $softwareSearch = '';
 
-    public bool $closeAppFirst = false;
+    #[Url]
+    public string $source = '';
+
+    #[Url(as: 'updates')]
+    public bool $isOutdatedOnly = false;
+
+    /** @var array<int, string> DeviceSoftware IDs */
+    public array $selectedSoftware = [];
+
+    public bool $selectAll = false;
 
     public function mount(Device $device): void
     {
@@ -48,9 +63,31 @@ final class Apps extends Component
     #[On('command-queued')]
     public function refreshCommands(): void {}
 
-    public function updatingSoftwareSearch(): void
+    /**
+     * A filter change starts again from page one with nothing ticked.
+     */
+    public function updated(string $property): void
     {
-        $this->resetPage();
+        if (in_array($property, ['softwareSearch', 'source', 'isOutdatedOnly'], true)) {
+            $this->resetPage();
+            $this->clearSelection();
+        }
+    }
+
+    /**
+     * Ticks every app on the current page.
+     */
+    public function updatedSelectAll(SoftwareQueries $software): void
+    {
+        $this->selectedSoftware = $this->selectAll
+            ? $software->forDevice($this->device, $this->filters())->paginate(config('software.device_per_page'))->pluck('id')->map(fn (int $id): string => (string) $id)->all()
+            : [];
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selectedSoftware = [];
+        $this->selectAll = false;
     }
 
     public function refreshInventory(RefreshSoftwareInventory $action): void
@@ -88,6 +125,26 @@ final class Apps extends Component
         Flux::toast(text: "{$package->name} on {$this->device->hostname}. The list refreshes once it has run.", heading: $packageAction->queuedHeading(), variant: 'success');
     }
 
+    /**
+     * Only packages in this device's own inventory can be ticked.
+     */
+    protected function planSelectedPackages(PackageAction $action): PackageCommandPlan
+    {
+        $installs = $this->device->software()->whereIn('id', $this->selectedSoftware)->get()
+            ->each(fn (DeviceSoftware $install): DeviceSoftware => $install->setRelation('device', $this->device));
+
+        return PackageCommandPlan::forInstalls($action, $installs);
+    }
+
+    private function filters(): SoftwareFilters
+    {
+        return new SoftwareFilters(
+            search: $this->softwareSearch,
+            source: SoftwareSource::tryFrom($this->source),
+            isOutdatedOnly: $this->isOutdatedOnly,
+        );
+    }
+
     public function render(SoftwareQueries $software): View
     {
         $hasSoftwareInventory = $this->device->hasSoftwareInventory();
@@ -96,7 +153,7 @@ final class Apps extends Component
             'apps' => $this->device->latestMetric?->appMetrics,
             'hasSoftwareInventory' => $hasSoftwareInventory,
             'lastChecked' => $this->device->software_inventoried_at === null ? null : 'Last checked '.$this->device->software_inventoried_at->diffForHumans().' by winget.',
-            'software' => $hasSoftwareInventory ? $software->forDevice($this->device, $this->softwareSearch)->paginate(config('software.device_per_page')) : null,
+            'software' => $hasSoftwareInventory ? $software->forDevice($this->device, $this->filters())->paginate(config('software.device_per_page')) : null,
             'packageCommands' => $hasSoftwareInventory ? $software->packageCommandsOnDevice($this->device) : collect(),
             'inventoryCommand' => $hasSoftwareInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('software.inventory_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::Apps->pageTitle($this->device));

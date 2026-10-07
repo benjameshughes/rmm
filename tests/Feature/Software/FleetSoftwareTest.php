@@ -192,7 +192,7 @@ it('says a package is not in winget instead of claiming it is up to date', funct
 });
 
 describe('fleet install and uninstall', function (): void {
-    it('installs a winget app only on inventoried Windows devices that do not have it', function (): void {
+    it('installs a winget app from its page on every Windows device that does not have it', function (): void {
         $has = pcWith([zip()]);
         $missingOne = pcWith([chrome('130.0')]);
         $missingTwo = pcWith([]);
@@ -200,12 +200,20 @@ describe('fleet install and uninstall', function (): void {
         $server = Device::factory()->active()->monitorOnly()->create(['software_inventoried_at' => now()]);
 
         Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])
-            ->assertSee('Install where missing (2)')
-            ->call('installEverywhere')
+            ->assertSeeHtml('data-install-more')
+            ->assertSeeHtml("packageId: '7zip.7zip'");
+
+        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+            ->dispatch('open-install-software', packageId: '7zip.7zip')
+            ->assertSet('isPackageFixed', true)
+            ->assertSee('Install 7zip.7zip: 3 commands across 3 devices.')
+            ->assertSee('1 device skipped: it already has it.')
+            ->call('install')
+            ->assertHasNoErrors()
             ->assertDispatched('command-queued');
 
         $commands = DeviceCommand::query()->with('script')->get();
-        expect($commands->pluck('device_id')->sort()->values()->all())->toBe(collect([$missingOne->id, $missingTwo->id])->sort()->values()->all())
+        expect($commands->pluck('device_id')->sort()->values()->all())->toBe(collect([$missingOne->id, $missingTwo->id, $notInventoried->id])->sort()->values()->all())
             ->and($commands->pluck('script.slug')->unique()->all())->toBe(['winget-install'])
             ->and($commands->first()->parameters)->toBe(['PackageId' => '7zip.7zip']);
     });
@@ -215,9 +223,14 @@ describe('fleet install and uninstall', function (): void {
         pcWith([]);
 
         Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'ARP\Machine\X64\Thing'])
-            ->assertDontSeeHtml('data-install-everywhere')
-            ->call('installEverywhere')
-            ->assertNotFound();
+            ->assertDontSeeHtml('data-install-more');
+
+        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+            ->dispatch('open-install-software', packageId: 'ARP\Machine\X64\Thing')
+            ->call('install')
+            ->assertHasErrors(['packageId' => 'regex']);
+
+        expect(DeviceCommand::query()->count())->toBe(0);
     });
 
     it('uninstalls from every device that has it and nothing else', function (): void {
@@ -296,9 +309,9 @@ describe('closing the app first', function (): void {
         pcWith([zip()]);
         pcWith([]);
 
-        Livewire::actingAs($this->user)->test(Show::class, ['packageId' => '7zip.7zip'])
-            ->set('closeAppFirst', true)
-            ->call('installEverywhere')
+        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+            ->dispatch('open-install-software', packageId: '7zip.7zip')
+            ->call('install')
             ->assertHasNoErrors();
 
         expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => '7zip.7zip']);

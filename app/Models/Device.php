@@ -183,6 +183,17 @@ final class Device extends Model
     }
 
     /**
+     * The query twin of platform(): any OS field naming Windows.
+     */
+    public function scopeRunsWindows(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $osQuery): Builder => $osQuery
+            ->where('os', 'like', '%windows%')
+            ->orWhere('os_name', 'like', '%windows%')
+            ->orWhere('kernel_name', 'like', '%windows%'));
+    }
+
+    /**
      * Devices still carrying a power state that has outlived its window.
      */
     public function scopeWithLapsedPowerState(Builder $query): Builder
