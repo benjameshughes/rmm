@@ -18,7 +18,9 @@ use InvalidArgumentException;
  * Backup secrets (repository name and password) are the command's own device's, or, for a script that
  * declares a SourceDevice parameter, the device that parameter names. Either
  * must be a Windows PC with backups enabled; anything else gets blanks, which
- * the scripts report as not set up. Ad-hoc commands and user scripts never
+ * the scripts report as not set up. The master password goes only to a
+ * script that declares it (backup-files), and only while that PC's master
+ * key is pending: once it is stamped as added, it is sent blank. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -61,6 +63,7 @@ final class ResolveCommandSecrets
             'ResticDownloadUrl' => config('backup.restic.download_url'),
             'ResticSha256' => config('backup.restic.sha256'),
             'ResticExeSha256' => config('backup.restic.exe_sha256'),
+            'MasterPassword' => $source?->isBackupMasterKeyPending ? (string) config('backup.master_password') : '',
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),
         };
     }

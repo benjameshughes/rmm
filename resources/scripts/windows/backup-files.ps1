@@ -10,6 +10,11 @@
 # Notes), Outlook's .ost cache, registry hives and anything over 4 GB. The
 # exclude rules ignore case.
 #
+# After a good backup (exit 0 or 3), while the RMM still sends the master
+# password, it is added as a second key on the repository (see
+# Add-ResticMasterKey). Failing to add it never fails the backup; master_key
+# in the result says added, present, failed or not_requested.
+#
 # Exit 0: backed up (or nothing had changed). Exit 3: backed up, but some
 # files could not be read; they are listed. Anything else: no snapshot, with
 # restic's reason. The last line is one JSON object for the Backups tab.
@@ -145,10 +150,20 @@ $verdict = switch ($exitCode) {
     default { "ATTENTION: $(Get-ResticExitMeaning $exitCode)" }
 }
 
+$masterKey = @{ Status = 'not_requested'; Error = $null }
+
+if ($exitCode -eq 0 -or $exitCode -eq 3) {
+    $masterKey = Add-ResticMasterKey
+}
+
 Write-Output $verdict
 Write-Output "Profiles: $($profiles -join ', ')"
 foreach ($line in $errors) {
     Write-Output "  $line"
+}
+
+if ($masterKey.Status -eq 'failed') {
+    Write-Output "ATTENTION: the backup itself is fine, but $($masterKey.Error). The next backup tries again"
 }
 
 $result = @{
@@ -164,6 +179,7 @@ $result = @{
     errors = @($errors)
     restic_version = $resticVersion
     sources = @($profiles)
+    master_key = $masterKey.Status
 }
 
 Write-Output (ConvertTo-Json -InputObject $result -Depth 4 -Compress)

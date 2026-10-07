@@ -41,6 +41,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Master Key
+    |--------------------------------------------------------------------------
+    |
+    | One extra password added as a second key to every PC's repository, so
+    | the admin host can forget, prune and check them all with a single
+    | password, and so the backups can still be opened if the RMM (and with
+    | it every PC's own password) is lost. It lives only in the RMM's .env
+    | and in Bitwarden. Null when unset, and then nothing is added.
+    |
+    | It reaches backup-files only while a PC's master key is still pending:
+    | after a good backup the script adds it with `restic key add` unless it
+    | already opens the repository, and the RMM stamps the PC
+    | (backup_master_key_added_at) from the result. A stamped PC is never
+    | sent it again, and no other script ever is.
+    |
+    */
+
+    'master_password' => env('BACKUP_MASTER_PASSWORD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Generated Repository Password
     |--------------------------------------------------------------------------
     |

@@ -60,6 +60,7 @@ it('hands the agent the repository name and password, server and restic pin only
         'ResticDownloadUrl' => config('backup.restic.download_url'),
         'ResticSha256' => config('backup.restic.sha256'),
         'ResticExeSha256' => config('backup.restic.exe_sha256'),
+        'MasterPassword' => '',
     ]);
 });
 

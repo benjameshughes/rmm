@@ -9,8 +9,9 @@
 # download lands in the locked folder too, never in a shared temp folder.
 #
 # The pin (RMM_ResticVersion, RMM_ResticDownloadUrl, RMM_ResticSha256,
-# RMM_ResticExeSha256) and the repository name and password arrive as environment
-# variables only when the agent fetches the command. They are never printed.
+# RMM_ResticExeSha256), the repository name and password and, while a PC's
+# master key is pending, RMM_MasterPassword arrive as environment variables
+# only when the agent fetches the command. They are never printed.
 #
 # Windows PowerShell 5.1, ASCII only, no try/catch. Every failure goes through
 # Stop-Run, so the last line printed is always one JSON object.
@@ -178,6 +179,43 @@ function Set-ResticRepository {
         [IO.File]::WriteAllText($resticCaCertPath, "$env:RMM_RestCaCert".Trim() + "`n", (New-Object Text.UTF8Encoding $false))
         $script:resticArguments += @('--cacert', $resticCaCertPath)
     }
+}
+
+# Adds the RMM's master password as a second key on this run's repository,
+# so the admin host can open every repository with one password and the
+# backups outlive the RMM. The RMM sends RMM_MasterPassword only while the
+# PC's master key is pending. If the master already opens the repository it
+# is left alone; otherwise restic opens it with the PC's own password and
+# adds the master, read from a file in the locked restic folder that is
+# deleted straight after. The master is never printed. Returns the outcome
+# (added, present, failed or not_requested) and why it failed.
+function Add-ResticMasterKey {
+    if (-not "$env:RMM_MasterPassword") {
+        return @{ Status = 'not_requested'; Error = $null }
+    }
+
+    $env:RESTIC_PASSWORD = $env:RMM_MasterPassword
+    $check = Invoke-Restic (@('cat', 'config', '--no-lock') + $resticArguments)
+    $env:RESTIC_PASSWORD = $env:RMM_ResticPassword
+
+    if ([int]$check.ExitCode -eq 0) {
+        return @{ Status = 'present'; Error = $null }
+    }
+
+    if ([int]$check.ExitCode -ne 12) {
+        return @{ Status = 'failed'; Error = "could not check the repository for the master key: $((Get-ResticErrors $check.Stderr 1) -join '; ')" }
+    }
+
+    $masterKeyFile = Join-Path $resticDir 'master-key.txt'
+    [IO.File]::WriteAllText($masterKeyFile, "$env:RMM_MasterPassword", (New-Object Text.UTF8Encoding $false))
+    $add = Invoke-Restic (@('key', 'add', '--new-password-file', $masterKeyFile, '--host', 'rmm', '--user', 'master') + $resticArguments)
+    Remove-Item -LiteralPath $masterKeyFile -Force -ErrorAction SilentlyContinue
+
+    if ([int]$add.ExitCode -ne 0) {
+        return @{ Status = 'failed'; Error = "could not add the master key: $((Get-ResticErrors $add.Stderr 1) -join '; ')" }
+    }
+
+    return @{ Status = 'added'; Error = $null }
 }
 
 function Test-BackupCredentials {

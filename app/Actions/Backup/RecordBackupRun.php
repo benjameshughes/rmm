@@ -18,7 +18,9 @@ use Illuminate\Support\Str;
  * a good backup, 3 a good one that skipped unreadable files, anything else
  * (a timeout or a script that died without a result included) a failure.
  * A PC the script skipped for having no credentials records nothing. A run
- * that saved a snapshot adds it to the snapshot list straight away.
+ * that saved a snapshot adds it to the snapshot list straight away. A run
+ * whose result says the master key was added, or was already there, stamps
+ * the PC once, so the master password is never sent to it again.
  */
 final class RecordBackupRun
 {
@@ -57,6 +59,7 @@ final class RecordBackupRun
                 'last_backup_at' => $finishedAt,
                 'last_backup_status' => $status,
                 'last_good_backup_at' => $status->isGood() ? $finishedAt : $command->device->last_good_backup_at,
+                'backup_master_key_added_at' => $command->device->backup_master_key_added_at ?? ($this->hasMasterKey($result) ? $finishedAt : null),
             ])->save();
 
             $this->addSnapshot($command->device, $backup, $result);
@@ -77,6 +80,14 @@ final class RecordBackupRun
         $snapshotId = $result['snapshot_id'] ?? null;
 
         return is_string($snapshotId) && preg_match('/^[0-9a-f]{8,64}$/', $snapshotId) === 1 ? $snapshotId : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function hasMasterKey(array $result): bool
+    {
+        return in_array($result['master_key'] ?? null, ['added', 'present'], true);
     }
 
     /**

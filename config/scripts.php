@@ -166,7 +166,7 @@ return [
             'platform' => 'windows',
             'file' => 'windows/backup-files.ps1',
             'includes' => ['windows/shared/restic.ps1'],
-            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256', 'MasterPassword'],
             'timeout_seconds' => 7200,
             'requires_admin' => true,
             'parameters' => [

@@ -92,6 +92,19 @@ trait BacksUpFiles
     }
 
     /**
+     * The master key line for the Backups tab: when it was added to this
+     * PC's repository, or why it has not been yet.
+     */
+    public function backupMasterKeyStatus(): string
+    {
+        return match (true) {
+            $this->backup_master_key_added_at !== null => 'added '.$this->backup_master_key_added_at->format('j M Y'),
+            blank(config('backup.master_password')) => 'not configured (set BACKUP_MASTER_PASSWORD)',
+            default => 'pending (added on next backup)',
+        };
+    }
+
+    /**
      * What overdue counts from: the last good backup, or before the first, when the credentials were set.
      */
     private function backupDueSince(): CarbonInterface
@@ -102,5 +115,13 @@ trait BacksUpFiles
     protected function hasBackupCredentials(): Attribute
     {
         return Attribute::get(fn (): bool => $this->backup_configured_at !== null);
+    }
+
+    /**
+     * Whether the next backup should add the master key: one is configured and this PC's repository is not stamped with it yet.
+     */
+    protected function isBackupMasterKeyPending(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->backup_master_key_added_at === null && filled(config('backup.master_password')));
     }
 }

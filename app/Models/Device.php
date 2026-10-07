@@ -96,6 +96,7 @@ final class Device extends Model
             'api_key_claimed_at' => 'datetime',
             'backup_repository_password' => 'encrypted',
             'backup_configured_at' => 'datetime',
+            'backup_master_key_added_at' => 'datetime',
             'last_backup_at' => 'datetime',
             'last_backup_status' => BackupRunStatus::class,
             'last_good_backup_at' => 'datetime',
