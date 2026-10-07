@@ -35,6 +35,7 @@
 
                 <flux:navlist.group :heading="__('Monitoring')" class="grid">
                     <flux:navlist.item icon="bell-alert" :href="route('alerts.index')" :current="request()->routeIs('alerts.*', 'alert-rules.*')" wire:navigate>{{ __('Alerts') }}</flux:navlist.item>
+                    <flux:navlist.item icon="presentation-chart-line" :href="route('trends.index')" :current="request()->routeIs('trends.*')" wire:navigate>{{ __('Trends') }}</flux:navlist.item>
                     @can('viewAny', App\Models\AuditLog::class)
                         <flux:navlist.item icon="shield-check" :href="route('audit.index')" :current="request()->routeIs('audit.*')" wire:navigate>{{ __('Audit Log') }}</flux:navlist.item>
                     @endcan

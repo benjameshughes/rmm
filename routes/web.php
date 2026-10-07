@@ -31,6 +31,7 @@ use App\Livewire\Settings\TwoFactor;
 use App\Livewire\Software\Index as SoftwareIndex;
 use App\Livewire\Software\Show as SoftwareShow;
 use App\Livewire\Tags\Index as TagsIndex;
+use App\Livewire\Trends\Index as TrendsIndex;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -96,6 +97,9 @@ Route::middleware(['auth'])->group(function () {
     // Alerts
     Route::get('alerts', AlertsIndex::class)->name('alerts.index');
     Route::get('alert-rules', AlertRulesIndex::class)->name('alert-rules.index');
+
+    // Trends
+    Route::get('trends', TrendsIndex::class)->name('trends.index');
 
     // Schedules
     Route::get('scheduled-tasks', ScheduledTasksIndex::class)->name('scheduled-tasks.index');

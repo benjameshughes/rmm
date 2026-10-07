@@ -19,7 +19,7 @@
             <flux:chart.viewport :class="$compact ? 'h-36' : 'aspect-[3/1] min-h-40'">
                 <flux:chart.svg>
                     @foreach($chart->series as $line)
-                        <flux:chart.line :field="$line['field']" class="{{ $line['color'] }}" curve="none" />
+                        <flux:chart.line :field="$line['field']" class="{{ $line['color'] }}" curve="none" :stroke-dasharray="($line['dashed'] ?? false) ? '4 4' : null" />
                     @endforeach
 
                     <flux:chart.axis axis="x" field="time" :format="$timeFormat">

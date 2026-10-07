@@ -16,7 +16,7 @@ final class MetricChart
     /**
      * @param  array<string, string|int>  $format  Intl.NumberFormat options for the values
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array<int, array{field: string, label: string, color: string, swatch: string}>  $series
+     * @param  array<int, array{field: string, label: string, color: string, swatch: string, dashed?: bool}>  $series
      */
     public function __construct(
         public readonly string $title,
@@ -29,7 +29,7 @@ final class MetricChart
     /**
      * @param  array<string, string|int>  $format
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array<int, array{field: string, label: string, color: string, swatch: string}>  $series
+     * @param  array<int, array{field: string, label: string, color: string, swatch: string, dashed?: bool}>  $series
      */
     public static function make(string $title, array $format, Collection $rows, array $series, ?string $emptyMessage = null): self
     {

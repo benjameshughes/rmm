@@ -9,6 +9,7 @@ use App\Models\Device;
 use App\Models\DeviceDiskMetric;
 use App\Models\DeviceMetric;
 use App\Models\DeviceNetworkMetric;
+use App\Queries\Concerns\BucketsReportTimes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -20,6 +21,8 @@ use Illuminate\Support\Collection;
  */
 final class DeviceMetricQueries
 {
+    use BucketsReportTimes;
+
     /**
      * @return Collection<int, array{time: string, cpu: ?float, ram: ?float, cpuQueue: ?float, load: ?float, diskBusy: ?float, pageFile: ?float}>
      */
@@ -95,19 +98,6 @@ final class DeviceMetricQueries
             ->where('device_metrics.recorded_at', '>=', $startsAt)
             ->groupBy('bucket')
             ->orderBy('bucket');
-    }
-
-    /**
-     * Whole buckets since the start of the range, worked out from the stored
-     * wall-clock values so the connection's time zone never shifts them.
-     */
-    private function bucketExpression(Builder $query): string
-    {
-        return match ($query->getConnection()->getDriverName()) {
-            'sqlite' => 'CAST(ROUND((julianday(device_metrics.recorded_at) - julianday(?)) * 86400) AS INTEGER) / ?',
-            'pgsql' => 'FLOOR(EXTRACT(EPOCH FROM (device_metrics.recorded_at - CAST(? AS timestamp))) / ?)',
-            default => 'FLOOR(TIMESTAMPDIFF(SECOND, ?, device_metrics.recorded_at) / ?)',
-        };
     }
 
     /**
