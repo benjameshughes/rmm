@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Counts metrics reports in a row that arrive with no CPU figure. A report with
- * CPU clears the count; reaching the threshold announces it exactly once, so a
- * PC that stays blank is not repaired on every report after.
+ * CPU clears the count; every blank report from the threshold on announces it,
+ * and the repair listener's cooldown decides how often anything is done.
  */
 final class WatchForSilentNetdata
 {
@@ -31,7 +31,7 @@ final class WatchForSilentNetdata
 
         Cache::add($key, 0);
 
-        if (Cache::increment($key) === config('devices.metrics.blank_reports_before_repair')) {
+        if (Cache::increment($key) >= config('devices.metrics.blank_reports_before_repair')) {
             NetdataWentQuiet::dispatch($event->device);
         }
     }

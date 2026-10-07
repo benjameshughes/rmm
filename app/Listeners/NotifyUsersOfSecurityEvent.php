@@ -25,7 +25,7 @@ final class NotifyUsersOfSecurityEvent
             return;
         }
 
-        $recipients = User::query()->get()
+        $recipients = User::query()->humans()->get()
             ->filter(fn (User $user): bool => $user->can('viewAny', AuditLog::class) && $auditLog->shouldNotify($user));
 
         Notification::send($recipients, new SecurityEvent($auditLog));

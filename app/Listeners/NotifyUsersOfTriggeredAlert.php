@@ -24,7 +24,7 @@ final class NotifyUsersOfTriggeredAlert
             return;
         }
 
-        $recipients = User::query()->get()
+        $recipients = User::query()->humans()->get()
             ->filter(fn (User $user): bool => $user->can('viewAny', Alert::class));
 
         Notification::send($recipients, new AlertTriggered($alert));

@@ -16,6 +16,7 @@ use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Hash;
 
 pest()->use(RefreshDatabase::class);
 
@@ -42,10 +43,10 @@ describe('watching for blank reports', function (): void {
         Event::assertNotDispatched(NetdataWentQuiet::class);
     });
 
-    it('fires exactly once on reaching the threshold, not again after', function (): void {
+    it('fires on every blank report from the threshold on, so a failed repair is tried again', function (): void {
         collect(range(1, 5))->each(fn (): null => reportMetrics($this->device, null));
 
-        Event::assertDispatchedTimes(NetdataWentQuiet::class, 1);
+        Event::assertDispatchedTimes(NetdataWentQuiet::class, 3);
         Event::assertDispatched(NetdataWentQuiet::class, fn (NetdataWentQuiet $event): bool => $event->device->is($this->device));
     });
 
@@ -112,16 +113,33 @@ describe('repairing quiet Netdata', function (): void {
         $command = DeviceCommand::query()->where('device_id', $this->device->id)->sole();
         expect($command->script_id)->toBe($this->script->id)
             ->and($command->status)->toBe(CommandStatus::Pending)
-            ->and($command->queued_by)->toBe($this->user->id);
+            ->and($command->queuedBy->name)->toBe('Claudette');
     });
 
-    it('queues it as whoever last queued a command on the device', function (): void {
-        $approver = User::factory()->create();
-        DeviceCommand::factory()->completed()->create(['device_id' => $this->device->id, 'queued_by' => $approver->id, 'queued_at' => now()->subDay()]);
+    it('queues one repair a day however many blank reports arrive', function (): void {
+        collect(range(1, 10))->each(fn (): null => reportMetrics($this->device, null));
 
+        expect(DeviceCommand::query()->where('script_id', $this->script->id)->count())->toBe(1);
+
+        $this->travel(25)->hours();
+        reportMetrics($this->device, null);
+
+        expect(DeviceCommand::query()->where('script_id', $this->script->id)->count())->toBe(2);
+    });
+
+    it('queues it as the Claudette automation user, created once', function (): void {
         NetdataWentQuiet::dispatch($this->device);
+        NetdataWentQuiet::dispatch(Device::factory()->windows()->active()->create());
 
-        expect(DeviceCommand::query()->where('script_id', $this->script->id)->sole()->queued_by)->toBe($approver->id);
+        expect(User::query()->where('email', config('devices.automation_user.email'))->count())->toBe(1)
+            ->and(DeviceCommand::query()->pluck('queued_by')->unique()->all())->toBe([User::automation()->id]);
+    });
+
+    it('leaves the automation user out of humans, so she gets no notifications', function (): void {
+        $claudette = User::automation();
+
+        expect(User::query()->humans()->pluck('id')->all())->toBe([$this->user->id])
+            ->and(Hash::check('', $claudette->password))->toBeFalse();
     });
 
     it('does not queue it again within the cooldown', function (): void {

@@ -187,6 +187,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Automation User
+    |--------------------------------------------------------------------------
+    |
+    | Commands nobody clicked (automatic repairs) are queued as this user, so
+    | the history shows what the system did on its own. It has an unknown
+    | random password and never receives notifications.
+    |
+    */
+
+    'automation_user' => [
+        'name' => 'Claudette',
+        'email' => 'claudette@rmm.invalid',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Metrics Storage
     |--------------------------------------------------------------------------
     |

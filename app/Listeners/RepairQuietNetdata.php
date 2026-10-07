@@ -35,13 +35,7 @@ final class RepairQuietNetdata
             return;
         }
 
-        $user = $this->queueAs($device);
-
-        if ($user === null) {
-            return;
-        }
-
-        ($this->executeScript)($script, $device, $user);
+        ($this->executeScript)($script, $device, User::automation());
     }
 
     private function wasRepairedRecently(Device $device, Script $script): bool
@@ -50,15 +44,5 @@ final class RepairQuietNetdata
             ->where('script_id', $script->id)
             ->where('queued_at', '>=', now()->subHours(config('devices.metrics.netdata_repair_cooldown_hours')))
             ->exists();
-    }
-
-    /**
-     * Nobody asked for this run, so it is queued as whoever last queued a
-     * command on the PC (its approver queued Install Netdata), else the first user.
-     */
-    private function queueAs(Device $device): ?User
-    {
-        return $device->commands()->with('queuedBy')->latest('queued_at')->first()?->queuedBy
-            ?? User::query()->oldest('id')->first();
     }
 }

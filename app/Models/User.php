@@ -62,4 +62,21 @@ class User extends Authenticatable
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
+
+    /**
+     * The user automatic commands are queued as. Created on first use with a
+     * random password nobody knows, so it can never sign in.
+     */
+    public static function automation(): self
+    {
+        return self::query()->firstOrCreate(
+            ['email' => config('devices.automation_user.email')],
+            ['name' => config('devices.automation_user.name'), 'password' => Str::random(64)],
+        );
+    }
+
+    public function scopeHumans($query)
+    {
+        return $query->whereNot('email', config('devices.automation_user.email'));
+    }
 }
