@@ -13,6 +13,7 @@ use App\Enums\ScriptPlatform;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\WatchesPrinters;
 use App\Models\Concerns\WatchesVirtualPrinter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -33,6 +34,7 @@ final class Device extends Model
     /** @use HasFactory<\Database\Factories\DeviceFactory> */
     use HasFactory;
 
+    use WatchesPrinters;
     use WatchesVirtualPrinter;
 
     protected $fillable = [
@@ -80,6 +82,8 @@ final class Device extends Model
             'system_inventoried_at' => 'datetime',
             'virtual_printer_seen_at' => 'datetime',
             'virtual_printer_missing_since' => 'datetime',
+            'printers_reported_at' => 'datetime',
+            'spooler_down_since' => 'datetime',
             'disks' => 'array',
             'mac_addresses' => 'array',
             'status' => DeviceStatus::class,

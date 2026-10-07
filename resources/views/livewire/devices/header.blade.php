@@ -5,6 +5,7 @@
             <x-device.status-badge :label="$statusLabel" :color="$statusColor" size="lg" />
             <x-device.monitor-only-badge :device="$device" />
             <x-device.virtual-printer-badge :device="$device" />
+            <x-device.printer-badge :label="$printerProblem" />
         </div>
 
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">

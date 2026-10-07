@@ -16,6 +16,16 @@
         </x-dashboard.section>
     @endif
 
+    @if($printerProblems->isNotEmpty())
+        <x-dashboard.section title="Printers" description="Printing problems on PCs that are online, worst first." data-printer-problems>
+            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                @foreach($printerProblems as $attention)
+                    <x-dashboard.printer-problem :attention="$attention" wire:key="printer-problem-{{ $attention->key() }}" />
+                @endforeach
+            </div>
+        </x-dashboard.section>
+    @endif
+
     <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <x-device.list.summary-card label="Devices" :value="$summary['total']" icon="server" :href="route('devices.index')" />
         <x-device.list.summary-card :label="DeviceListFilter::Online->label()" :value="$summary['online']" icon="signal" tone="text-green-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::Online->value])" />

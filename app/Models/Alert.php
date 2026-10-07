@@ -25,6 +25,7 @@ final class Alert extends Model
         'status',
         'severity',
         'metric',
+        'subject',
         'threshold',
         'current_value',
         'message',

@@ -87,6 +87,39 @@ final class AlertRule extends Model
         ]);
     }
 
+    /**
+     * The built-in rule behind printer problem alerts, created on first use so
+     * it can be switched off under Alert Rules like any other rule.
+     */
+    public static function printerProblem(): self
+    {
+        return self::builtIn(AlertMetric::PrinterProblem, config('printers.alerts.printer_problem'));
+    }
+
+    /**
+     * The built-in rule behind stopped print spooler alerts, created on first
+     * use so it can be switched off under Alert Rules like any other rule.
+     */
+    public static function spoolerDown(): self
+    {
+        return self::builtIn(AlertMetric::SpoolerDown, config('printers.alerts.spooler_down'));
+    }
+
+    /**
+     * @param  array{rule_name: string, severity: string}  $settings
+     */
+    private static function builtIn(AlertMetric $metric, array $settings): self
+    {
+        return self::query()->firstOrCreate(['metric' => $metric], [
+            'name' => $settings['rule_name'],
+            'operator' => AlertOperator::GreaterThan,
+            'threshold' => 0,
+            'duration_minutes' => 0,
+            'severity' => AlertSeverity::from($settings['severity']),
+            'is_active' => true,
+        ]);
+    }
+
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);

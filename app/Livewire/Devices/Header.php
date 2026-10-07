@@ -52,6 +52,7 @@ final class Header extends Component
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
+    #[On('echo-private:devices.{device.id},PrintersReported')]
     public function refreshDevice(): void
     {
         $this->device->refresh();
@@ -176,6 +177,7 @@ final class Header extends Component
             'statusLabel' => $this->device->statusLabel(),
             'statusColor' => $this->device->statusColor(),
             'operatingSystem' => $this->device->operatingSystem(),
+            'printerProblem' => $this->device->printerProblemLabel(),
             'scripts' => $this->showScriptModal ? Script::query()->orderBy('name')->get() : collect(),
         ]);
     }

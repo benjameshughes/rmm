@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\DeviceCommandController;
 use App\Http\Controllers\Api\DeviceEnrollmentController;
 use App\Http\Controllers\Api\DeviceMetricsController;
+use App\Http\Controllers\Api\DevicePrintersController;
 use App\Http\Controllers\Api\HeartbeatController;
 use App\Http\Controllers\Api\PowerEventController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,9 @@ Route::match(['GET', 'POST'], '/check', [DeviceEnrollmentController::class, 'che
 
 Route::middleware(['device.auth'])->group(function (): void {
     Route::post('/metrics', [DeviceMetricsController::class, 'store'])
+        ->middleware('throttle:api.metrics');
+
+    Route::post('/printers', [DevicePrintersController::class, 'store'])
         ->middleware('throttle:api.metrics');
 
     Route::post('/heartbeat', [HeartbeatController::class, 'store'])

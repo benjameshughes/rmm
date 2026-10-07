@@ -13,6 +13,7 @@
                 <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
                 <x-device.monitor-only-badge :device="$device" />
                 <x-device.virtual-printer-badge :device="$device" />
+                <x-device.printer-badge :label="$device->printerProblemLabel()" />
             </div>
             <x-device.list.activity :in-flight="$device->inFlight()" />
         </div>

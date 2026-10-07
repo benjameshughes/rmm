@@ -16,6 +16,8 @@ enum AlertMetric: string
     case AgentOutdated = 'agent_outdated';
     case ScriptFailed = 'script_failed';
     case VirtualPrinterDown = 'virtual_printer_down';
+    case PrinterProblem = 'printer_problem';
+    case SpoolerDown = 'spooler_down';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -36,6 +38,8 @@ enum AlertMetric: string
             self::AgentOutdated => 'Agent Outdated',
             self::ScriptFailed => 'Scheduled Script Failed',
             self::VirtualPrinterDown => 'Virtual Printer Down',
+            self::PrinterProblem => 'Printer Problem',
+            self::SpoolerDown => 'Print Spooler Down',
         };
     }
 
@@ -45,7 +49,7 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown => '',
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown => '',
         };
     }
 
@@ -54,13 +58,15 @@ enum AlertMetric: string
      * from a built-in rule rather than by comparing a metric against a threshold.
      * Scheduled script failures likewise come from a built-in rule, raised when a
      * scheduled command finishes, and a print station missing its Virtual
-     * Printer from one raised as metrics reports arrive.
+     * Printer from one raised as metrics reports arrive. Printer problems and
+     * a stopped print spooler come from built-in rules raised as printer
+     * reports arrive.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown => false,
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown => false,
         };
     }
 }

@@ -26,7 +26,9 @@ it('only offers threshold based metrics for user rules', function (): void {
     expect(AlertMetric::thresholdBased())->not->toContain(AlertMetric::AgentOutdated)
         ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::ScriptFailed)
         ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::VirtualPrinterDown)
-        ->and(AlertMetric::thresholdBased())->toHaveCount(count(AlertMetric::cases()) - 3);
+        ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::PrinterProblem)
+        ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::SpoolerDown)
+        ->and(AlertMetric::thresholdBased())->toHaveCount(count(AlertMetric::cases()) - 5);
 });
 
 it('skips the outdated-agent rule when evaluating metrics', function (): void {

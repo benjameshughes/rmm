@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\DTOs\DeviceAttention;
+use App\DTOs\Printers\PrinterAttention;
 use App\Enums\DeviceStatus;
 use App\Enums\VirtualPrinterState;
 use App\Models\Alert;
 use App\Models\AuditLog;
 use App\Models\Device;
+use App\Models\DevicePrinter;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
@@ -105,6 +107,52 @@ final class DashboardQueries
             ->reject(fn (array $station): bool => $station['state'] === VirtualPrinterState::Unwatched)
             ->sortBy(fn (array $station): int => $station['state'] === VirtualPrinterState::Down ? 0 : 1)
             ->values();
+    }
+
+    /**
+     * Printing problems on plainly online PCs, worst first: stopped spoolers,
+     * printers Windows flags as broken, failing jobs, then backed-up queues,
+     * each longest-running first.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     * @return Collection<int, PrinterAttention>
+     */
+    public function printerProblems(EloquentCollection $fleet): Collection
+    {
+        $problemPrinters = DevicePrinter::query()
+            ->whereNotNull('problem_since')
+            ->whereIn('device_id', $fleet->modelKeys())
+            ->get()
+            ->groupBy('device_id');
+
+        return $fleet->toBase()
+            ->each(fn (Device $device): Device => $device->setRelation('problemPrinters', new EloquentCollection($problemPrinters->get($device->id, []))))
+            ->flatMap($this->printerAttentionFor(...))
+            ->sortBy(fn (PrinterAttention $attention): array => [$attention->rank, $attention->since->getTimestamp()])
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, PrinterAttention>
+     */
+    private function printerAttentionFor(Device $device): Collection
+    {
+        return $device->currentPrinterProblems()
+            ->toBase()
+            ->map(fn (DevicePrinter $printer): PrinterAttention => new PrinterAttention(
+                device: $device,
+                printerName: $printer->name,
+                problem: $printer->queue()->problemSummary(),
+                since: $printer->problem_since,
+                rank: $printer->queue()->problemRank(),
+            ))
+            ->when($device->isSpoolerDown, fn (Collection $attentions): Collection => $attentions->prepend(new PrinterAttention(
+                device: $device,
+                printerName: null,
+                problem: 'Print spooler not running',
+                since: $device->spooler_down_since,
+                rank: -1,
+            )));
     }
 
     /**
