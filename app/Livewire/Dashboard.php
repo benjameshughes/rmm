@@ -65,6 +65,7 @@ final class Dashboard extends Component
             'summary' => $dashboard->summary(),
             'printStations' => $dashboard->printStations($fleet),
             'printerProblems' => $dashboard->printerProblems($fleet),
+            'backupProblems' => $dashboard->backupProblems($fleet),
             'needsAttention' => $needsAttention->values(),
             'worthKnowing' => $worthKnowing->values(),
             'fullestDisks' => $dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),

@@ -35,26 +35,40 @@ final class SyncSystemScripts
     }
 
     /**
-     * @param  array{name: string, description: string, category: string, platform: string, file: string, timeout_seconds: int, requires_admin: bool, parameters?: array<int, array{name: string, label: string, type: string, required?: bool, default?: ?string, options?: array<int, string>}>}  $definition
+     * @param  array{name: string, description: string, category: string, platform: string, file: string, includes?: array<int, string>, timeout_seconds: int, requires_admin: bool, parameters?: array<int, array{name: string, label: string, type: string, required?: bool, default?: ?string, options?: array<int, string>}>}  $definition
      */
     private function sync(string $slug, array $definition): void
     {
-        $path = config('scripts.path').DIRECTORY_SEPARATOR.$definition['file'];
-
-        throw_unless(File::exists($path), RuntimeException::class, "System script '{$slug}' points at a missing file: {$definition['file']}");
-
         Script::query()->updateOrCreate(['slug' => $slug], [
             'name' => $definition['name'],
             'description' => $definition['description'],
             'category' => ScriptCategory::from($definition['category']),
             'platform' => ScriptPlatform::from($definition['platform']),
             'script_type' => $this->scriptType($definition['file']),
-            'script_content' => File::get($path),
+            'script_content' => $this->content($slug, [...($definition['includes'] ?? []), $definition['file']]),
             'timeout_seconds' => $definition['timeout_seconds'],
             'requires_admin' => $definition['requires_admin'],
             'parameters' => $definition['parameters'] ?? [],
             'is_system' => true,
         ]);
+    }
+
+    /**
+     * The script's own file, with any shared includes in front of it in order.
+     *
+     * @param  array<int, string>  $files
+     */
+    private function content(string $slug, array $files): string
+    {
+        return collect($files)
+            ->map(function (string $file) use ($slug): string {
+                $path = config('scripts.path').DIRECTORY_SEPARATOR.$file;
+
+                throw_unless(File::exists($path), RuntimeException::class, "System script '{$slug}' points at a missing file: {$file}");
+
+                return File::get($path);
+            })
+            ->implode("\n");
     }
 
     private function scriptType(string $file): ScriptType

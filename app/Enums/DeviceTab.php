@@ -14,6 +14,7 @@ enum DeviceTab: string
     case Apps = 'apps';
     case System = 'system';
     case Printers = 'printers';
+    case Backups = 'backups';
     case Details = 'details';
 
     public function label(): string
@@ -25,6 +26,7 @@ enum DeviceTab: string
             self::Apps => 'Apps',
             self::System => 'System',
             self::Printers => 'Printers',
+            self::Backups => 'Backups',
             self::Details => 'Details',
         };
     }
@@ -38,6 +40,7 @@ enum DeviceTab: string
             self::Apps => 'cpu-chip',
             self::System => 'computer-desktop',
             self::Printers => 'printer',
+            self::Backups => 'cloud-arrow-up',
             self::Details => 'information-circle',
         };
     }

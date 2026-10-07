@@ -48,6 +48,24 @@ return [
         'max_value_length' => 1000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Includes and Secrets
+    |--------------------------------------------------------------------------
+    |
+    | A system script may list `includes`: shared files under `path` that the
+    | sync puts in front of its own file, so scripts share one copy of the
+    | same setup code.
+    |
+    | A system script may also list `secrets`: values the server hands the
+    | agent alongside the parameters, as RMM_<Name> environment variables,
+    | only when the agent fetches the command. They are worked out at that
+    | moment by ResolveCommandSecrets and never stored with the command, its
+    | parameters or the audit log. A script with secrets needs an agent that
+    | passes parameters on.
+    |
+    */
+
     'system' => [
         'shutdown' => [
             'name' => 'Shutdown',
@@ -129,6 +147,60 @@ return [
             'file' => 'windows/disk-cleanup.ps1',
             'timeout_seconds' => 1800,
             'requires_admin' => true,
+        ],
+        'install-restic' => [
+            'name' => 'Install Restic',
+            'description' => 'Install the pinned restic release the file backups use, checked against its published sha256. Skips a PC that already has it',
+            'category' => 'backup',
+            'platform' => 'windows',
+            'file' => 'windows/install-restic.ps1',
+            'includes' => ['windows/shared/restic.ps1'],
+            'secrets' => ['ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
+        'backup-files' => [
+            'name' => 'Back Up Files',
+            'description' => 'Back up every user profile to the backup server with restic, from a shadow copy, skipping caches, temp files and anything over 4 GB. Does nothing on a PC without backup credentials',
+            'category' => 'backup',
+            'platform' => 'windows',
+            'file' => 'windows/backup-files.ps1',
+            'includes' => ['windows/shared/restic.ps1'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'timeout_seconds' => 7200,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'StaggerMinutes', 'label' => 'Random start delay, up to (minutes)', 'type' => 'number', 'required' => false, 'default' => '30'],
+                ['name' => 'UploadLimitKiB', 'label' => 'Upload limit (KiB/s, 0 for none)', 'type' => 'number', 'required' => false, 'default' => '0'],
+            ],
+        ],
+        'backup-snapshots' => [
+            'name' => 'List Backups',
+            'description' => 'List the PC\'s backup snapshots on the backup server, for its Backups tab',
+            'category' => 'backup',
+            'platform' => 'windows',
+            'file' => 'windows/backup-snapshots.ps1',
+            'includes' => ['windows/shared/restic.ps1'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
+        'backup-restore' => [
+            'name' => 'Restore Backup',
+            'description' => 'Restore files from a backup snapshot into a new folder, never overwriting anything. Source Device restores another PC\'s backup onto this one',
+            'category' => 'backup',
+            'platform' => 'windows',
+            'file' => 'windows/backup-restore.ps1',
+            'includes' => ['windows/shared/restic.ps1'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'timeout_seconds' => 7200,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'SnapshotId', 'label' => 'Snapshot ID', 'type' => 'text', 'required' => true, 'default' => 'latest'],
+                ['name' => 'IncludePath', 'label' => 'Only this file or folder', 'type' => 'text', 'required' => false],
+                ['name' => 'Target', 'label' => 'Restore into folder', 'type' => 'text', 'required' => false],
+                ['name' => 'SourceDevice', 'label' => 'Source device ID', 'type' => 'number', 'required' => false],
+            ],
         ],
         'clear-print-queue' => [
             'name' => 'Clear Print Queue',

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\DTOs\InFlightCommands;
 use App\Enums\ApiKeyState;
+use App\Enums\BackupRunStatus;
 use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
 use App\Enums\DeviceStatus;
@@ -13,6 +14,7 @@ use App\Enums\ScriptPlatform;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BacksUpFiles;
 use App\Models\Concerns\WatchesPrinters;
 use App\Models\Concerns\WatchesVirtualPrinter;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,6 +32,7 @@ use Illuminate\Support\Str;
 final class Device extends Model
 {
     use Auditable;
+    use BacksUpFiles;
 
     /** @use HasFactory<\Database\Factories\DeviceFactory> */
     use HasFactory;
@@ -64,6 +67,8 @@ final class Device extends Model
     protected $hidden = [
         'api_key_hash',
         'pending_api_key',
+        'backup_rest_password',
+        'backup_repository_password',
     ];
 
     /** @var array<string, class-string> */
@@ -90,6 +95,13 @@ final class Device extends Model
             'pending_api_key' => 'encrypted',
             'api_key_issued_at' => 'datetime',
             'api_key_claimed_at' => 'datetime',
+            'backup_rest_password' => 'encrypted',
+            'backup_repository_password' => 'encrypted',
+            'backup_configured_at' => 'datetime',
+            'last_backup_at' => 'datetime',
+            'last_backup_status' => BackupRunStatus::class,
+            'last_good_backup_at' => 'datetime',
+            'backup_snapshots_listed_at' => 'datetime',
         ];
     }
 

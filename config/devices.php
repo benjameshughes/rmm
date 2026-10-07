@@ -67,6 +67,10 @@ return [
             'api_key_hash',
             'api_key_claimed_at',
             'virtual_printer_missing_since',
+            'backup_configured_at',
+            'last_backup_at',
+            'last_good_backup_at',
+            'backup_snapshots_listed_at',
         ],
     ],
 

@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\DTOs\DeviceAttention;
 use App\DTOs\Printers\PrinterAttention;
+use App\Enums\BackupState;
 use App\Enums\DeviceStatus;
 use App\Enums\VirtualPrinterState;
 use App\Models\Alert;
@@ -153,6 +154,22 @@ final class DashboardQueries
                 since: $device->spooler_down_since,
                 rank: -1,
             )));
+    }
+
+    /**
+     * PCs with backup credentials whose last run failed or whose last good
+     * backup is overdue, failed first, then longest overdue.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     * @return Collection<int, array{device: Device, state: BackupState, problem: string}>
+     */
+    public function backupProblems(EloquentCollection $fleet): Collection
+    {
+        return $fleet->toBase()
+            ->map(fn (Device $device): array => ['device' => $device, 'state' => $device->backupState(), 'problem' => $device->backupProblem()])
+            ->filter(fn (array $row): bool => $row['state']->needsAttention())
+            ->sortBy(fn (array $row): array => [$row['state'] === BackupState::Failed ? 0 : 1, $row['device']->last_good_backup_at?->getTimestamp() ?? 0])
+            ->values();
     }
 
     /**

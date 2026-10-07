@@ -23,7 +23,7 @@ final class ExecuteScriptOnDevice
      * @param  ScheduledTask|null  $scheduledTask  The schedule that queued this run, so its result can raise or resolve an alert
      * @param  array<string, string>  $parameters  Values already checked by ValidateScriptParameterValues
      *
-     * @throws ValidationException When the device is monitor only, or the script has parameters and the device's agent is too old to pass them on
+     * @throws ValidationException When the device is monitor only, or the script takes parameters or secrets and the device's agent is too old to pass them on
      */
     public function __invoke(Script $script, Device $device, User $user, ?ScheduledTask $scheduledTask = null, array $parameters = []): DeviceCommand
     {
@@ -33,7 +33,7 @@ final class ExecuteScriptOnDevice
         );
 
         throw_if(
-            $script->parameters->isNotEmpty() && ! $this->agentVersions->supportsScriptParameters($device),
+            $script->takesValues() && ! $this->agentVersions->supportsScriptParameters($device),
             ValidationException::withMessages(['script' => $this->outdatedAgentMessage($device)]),
         );
 

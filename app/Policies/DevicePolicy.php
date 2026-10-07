@@ -42,6 +42,14 @@ final class DevicePolicy
         return ! $device->isMonitorOnly;
     }
 
+    /**
+     * Setting backup credentials only makes sense on a PC that can run the backup scripts.
+     */
+    public function manageBackups(User $user, Device $device): bool
+    {
+        return ! $device->isMonitorOnly;
+    }
+
     public function runAdHocCommand(User $user, Device $device): bool
     {
         return ! $device->isMonitorOnly;

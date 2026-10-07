@@ -18,6 +18,7 @@ enum AlertMetric: string
     case VirtualPrinterDown = 'virtual_printer_down';
     case PrinterProblem = 'printer_problem';
     case SpoolerDown = 'spooler_down';
+    case BackupOverdue = 'backup_overdue';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -40,6 +41,7 @@ enum AlertMetric: string
             self::VirtualPrinterDown => 'Virtual Printer Down',
             self::PrinterProblem => 'Printer Problem',
             self::SpoolerDown => 'Print Spooler Down',
+            self::BackupOverdue => 'Backup Overdue or Failed',
         };
     }
 
@@ -49,7 +51,7 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown => '',
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue => '',
         };
     }
 
@@ -60,13 +62,14 @@ enum AlertMetric: string
      * scheduled command finishes, and a print station missing its Virtual
      * Printer from one raised as metrics reports arrive. Printer problems and
      * a stopped print spooler come from built-in rules raised as printer
-     * reports arrive.
+     * reports arrive, and overdue or failed backups from one checked hourly
+     * and after every backup run.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown => false,
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue => false,
         };
     }
 }

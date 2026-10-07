@@ -55,6 +55,25 @@ final class Script extends Model
         return self::query()->system()->where('slug', $slug)->firstOrFail();
     }
 
+    /**
+     * The values the server hands the agent only when it fetches a run of
+     * this script, never stored with the command. Only system scripts have any.
+     *
+     * @return array<int, string>
+     */
+    public function secretNames(): array
+    {
+        return $this->is_system ? config("scripts.system.{$this->slug}.secrets", []) : [];
+    }
+
+    /**
+     * Whether values travel to the agent with a run: parameters, secrets or both.
+     */
+    public function takesValues(): bool
+    {
+        return $this->parameters->isNotEmpty() || $this->secretNames() !== [];
+    }
+
     public function scopeSystem($query)
     {
         return $query->where('is_system', true);

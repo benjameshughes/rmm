@@ -139,6 +139,20 @@ final class DeviceCommand extends Model
         return Str::limit($summary, config('alerts.scheduled_script_failed.summary_max_length'));
     }
 
+    /**
+     * Scripts that report data print it as one JSON object on their last
+     * line of stdout. Null when that line is missing or not a JSON object.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function resultJson(): ?array
+    {
+        $lastLine = Str::of($this->stdout())->trim()->explode("\n")->last();
+        $decoded = json_decode(trim((string) $lastLine), true);
+
+        return is_array($decoded) && ! array_is_list($decoded) ? $decoded : null;
+    }
+
     public function durationForHumans(): ?string
     {
         $startedAt = $this->started_at ?? $this->sent_at;

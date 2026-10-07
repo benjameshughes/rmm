@@ -9,6 +9,7 @@ use App\Livewire\Dashboard;
 use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
 use App\Livewire\Devices\Apps as DeviceApps;
+use App\Livewire\Devices\Backups as DeviceBackups;
 use App\Livewire\Devices\Commands as DeviceCommands;
 use App\Livewire\Devices\Details as DeviceDetails;
 use App\Livewire\Devices\Index as DevicesIndex;
@@ -71,6 +72,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('apps', DeviceApps::class)->name('apps');
         Route::get('system', DeviceSystem::class)->name('system');
         Route::get('printers', DevicePrinters::class)->name('printers');
+        Route::get('backups', DeviceBackups::class)->name('backups');
         Route::get('details', DeviceDetails::class)->name('details');
     });
 

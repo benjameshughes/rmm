@@ -15,4 +15,5 @@ enum ScriptCategory: string
     case Processes = 'processes';
     case Updates = 'updates';
     case User = 'user';
+    case Backup = 'backup';
 }

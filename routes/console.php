@@ -15,4 +15,5 @@ Schedule::command('devices:check-offline')->everyMinute();
 Schedule::command('schedule:run-tasks')->everyMinute();
 Schedule::command('commands:expire-stale')->everyMinute();
 Schedule::command('agent:check-version')->hourly();
+Schedule::command('backups:check')->hourly();
 Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class, AuditLog::class, MetricSample::class]])->hourly();

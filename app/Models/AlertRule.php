@@ -106,6 +106,15 @@ final class AlertRule extends Model
     }
 
     /**
+     * The built-in rule behind overdue or failed backup alerts, created on
+     * first use so it can be switched off under Alert Rules like any other rule.
+     */
+    public static function backupOverdue(): self
+    {
+        return self::builtIn(AlertMetric::BackupOverdue, config('backup.alert'));
+    }
+
+    /**
      * @param  array{rule_name: string, severity: string}  $settings
      */
     private static function builtIn(AlertMetric $metric, array $settings): self

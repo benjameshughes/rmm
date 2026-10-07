@@ -14,6 +14,7 @@
                 <x-device.monitor-only-badge :device="$device" />
                 <x-device.virtual-printer-badge :device="$device" />
                 <x-device.printer-badge :label="$device->printerProblemLabel()" />
+                <x-device.backup-badge :device="$device" />
             </div>
             <x-device.list.activity :in-flight="$device->inFlight()" />
         </div>

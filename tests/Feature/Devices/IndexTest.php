@@ -84,7 +84,7 @@ it('labels and colours a device from its status and presence', function (array $
     expect($device->statusLabel())->toBe($label)
         ->and($device->statusColor())->toBe($color);
 })->with([
-    'online' => [['status' => DeviceStatus::Active, 'last_seen' => now()], 'Online', 'green'],
+    'online' => [fn (): array => ['status' => DeviceStatus::Active, 'last_seen' => now()], 'Online', 'green'],
     'offline' => [['status' => DeviceStatus::Active, 'last_seen' => now()->subHour()], 'Offline', 'red'],
     'pending' => [['status' => DeviceStatus::Pending, 'last_seen' => now()], 'Pending', 'amber'],
     'revoked' => [['status' => DeviceStatus::Revoked, 'last_seen' => now()], 'Revoked', 'zinc'],

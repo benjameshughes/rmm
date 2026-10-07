@@ -26,6 +26,16 @@
         </x-dashboard.section>
     @endif
 
+    @if($backupProblems->isNotEmpty())
+        <x-dashboard.section title="Backups" description="PCs whose last backup failed or whose last good one is overdue." data-backup-problems>
+            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                @foreach($backupProblems as $row)
+                    <x-dashboard.backup-problem :device="$row['device']" :state="$row['state']" :problem="$row['problem']" wire:key="backup-problem-{{ $row['device']->id }}" />
+                @endforeach
+            </div>
+        </x-dashboard.section>
+    @endif
+
     <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <x-device.list.summary-card label="Devices" :value="$summary['total']" icon="server" :href="route('devices.index')" />
         <x-device.list.summary-card :label="DeviceListFilter::Online->label()" :value="$summary['online']" icon="signal" tone="text-green-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::Online->value])" />

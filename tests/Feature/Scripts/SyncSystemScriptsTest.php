@@ -102,3 +102,20 @@ it('can be run from artisan', function (): void {
 
     expect(Script::findSystem('restart'))->not->toBeNull();
 });
+
+it('puts a script\'s shared includes in front of its own file, in order', function (): void {
+    useScriptsFixture(
+        ['windows/shared/a.ps1' => 'function A {}', 'windows/shared/b.ps1' => 'function B {}', 'windows/restart.ps1' => 'A; B'],
+        ['restart' => restartDefinition(['includes' => ['windows/shared/a.ps1', 'windows/shared/b.ps1']])],
+    );
+
+    app(SyncSystemScripts::class)();
+
+    expect(Script::findSystem('restart')->script_content)->toBe("function A {}\nfunction B {}\nA; B");
+});
+
+it('refuses an include that does not exist', function (): void {
+    useScriptsFixture(['windows/restart.ps1' => 'A'], ['restart' => restartDefinition(['includes' => ['windows/shared/missing.ps1']])]);
+
+    app(SyncSystemScripts::class)();
+})->throws(RuntimeException::class, "System script 'restart' points at a missing file: windows/shared/missing.ps1");

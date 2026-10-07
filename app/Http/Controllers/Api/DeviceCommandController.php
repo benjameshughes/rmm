@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Script\ResolveCommandSecrets;
 use App\Enums\CommandStatus;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -15,8 +16,10 @@ final class DeviceCommandController
 {
     /**
      * A monitor-only device is never handed a command, whatever its agent claims to support.
+     * Secrets the script declares join its parameters here and only here, so they reach the
+     * agent without ever being stored or logged.
      */
-    public function pending(Request $request): JsonResponse
+    public function pending(Request $request, ResolveCommandSecrets $resolveSecrets): JsonResponse
     {
         /** @var Device $device */
         $device = $request->attributes->get('device');
@@ -47,7 +50,7 @@ final class DeviceCommandController
                 'script_content' => $command->script_content,
                 'script_type' => $command->script_type,
                 'timeout_seconds' => $command->timeout_seconds,
-                'parameters' => (object) ($command->parameters ?? []),
+                'parameters' => (object) [...($command->parameters ?? []), ...$resolveSecrets($command)],
             ],
         ]);
     }
