@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Livewire\Dashboard;
+use App\Livewire\Devices\Header;
 use App\Livewire\Devices\Index;
 use App\Models\Device;
 use App\Models\User;
@@ -61,16 +62,37 @@ it('flags a down print station on its devices table row', function (): void {
     printStation('LABEL-DOWN', ['virtual_printer_missing_since' => now()->subMinutes(20)]);
 
     Livewire::test(Index::class)
-        ->assertSeeHtml('data-virtual-printer-down')
+        ->assertSeeHtml('data-virtual-printer="down"')
         ->assertSee('Virtual Printer');
 });
 
-it('shows no badge for a ready or offline print station', function (Closure $attributes): void {
-    printStation('LABEL-PC', $attributes());
+it('shows a ready print station as ready on its devices table row', function (): void {
+    printStation('LABEL-PC');
 
-    Livewire::test(Index::class)->assertDontSeeHtml('data-virtual-printer-down');
+    Livewire::test(Index::class)
+        ->assertSeeHtml('data-virtual-printer="ready"')
+        ->assertSee('Ready');
+});
+
+it('shows no badge for an offline print station or a PC that is not a station', function (Closure $attributes): void {
+    Device::factory()->windows()->active()->create($attributes());
+
+    Livewire::test(Index::class)->assertDontSeeHtml('data-virtual-printer=');
 })->with([
     // Closures so the timestamps are taken when each case runs, not when the suite loads.
-    'ready' => [fn (): array => []],
-    'offline' => [fn (): array => ['last_seen' => now()->subHour(), 'virtual_printer_missing_since' => now()->subHour()]],
+    'offline station' => [fn (): array => ['virtual_printer_seen_at' => now()->subHour(), 'last_seen' => now()->subHour(), 'virtual_printer_missing_since' => now()->subHour()]],
+    'not a station' => [fn (): array => []],
 ]);
+
+it('shows the status on the device page header and updates it live', function (): void {
+    $device = printStation('LABEL-HEAD');
+
+    $component = Livewire::test(Header::class, ['device' => $device])
+        ->assertSeeHtml('data-virtual-printer="ready"');
+
+    $device->forceFill(['virtual_printer_missing_since' => now()->subMinutes(10)])->save();
+
+    $component->dispatch("echo-private:devices.{$device->id},DeviceUpdated")
+        ->assertSeeHtml('data-virtual-printer="down"')
+        ->assertSee('Down for 10m');
+});
