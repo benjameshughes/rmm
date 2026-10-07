@@ -210,6 +210,11 @@ return [
     | Windows device when it is approved. Linux machines are monitor only and
     | cannot be sent scripts, so the Linux agent installer installs it first.
     |
+    | Netdata can keep running while reporting no CPU (a corrupt perf counter
+    | list, or a hung service). Once a PC sends blank_reports_before_repair
+    | reports in a row with no CPU, the repair script is queued on it, at most
+    | once per netdata_repair_cooldown_hours so a dead PC is never looped on.
+    |
     */
 
     'metrics' => [
@@ -219,6 +224,10 @@ return [
         'sample_retention_hours' => 2160,
         'recent_commands' => 5,
         'netdata_install_script_slug' => 'install-netdata',
+        'netdata_repair_script_slug' => 'repair-netdata',
+        'blank_reports_before_repair' => 3,
+        'blank_reports_cache_key' => 'devices.metrics.blank-reports',
+        'netdata_repair_cooldown_hours' => 24,
         'chart_ranges' => [
             '1h' => ['minutes' => 60, 'bucket_seconds' => 60],
             '24h' => ['minutes' => 1440, 'bucket_seconds' => 600],

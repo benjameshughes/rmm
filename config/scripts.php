@@ -85,6 +85,15 @@ return [
             'timeout_seconds' => 600,
             'requires_admin' => true,
         ],
+        'repair-netdata' => [
+            'name' => 'Repair Netdata',
+            'description' => 'Get Netdata reporting CPU again: restart a stopped or hung service, and rebuild a corrupt Windows performance counter list. Queued automatically when a PC stops reporting CPU',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/repair-netdata.ps1',
+            'timeout_seconds' => 600,
+            'requires_admin' => true,
+        ],
         'never-sleep' => [
             'name' => 'Never Sleep',
             'description' => 'Set the PC to never sleep and the screen to turn off after 60 minutes',
