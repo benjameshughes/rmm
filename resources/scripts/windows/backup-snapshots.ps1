@@ -3,7 +3,7 @@
 # is one JSON object: every snapshot with its time, folders and size.
 
 if (-not (Test-BackupCredentials)) {
-    Stop-Run 'backups are not set up for this PC in the RMM. Set its credentials on the Backups tab'
+    Stop-Run 'backups are not set up for this PC in the RMM. Enable backups on its Backups tab'
 }
 
 Use-Restic

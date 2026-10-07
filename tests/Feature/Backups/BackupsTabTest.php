@@ -60,7 +60,7 @@ it('asks for credentials and hides the buttons on a PC that is not set up', func
     $this->actingAs($this->user)
         ->get(route('devices.backups', $bare))
         ->assertSee('data-backup-state="not_configured"', false)
-        ->assertSee('Set this PC\'s credentials below', false)
+        ->assertSee('Enable backups below', false)
         ->assertDontSee('Back up now');
 
     Livewire::actingAs($this->user)->test(Backups::class, ['device' => $bare])

@@ -67,7 +67,6 @@ final class Device extends Model
     protected $hidden = [
         'api_key_hash',
         'pending_api_key',
-        'backup_rest_password',
         'backup_repository_password',
     ];
 
@@ -95,7 +94,6 @@ final class Device extends Model
             'pending_api_key' => 'encrypted',
             'api_key_issued_at' => 'datetime',
             'api_key_claimed_at' => 'datetime',
-            'backup_rest_password' => 'encrypted',
             'backup_repository_password' => 'encrypted',
             'backup_configured_at' => 'datetime',
             'last_backup_at' => 'datetime',

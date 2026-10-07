@@ -15,9 +15,9 @@ use InvalidArgumentException;
  * This is the only place they are put together: they are never written to
  * the command, its parameters, the audit log or any log line.
  *
- * Backup credentials are the command's own device's, or, for a script that
+ * Backup secrets (repository name and password) are the command's own device's, or, for a script that
  * declares a SourceDevice parameter, the device that parameter names. Either
- * must be a Windows PC with credentials set; anything else gets blanks, which
+ * must be a Windows PC with backups enabled; anything else gets blanks, which
  * the scripts report as not set up. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
@@ -55,8 +55,7 @@ final class ResolveCommandSecrets
         return match ($name) {
             'RestUrl' => rtrim((string) config('backup.rest_url'), '/'),
             'RestCaCert' => (string) config('backup.ca_cert'),
-            'RestUser' => (string) $source?->backup_rest_username,
-            'RestPassword' => (string) $source?->backup_rest_password,
+            'RepositoryName' => (string) $source?->backup_repository_name,
             'ResticPassword' => (string) $source?->backup_repository_password,
             'ResticVersion' => config('backup.restic.version'),
             'ResticDownloadUrl' => config('backup.restic.download_url'),

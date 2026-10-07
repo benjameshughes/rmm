@@ -3,8 +3,9 @@
 # whole. Run from a schedule it first waits a random 0 to StaggerMinutes, so
 # the PCs do not all upload at once; Back up now on the Backups tab passes 0.
 #
-# A PC without backup credentials in the RMM is skipped with exit 0, so a
-# schedule across a whole group stays quiet. Each whole C:\Users\<name> is
+# A PC without backups enabled in the RMM is skipped with exit 0, so a
+# schedule across a whole group stays quiet. The first backup creates the
+# PC's repository on the backup server. Each whole C:\Users\<name> is
 # backed up, less caches, temp files, Store app data (apart from Sticky
 # Notes), Outlook's .ost cache, registry hives and anything over 4 GB. The
 # exclude rules ignore case.
@@ -35,6 +36,20 @@ $excludes = @(
     'UsrClass.dat*',
     'Thumbs.db'
 )
+
+# The first backup finds no repository (restic exit 10) and creates it with
+# the repository password from the RMM. Append-only rest-server lets a PC
+# create a repository; it just can never delete from one. Call it as a
+# statement, so a Stop-Run inside still prints.
+function Initialize-ResticRepository {
+    $init = Invoke-Restic (@('init') + $resticArguments)
+
+    if ([int]$init.ExitCode -ne 0) {
+        Stop-Run "could not create the repository for $env:RMM_RepositoryName on the backup server: $((Get-ResticErrors $init.Stderr 3) -join '; ')" ([int]$init.ExitCode)
+    }
+
+    Write-Output "Created the repository for $env:RMM_RepositoryName on the backup server"
+}
 
 function Format-Bytes($bytes) {
     $value = [double]("0$bytes")
@@ -101,6 +116,12 @@ if ([int]$uploadLimit -gt 0) {
 }
 
 $run = Invoke-Restic $arguments
+
+if ([int]$run.ExitCode -eq 10) {
+    Initialize-ResticRepository
+    $run = Invoke-Restic $arguments
+}
+
 $exitCode = [int]$run.ExitCode
 $summaryLine = $run.Stdout | Where-Object { $_ -match '^\{"message_type":"summary"' } | Select-Object -Last 1
 $summary = if ($summaryLine) { $summaryLine | ConvertFrom-Json }

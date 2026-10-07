@@ -137,13 +137,12 @@ class DeviceFactory extends Factory
     }
 
     /**
-     * A Windows PC with backup credentials set the given hours ago, before any backup ran.
+     * A Windows PC with backups enabled the given hours ago, before any backup ran.
      */
     public function withBackupCredentials(int $setHoursAgo = 1): static
     {
         return $this->windows()->state(fn (array $attributes): array => [
-            'backup_rest_username' => Str::lower($attributes['hostname']),
-            'backup_rest_password' => 'rest-secret-'.Str::random(12),
+            'backup_repository_name' => Str::lower($attributes['hostname']),
             'backup_repository_password' => 'repo-secret-'.Str::random(12),
             'backup_configured_at' => now()->subHours($setHoursAgo),
         ]);

@@ -57,7 +57,7 @@ return [
     'attributes' => [
         Script::class => ['name', 'description', 'category', 'platform', 'script_type', 'script_content', 'is_system', 'timeout_seconds', 'requires_admin', 'parameters'],
         ScheduledTask::class => ['name', 'action', 'script_id', 'cron_expression', 'target_type', 'target_id', 'is_active', 'parameters'],
-        Device::class => ['hostname', 'status', 'device_group_id', 'api_key_hash', 'backup_rest_username', 'backup_rest_password', 'backup_repository_password'],
+        Device::class => ['hostname', 'status', 'device_group_id', 'api_key_hash', 'backup_repository_name', 'backup_repository_password'],
         DeviceCommand::class => ['device_id', 'script_id', 'scheduled_task_id', 'script_type', 'timeout_seconds', 'parameters', 'status'],
         AlertRule::class => ['name', 'metric', 'operator', 'threshold', 'duration_minutes', 'severity', 'is_active'],
         Alert::class => ['status'],
@@ -81,7 +81,6 @@ return [
         'two_factor_recovery_codes',
         'api_key_hash',
         'pending_api_key',
-        'backup_rest_password',
         'backup_repository_password',
     ],
 

@@ -45,7 +45,7 @@ it('never carries a secret, server address or pinned value in the script text', 
         ->and($content)->not->toContain('github.com')
         ->and($content)->not->toMatch('/https?:\/\//')
         ->and($content)->not->toMatch('/RESTIC_PASSWORD\s*=\s*[\'"]/')
-        ->and($content)->not->toMatch('/Write-Output[^\r\n]*RMM_(RestPassword|ResticPassword)/');
+        ->and($content)->not->toMatch('/Write-Output[^\r\n]*RMM_ResticPassword/');
 })->with(BackupScript::cases());
 
 it('checks the restic download and binary against the pinned sha256 before running it, in a locked folder', function (): void {
@@ -58,7 +58,9 @@ it('checks the restic download and binary against the pinned sha256 before runni
         ->toContain("'S-1-5-18', 'S-1-5-32-544'")
         ->toContain('ReparsePoint')
         ->toContain('foreach ($attempt in 1..3)')
-        ->toContain('$env:RESTIC_REST_USERNAME = $restUser')
+        ->toContain('$env:RESTIC_REPOSITORY = "rest:$restUrl/$repositoryName/"')
+        ->not->toContain('RESTIC_REST_USERNAME')
+        ->not->toContain('RESTIC_REST_PASSWORD')
         ->toContain("\$env:GOMAXPROCS = '2'")
         ->toContain("PriorityClass = 'BelowNormal'")
         ->not->toContain('$env:TEMP');
@@ -85,8 +87,23 @@ it('backs up whole profiles from a shadow copy, skipping caches and huge files',
         ->toContain('Get-ResticExitMeaning');
 });
 
-it('explains a missing repository as a PC to onboard on scarif', function (): void {
-    expect(backupScriptFile('shared/restic.ps1'))->toMatch('/10 \{ return "the repository for .* Onboard this PC on scarif/');
+it('explains a missing repository as one the first backup creates', function (): void {
+    expect(backupScriptFile('shared/restic.ps1'))->toMatch('/10 \{ return "the repository for .* does not exist on the backup server yet. Back up now creates it" \}/');
+});
+
+it('creates the repository when the first backup finds none, then backs up in the same run', function (): void {
+    $backup = backupScriptFile('backup-files.ps1');
+
+    expect($backup)->toContain("if ([int]\$run.ExitCode -eq 10) {\n    Initialize-ResticRepository\n    \$run = Invoke-Restic \$arguments\n}")
+        ->toContain("\$init = Invoke-Restic (@('init') + \$resticArguments)")
+        ->toContain('Created the repository for $env:RMM_RepositoryName on the backup server')
+        ->and(strpos($backup, 'Initialize-ResticRepository'."\n"))->toBeLessThan(strpos($backup, '$exitCode = [int]$run.ExitCode'));
+});
+
+it('stops with the server message when the repository cannot be created', function (): void {
+    expect(backupScriptFile('backup-files.ps1'))
+        ->toContain('Stop-Run "could not create the repository for $env:RMM_RepositoryName on the backup server: $((Get-ResticErrors $init.Stderr 3) -join \'; \')" ([int]$init.ExitCode)')
+        ->not->toContain('htpasswd');
 });
 
 it('restores into a new folder without overwriting anything', function (): void {

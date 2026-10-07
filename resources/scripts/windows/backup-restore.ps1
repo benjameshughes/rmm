@@ -38,7 +38,7 @@ if ($includePath -match '[<>"|?*\x00-\x1f]') {
 }
 
 if (-not (Test-BackupCredentials)) {
-    Stop-Run 'the RMM sent no backup credentials for the PC being restored. Set them on its Backups tab'
+    Stop-Run 'the RMM sent no backup credentials for the PC being restored. Enable backups on its Backups tab'
 }
 
 Use-Restic
@@ -64,7 +64,7 @@ if ($exitCode -eq 0) {
     icacls.exe $target /reset /T /C /L /Q | Out-Null
 }
 
-$source = "$env:RMM_RestUser".Trim()
+$source = "$env:RMM_RepositoryName".Trim()
 $verdict = if ($exitCode -eq 0) { "OK: restored $($summary.files_restored) files from $source snapshot $snapshotId to $target" } else { "ATTENTION: $(Get-ResticExitMeaning $exitCode)" }
 Write-Output $verdict
 

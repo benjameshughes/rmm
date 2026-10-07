@@ -15,91 +15,90 @@ beforeEach(function (): void {
     $this->device = Device::factory()->active()->windows()->create(['hostname' => 'OFFICE-PC-07']);
 });
 
-it('suggests the lowercase hostname and shows both passwords as not set', function (): void {
+it('offers to enable backups on a PC that has none, with the APP_KEY recovery note', function (): void {
     Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])
-        ->assertSet('restUsername', 'office-pc-07')
-        ->assertSet('restPassword', '')
-        ->assertSeeInOrder(['Rest-server password', 'Not set', 'Repository password', 'Not set']);
+        ->assertSee('Enable backups')
+        ->assertSee('Keep APP_KEY in Bitwarden')
+        ->assertDontSee('data-disable-backups', false);
 });
 
-it('stores the credentials encrypted, clears the form and never echoes a password back', function (): void {
-    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])
-        ->set('restPassword', 'rest-pass-0123456789')
-        ->set('repositoryPassword', 'repo-pass-0123456789')
-        ->call('save')
+it('names the repository after the lowercase hostname and generates an encrypted password it never echoes', function (): void {
+    $component = Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])
+        ->call('enable')
         ->assertHasNoErrors()
-        ->assertSet('restPassword', '')
-        ->assertSet('repositoryPassword', '')
         ->assertDispatched('backup-credentials-saved')
-        ->assertDontSee('rest-pass-0123456789')
-        ->assertDontSee('repo-pass-0123456789')
-        ->assertSeeInOrder(['Rest-server password', 'Set', 'Repository password', 'Set']);
+        ->assertSee('office-pc-07')
+        ->assertSee('Disable backups');
 
     $device = $this->device->fresh();
     $raw = DB::table('devices')->where('id', $device->id)->first();
 
     expect($device)
-        ->backup_rest_username->toBe('office-pc-07')
-        ->backup_rest_password->toBe('rest-pass-0123456789')
-        ->backup_repository_password->toBe('repo-pass-0123456789')
+        ->backup_repository_name->toBe('office-pc-07')
+        ->backup_repository_password->toMatch('/^[A-Za-z0-9]{48}$/')
         ->backup_configured_at->not->toBeNull()
-        ->and($raw->backup_rest_password)->not->toContain('rest-pass')
-        ->and($raw->backup_repository_password)->not->toContain('repo-pass');
+        ->and($raw->backup_repository_password)->not->toContain($device->backup_repository_password);
+
+    $component->assertDontSee($device->backup_repository_password);
 });
 
-it('audits the change by name only', function (): void {
-    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])
-        ->set('restPassword', 'rest-pass-0123456789')
-        ->set('repositoryPassword', 'repo-pass-0123456789')
-        ->call('save');
+it('generates a different repository password for each PC', function (): void {
+    $other = Device::factory()->active()->windows()->create();
 
+    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])->call('enable');
+    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $other])->call('enable');
+
+    expect($this->device->fresh()->backup_repository_password)->not->toBe($other->fresh()->backup_repository_password);
+});
+
+it('audits enabling by name only', function (): void {
+    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])->call('enable');
+
+    $device = $this->device->fresh();
     $audit = AuditLog::query()->where('action', AuditAction::DeviceUpdated)->sole();
 
-    expect($audit->properties['secrets_changed'])->toBe(['backup_rest_password', 'backup_repository_password'])
-        ->and($audit->properties['changes'])->toBe(['backup_rest_username' => ['from' => null, 'to' => 'office-pc-07']])
-        ->and(json_encode($audit->properties))->not->toContain('pass-0123456789');
+    expect($audit->properties['secrets_changed'])->toBe(['backup_repository_password'])
+        ->and($audit->properties['changes'])->toBe(['backup_repository_name' => ['from' => null, 'to' => 'office-pc-07']])
+        ->and(json_encode($audit->properties))->not->toContain($device->backup_repository_password);
 });
 
-it('keeps a password left blank once credentials are set, so the username can change alone', function (): void {
+it('never changes the repository password or name once set, through enable, disable and enable again', function (): void {
+    $component = Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])->call('enable');
+    $before = $this->device->fresh()->only('backup_repository_name', 'backup_repository_password');
+
+    $this->device->forceFill(['hostname' => 'RENAMED-PC'])->save();
+    $component->call('enable')->call('disable')->call('enable');
+
+    expect($this->device->fresh())
+        ->only('backup_repository_name', 'backup_repository_password')->toBe($before)
+        ->backup_configured_at->not->toBeNull();
+});
+
+it('disables backups, keeping the repository password so enabling again reuses the repository', function (): void {
     $device = Device::factory()->active()->withBackupCredentials(setHoursAgo: 48)->create();
-    $before = [$device->backup_rest_password, $device->backup_repository_password, $device->backup_configured_at->toIso8601String()];
+    $before = $device->only('backup_repository_name', 'backup_repository_password');
 
     Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $device])
-        ->assertSeeInOrder(['Rest-server password', 'Set', 'Repository password', 'Set'])
-        ->set('restUsername', 'renamed-pc')
-        ->call('save')
-        ->assertHasNoErrors();
+        ->call('disable')
+        ->assertDispatched('backup-credentials-saved')
+        ->assertSee('Enable backups')
+        ->assertDontSee('data-disable-backups', false);
 
     $device->refresh();
 
-    expect($device->backup_rest_username)->toBe('renamed-pc')
-        ->and([$device->backup_rest_password, $device->backup_repository_password, $device->backup_configured_at->toIso8601String()])->toBe($before);
+    expect($device)
+        ->backup_configured_at->toBeNull()
+        ->hasBackupCredentials->toBeFalse()
+        ->canBackUp()->toBeFalse()
+        ->only('backup_repository_name', 'backup_repository_password')->toBe($before);
 });
 
-it('refuses bad credentials with readable messages', function (string $field, string $value, string $rule): void {
-    Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $this->device])
-        ->set('restPassword', 'rest-pass-0123456789')
-        ->set('repositoryPassword', 'repo-pass-0123456789')
-        ->set($field, $value)
-        ->call('save')
-        ->assertHasErrors([$field => $rule]);
-
-    expect($this->device->fresh()->backup_configured_at)->toBeNull();
-})->with([
-    'no rest password the first time' => ['restPassword', '', 'required'],
-    'no repository password the first time' => ['repositoryPassword', '', 'required'],
-    'short password' => ['restPassword', 'short', 'min'],
-    'line break in password' => ['repositoryPassword', "pass\nword-0123456", 'not_regex'],
-    'uppercase username' => ['restUsername', 'OFFICE-PC-07', 'regex'],
-    'username with a slash' => ['restUsername', 'office/pc', 'regex'],
-]);
-
-it('forbids setting credentials on a monitor-only device', function (): void {
+it('forbids managing backups on a monitor-only device', function (string $action): void {
     $device = Device::factory()->active()->monitorOnly()->create();
 
     Livewire::actingAs($this->user)->test(BackupCredentials::class, ['device' => $device])
-        ->set('restPassword', 'rest-pass-0123456789')
-        ->set('repositoryPassword', 'repo-pass-0123456789')
-        ->call('save')
+        ->call($action)
         ->assertForbidden();
-});
+
+    expect($device->fresh()->backup_repository_password)->toBeNull();
+})->with(['enable', 'disable']);

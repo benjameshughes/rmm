@@ -9,7 +9,7 @@
 # download lands in the locked folder too, never in a shared temp folder.
 #
 # The pin (RMM_ResticVersion, RMM_ResticDownloadUrl, RMM_ResticSha256,
-# RMM_ResticExeSha256) and any backup credentials arrive as environment
+# RMM_ResticExeSha256) and the repository name and password arrive as environment
 # variables only when the agent fetches the command. They are never printed.
 #
 # Windows PowerShell 5.1, ASCII only, no try/catch. Every failure goes through
@@ -151,25 +151,23 @@ function Use-Restic {
     $script:resticWasInstalled = $true
 }
 
-# Points restic at this run's repository from the injected credentials, the
+# Points restic at this run's repository from the injected name and password, the
 # backup server URL and its CA certificate when one is set, and leaves the
 # arguments every restic call needs in $resticArguments. Call it as a
 # statement after Use-Restic, which makes the folder the certificate goes in.
 function Set-ResticRepository {
     $restUrl = "$env:RMM_RestUrl".Trim().TrimEnd('/')
-    $restUser = "$env:RMM_RestUser".Trim()
+    $repositoryName = "$env:RMM_RepositoryName".Trim()
 
     if (-not $restUrl) {
         Stop-Run 'no backup server is set in the RMM. Set BACKUP_REST_URL on the server'
     }
 
-    if ($restUser -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') {
-        Stop-Run 'the backup username from the RMM is not valid. Set it again on the Backups tab'
+    if ($repositoryName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') {
+        Stop-Run 'the backup repository name from the RMM is not valid'
     }
 
-    $env:RESTIC_REPOSITORY = "rest:$restUrl/$restUser/"
-    $env:RESTIC_REST_USERNAME = $restUser
-    $env:RESTIC_REST_PASSWORD = $env:RMM_RestPassword
+    $env:RESTIC_REPOSITORY = "rest:$restUrl/$repositoryName/"
     $env:RESTIC_PASSWORD = $env:RMM_ResticPassword
     $env:RESTIC_PROGRESS_FPS = '0.0166'
     $env:GOMAXPROCS = '2'
@@ -183,7 +181,7 @@ function Set-ResticRepository {
 }
 
 function Test-BackupCredentials {
-    return [bool]("$env:RMM_RestUser".Trim() -and "$env:RMM_RestPassword" -and "$env:RMM_ResticPassword")
+    return [bool]("$env:RMM_RepositoryName".Trim() -and "$env:RMM_ResticPassword")
 }
 
 # Runs restic at below-normal priority, keeping its JSON lines (stdout) and
@@ -223,9 +221,9 @@ function Get-ResticErrors($lines, [int] $limit = 20) {
 # What a restic exit code means, for the verdict line.
 function Get-ResticExitMeaning([int] $exitCode) {
     switch ($exitCode) {
-        10 { return "the repository for $env:RMM_RestUser does not exist on the backup server. Onboard this PC on scarif: add its rest-server user and run restic init for it" }
+        10 { return "the repository for $env:RMM_RepositoryName does not exist on the backup server yet. Back up now creates it" }
         11 { return 'the repository is locked by another restic run. It clears by itself; run again later' }
-        12 { return 'the repository password is wrong. Set it again on the Backups tab' }
+        12 { return 'the repository password is wrong. It must be the one the repository was created with' }
         130 { return 'restic was cancelled' }
         default { return "restic failed with exit code $exitCode" }
     }

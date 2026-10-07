@@ -161,12 +161,12 @@ return [
         ],
         'backup-files' => [
             'name' => 'Back Up Files',
-            'description' => 'Back up every user profile to the backup server with restic, from a shadow copy, skipping caches, temp files and anything over 4 GB. Does nothing on a PC without backup credentials',
+            'description' => 'Back up every user profile to the backup server with restic, from a shadow copy, skipping caches, temp files and anything over 4 GB. Creates the PC\'s repository on its first run. Does nothing on a PC without backups enabled',
             'category' => 'backup',
             'platform' => 'windows',
             'file' => 'windows/backup-files.ps1',
             'includes' => ['windows/shared/restic.ps1'],
-            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
             'timeout_seconds' => 7200,
             'requires_admin' => true,
             'parameters' => [
@@ -181,7 +181,7 @@ return [
             'platform' => 'windows',
             'file' => 'windows/backup-snapshots.ps1',
             'includes' => ['windows/shared/restic.ps1'],
-            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
             'timeout_seconds' => 600,
             'requires_admin' => true,
         ],
@@ -192,7 +192,7 @@ return [
             'platform' => 'windows',
             'file' => 'windows/backup-restore.ps1',
             'includes' => ['windows/shared/restic.ps1'],
-            'secrets' => ['RestUrl', 'RestCaCert', 'RestUser', 'RestPassword', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
             'timeout_seconds' => 7200,
             'requires_admin' => true,
             'parameters' => [

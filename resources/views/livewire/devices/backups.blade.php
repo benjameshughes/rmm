@@ -15,9 +15,9 @@
                         @if($device->last_good_backup_at)
                             Last good backup {{ $device->lastGoodBackupForHumans() }} &middot; {{ $device->last_good_backup_at->format('j M Y, H:i') }}
                         @elseif($device->hasBackupCredentials)
-                            No good backup yet. Credentials set {{ $device->backup_configured_at->diffForHumans() }}.
+                            No good backup yet. Enabled {{ $device->backup_configured_at->diffForHumans() }}.
                         @else
-                            Set this PC's credentials below once its rest-server user and repository exist on scarif.
+                            Enable backups below to generate this PC's credentials.
                         @endif
                     </flux:text>
                 </div>

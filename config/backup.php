@@ -10,24 +10,46 @@ return [
     |--------------------------------------------------------------------------
     |
     | PCs back their user profiles up with restic to rest-server on scarif,
-    | run with --append-only --private-repos over TLS. Each PC has its own
-    | basic-auth user (its lowercase hostname) and repository at
-    | {rest_url}/{username}/, both set up by hand on scarif before the PC's
-    | credentials are entered on its Backups tab. A PC can add snapshots but
-    | never delete or rewrite them.
+    | run as `rest-server --append-only --no-auth` over TLS, with the
+    | firewall letting only the office VLAN reach it. There are no per-PC
+    | logins: each PC's repository at {rest_url}/{repository name}/ is
+    | encrypted with its own repository password, and append-only means a PC
+    | can add snapshots but never delete or rewrite them. Anything on the
+    | VLAN can still write to the server, so give its ZFS dataset a quota.
+    |
+    | Enable backups on a PC's Backups tab names its repository after its
+    | lowercase hostname and generates its password, both kept for good; its
+    | first backup creates the repository.
+    |
+    | The repository passwords are stored encrypted with APP_KEY and exist
+    | nowhere else. Keep APP_KEY in Bitwarden: if the RMM is lost without it,
+    | no backup on scarif can be decrypted.
     |
     | ca_cert is an optional PEM certificate for a self-signed server; PCs
     | write it to disk and pass it to restic as --cacert.
     |
-    | These values, the restic pin below and each PC's credentials reach the
-    | backup scripts only when the agent fetches the command (see `secrets`
-    | in config/scripts.php). They are never stored with the command.
+    | These values, the restic pin below and each PC's repository name and
+    | password reach the backup scripts only when the agent fetches the
+    | command (see `secrets` in config/scripts.php). They are never stored
+    | with the command.
     |
     */
 
     'rest_url' => env('BACKUP_REST_URL'),
 
     'ca_cert' => env('BACKUP_CA_CERT'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generated Repository Password
+    |--------------------------------------------------------------------------
+    |
+    | Length of each PC's generated repository password, letters and digits
+    | only, so it needs no escaping in an environment variable.
+    |
+    */
+
+    'generated_password_length' => 48,
 
     /*
     |--------------------------------------------------------------------------
@@ -57,7 +79,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | PCs cannot delete anything from an append-only repository, so retention
-    | runs on Ben's admin host with full access to scarif, never on a PC:
+    | runs on scarif itself against the repository folders, never on a PC or
+    | through the append-only server:
     |
     |   restic forget --keep-within-daily 7d --keep-within-weekly 1m \
     |       --keep-within-monthly 1y --prune
@@ -73,8 +96,8 @@ return [
     | Health
     |--------------------------------------------------------------------------
     |
-    | A PC with credentials is overdue once its last good backup (or, before
-    | its first, the moment its credentials were set) is older than
+    | A PC with backups enabled is overdue once its last good backup (or,
+    | before its first, the moment backups were enabled) is older than
     | stale_after_hours. An overdue PC, or one whose last run failed, raises
     | the built-in alert below, checked hourly and after every run.
     |

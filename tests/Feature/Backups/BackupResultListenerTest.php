@@ -120,7 +120,7 @@ it('records a failure without moving the last good backup', function (int $exitC
         ->and(DeviceBackupSnapshot::query()->count())->toBe(0);
 })->with([
     'restic failed' => [1, 'ATTENTION: restic failed with exit code 1'],
-    'repository missing' => [10, 'ATTENTION: the repository for pc does not exist on the backup server. Onboard this PC on scarif'],
+    'repository missing' => [10, 'ATTENTION: the repository for pc does not exist on the backup server yet. Back up now creates it'],
     'wrong password' => [12, 'ATTENTION: the repository password is wrong'],
 ]);
 

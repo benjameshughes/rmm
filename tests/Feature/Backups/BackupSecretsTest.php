@@ -43,7 +43,7 @@ function everythingStored(): string
         ->implode("\n");
 }
 
-it('hands the agent the device credentials, server and restic pin only when it fetches a backup', function (): void {
+it('hands the agent the repository name and password, server and restic pin only when it fetches a backup', function (): void {
     $this->actingAs($this->user);
     app(QueueBackupScript::class)(BackupScript::BackUp, $this->device, $this->user, ['StaggerMinutes' => 0]);
 
@@ -54,8 +54,7 @@ it('hands the agent the device credentials, server and restic pin only when it f
         'UploadLimitKiB' => '0',
         'RestUrl' => 'https://scarif.example.test:30248',
         'RestCaCert' => "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
-        'RestUser' => $this->device->backup_rest_username,
-        'RestPassword' => $this->device->backup_rest_password,
+        'RepositoryName' => $this->device->backup_repository_name,
         'ResticPassword' => $this->device->backup_repository_password,
         'ResticVersion' => config('backup.restic.version'),
         'ResticDownloadUrl' => config('backup.restic.download_url'),
@@ -77,21 +76,18 @@ it('never stores or audits the secrets: not in the command, its parameters, the 
     expect($command->fresh()->parameters)->toBe(['StaggerMinutes' => '0', 'UploadLimitKiB' => '0'])
         ->and($command->fresh()->status)->toBe(CommandStatus::Sent)
         ->and(AuditLog::query()->count())->toBeGreaterThan(0)
-        ->and($stored)->not->toContain($this->device->backup_rest_password)
         ->and($stored)->not->toContain($this->device->backup_repository_password)
         ->and($stored)->not->toContain('scarif.example.test')
         ->and($logged)->not->toBeEmpty()
-        ->and($logged->implode("\n"))->not->toContain($this->device->backup_rest_password)
         ->and($logged->implode("\n"))->not->toContain($this->device->backup_repository_password);
 });
 
-it('stores the credentials encrypted and keeps them out of serialised devices', function (): void {
+it('stores the repository password encrypted and keeps it out of serialised devices', function (): void {
     $raw = DB::table('devices')->where('id', $this->device->id)->first();
 
-    expect($raw->backup_rest_password)->not->toBe($this->device->backup_rest_password)
-        ->and(decrypt($raw->backup_rest_password, unserialize: false))->toBe($this->device->backup_rest_password)
-        ->and($raw->backup_repository_password)->not->toContain('repo-secret')
-        ->and($this->device->toArray())->not->toHaveKeys(['backup_rest_password', 'backup_repository_password']);
+    expect($raw->backup_repository_password)->not->toContain('repo-secret')
+        ->and(decrypt($raw->backup_repository_password, unserialize: false))->toBe($this->device->backup_repository_password)
+        ->and($this->device->toArray())->not->toHaveKey('backup_repository_password');
 });
 
 it('hands a restore the source device credentials when SourceDevice names another Windows PC', function (): void {
@@ -103,8 +99,7 @@ it('hands a restore the source device credentials when SourceDevice names anothe
     $parameters = pullCommand('TARGET-KEY')['parameters'];
 
     expect($parameters['SourceDevice'])->toBe((string) $this->device->id)
-        ->and($parameters['RestUser'])->toBe($this->device->backup_rest_username)
-        ->and($parameters['RestPassword'])->toBe($this->device->backup_rest_password)
+        ->and($parameters['RepositoryName'])->toBe($this->device->backup_repository_name)
         ->and($parameters['ResticPassword'])->toBe($this->device->backup_repository_password);
 });
 
@@ -112,13 +107,13 @@ it('defaults a restore to the device it runs on', function (): void {
     $this->actingAs($this->user);
     app(QueueBackupScript::class)(BackupScript::Restore, $this->device, $this->user, ['SnapshotId' => 'latest']);
 
-    expect(pullCommand()['parameters']['RestUser'])->toBe($this->device->backup_rest_username);
+    expect(pullCommand()['parameters']['RepositoryName'])->toBe($this->device->backup_repository_name);
 });
 
 it('hands over blank credentials when the source is not a Windows PC with credentials', function (string $source): void {
     $sourceId = match ($source) {
         'without credentials' => Device::factory()->active()->windows()->create()->id,
-        'linux' => Device::factory()->active()->linux()->create(['backup_rest_username' => 'srv', 'backup_rest_password' => 'x', 'backup_repository_password' => 'y', 'backup_configured_at' => now()])->id,
+        'linux' => Device::factory()->active()->linux()->create(['backup_repository_name' => 'srv', 'backup_repository_password' => 'y', 'backup_configured_at' => now()])->id,
         'missing' => 999999,
     };
 
@@ -132,8 +127,7 @@ it('hands over blank credentials when the source is not a Windows PC with creden
 
     $parameters = pullCommand('TARGET-KEY')['parameters'];
 
-    expect($parameters['RestUser'])->toBe('')
-        ->and($parameters['RestPassword'])->toBe('')
+    expect($parameters['RepositoryName'])->toBe('')
         ->and($parameters['ResticPassword'])->toBe('')
         ->and($parameters['RestUrl'])->toBe('https://scarif.example.test:30248')
         ->and($command->fresh()->status)->toBe(CommandStatus::Sent);
@@ -148,7 +142,7 @@ it('ignores SourceDevice on scripts that do not declare it', function (): void {
         'parameters' => ['SourceDevice' => (string) $other->id],
     ]);
 
-    expect(pullCommand()['parameters']['RestUser'])->toBe($this->device->backup_rest_username);
+    expect(pullCommand()['parameters']['RepositoryName'])->toBe($this->device->backup_repository_name);
 });
 
 it('never hands secrets to user scripts, ad-hoc commands or non-Windows devices', function (): void {
@@ -156,7 +150,7 @@ it('never hands secrets to user scripts, ad-hoc commands or non-Windows devices'
     DeviceCommand::factory()->create(['device_id' => $this->device->id, 'script_id' => $userScript->id, 'status' => CommandStatus::Pending, 'queued_at' => now()->subMinute()]);
     DeviceCommand::factory()->create(['device_id' => $this->device->id, 'script_id' => null, 'script_content' => 'Get-Date', 'status' => CommandStatus::Pending, 'queued_at' => now()]);
 
-    $linux = Device::factory()->active()->linux()->withApiKey('LINUX-KEY')->create(['backup_rest_username' => 'srv', 'backup_rest_password' => 'linux-secret', 'backup_repository_password' => 'linux-repo', 'backup_configured_at' => now()]);
+    $linux = Device::factory()->active()->linux()->withApiKey('LINUX-KEY')->create(['backup_repository_name' => 'srv', 'backup_repository_password' => 'linux-repo', 'backup_configured_at' => now()]);
     DeviceCommand::factory()->create(['device_id' => $linux->id, 'script_id' => Script::findSystem(BackupScript::BackUp->value)->id, 'status' => CommandStatus::Pending]);
 
     expect(pullCommand()['parameters'])->toBe([])
