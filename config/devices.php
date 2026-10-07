@@ -66,6 +66,7 @@ return [
             'mac_addresses',
             'api_key_hash',
             'api_key_claimed_at',
+            'virtual_printer_missing_since',
         ],
     ],
 
@@ -248,6 +249,35 @@ return [
             '1h' => ['minutes' => 60, 'bucket_seconds' => 60],
             '24h' => ['minutes' => 1440, 'bucket_seconds' => 600],
             '7d' => ['minutes' => 10080, 'bucket_seconds' => 3600],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Watched Apps
+    |--------------------------------------------------------------------------
+    |
+    | Desktop apps the office cannot work without, spotted by their Netdata
+    | apps-plugin name in every metrics report. Linnworks' Virtual Printer
+    | installs per user, so it only runs while someone is signed in.
+    |
+    | A PC that ran it within station_lookback_days is a print station. A
+    | station is down once it has been plainly online without the app for
+    | down_after_minutes, and raises an alert once that reaches
+    | alert_after_minutes. Time spent offline, off or powering on never
+    | counts towards either.
+    |
+    */
+
+    'watched_apps' => [
+        'virtual_printer' => [
+            'netdata_app' => 'Virtual_Printer_2',
+            'label' => 'Virtual Printer',
+            'down_after_minutes' => 2,
+            'station_lookback_days' => 14,
+            'alert_after_minutes' => 5,
+            'alert_rule_name' => 'Virtual Printer down',
+            'alert_severity' => 'critical',
         ],
     ],
 

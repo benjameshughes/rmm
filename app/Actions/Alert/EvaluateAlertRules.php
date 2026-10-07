@@ -49,7 +49,7 @@ final class EvaluateAlertRules
             AlertMetric::DiskBusy => $deviceMetric->disk_busy_percent,
             AlertMetric::PageFile => $deviceMetric->pageFilePercent(),
             AlertMetric::Offline => $this->getOfflineMinutes($device),
-            AlertMetric::AgentOutdated, AlertMetric::ScriptFailed => null,
+            AlertMetric::AgentOutdated, AlertMetric::ScriptFailed, AlertMetric::VirtualPrinterDown => null,
         };
     }
 

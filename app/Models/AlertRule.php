@@ -71,6 +71,22 @@ final class AlertRule extends Model
         ]);
     }
 
+    /**
+     * The built-in rule behind Virtual Printer alerts, created on first use so
+     * it can be switched off under Alert Rules like any other rule.
+     */
+    public static function virtualPrinterDown(): self
+    {
+        return self::query()->firstOrCreate(['metric' => AlertMetric::VirtualPrinterDown], [
+            'name' => config('devices.watched_apps.virtual_printer.alert_rule_name'),
+            'operator' => AlertOperator::GreaterThan,
+            'threshold' => 0,
+            'duration_minutes' => 0,
+            'severity' => AlertSeverity::from(config('devices.watched_apps.virtual_printer.alert_severity')),
+            'is_active' => true,
+        ]);
+    }
+
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);

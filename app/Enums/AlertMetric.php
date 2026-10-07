@@ -15,6 +15,7 @@ enum AlertMetric: string
     case Offline = 'offline';
     case AgentOutdated = 'agent_outdated';
     case ScriptFailed = 'script_failed';
+    case VirtualPrinterDown = 'virtual_printer_down';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -34,6 +35,7 @@ enum AlertMetric: string
             self::Offline => 'Device Offline',
             self::AgentOutdated => 'Agent Outdated',
             self::ScriptFailed => 'Scheduled Script Failed',
+            self::VirtualPrinterDown => 'Virtual Printer Down',
         };
     }
 
@@ -43,7 +45,7 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated, self::ScriptFailed => '',
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown => '',
         };
     }
 
@@ -51,13 +53,14 @@ enum AlertMetric: string
      * Agent versions are not numbers, so that alert is raised by agent:check-version
      * from a built-in rule rather than by comparing a metric against a threshold.
      * Scheduled script failures likewise come from a built-in rule, raised when a
-     * scheduled command finishes.
+     * scheduled command finishes, and a print station missing its Virtual
+     * Printer from one raised as metrics reports arrive.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated, self::ScriptFailed => false,
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown => false,
         };
     }
 }

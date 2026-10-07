@@ -63,6 +63,7 @@ final class Dashboard extends Component
 
         return view('livewire.dashboard', [
             'summary' => $dashboard->summary(),
+            'printStations' => $dashboard->printStations($fleet),
             'needsAttention' => $needsAttention->values(),
             'worthKnowing' => $worthKnowing->values(),
             'fullestDisks' => $dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),

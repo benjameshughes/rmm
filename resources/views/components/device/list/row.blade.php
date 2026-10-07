@@ -12,6 +12,7 @@
             <div class="flex flex-wrap items-center gap-1">
                 <x-device.status-badge :label="$device->statusLabel()" :color="$device->statusColor()" size="sm" />
                 <x-device.monitor-only-badge :device="$device" />
+                <x-device.virtual-printer-badge :device="$device" />
             </div>
             <x-device.list.activity :in-flight="$device->inFlight()" />
         </div>

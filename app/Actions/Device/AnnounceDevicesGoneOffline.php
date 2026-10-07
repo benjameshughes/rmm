@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Actions\VirtualPrinter\PauseVirtualPrinterWatch;
 use App\Enums\DeviceStatus;
 use App\Events\DeviceUpdated;
 use App\Models\Device;
 
 final class AnnounceDevicesGoneOffline
 {
+    public function __construct(private readonly PauseVirtualPrinterWatch $pauseVirtualPrinterWatch) {}
+
     /**
      * Online is worked out from last_seen, so a device going quiet changes no
      * row and fires no event. This announces devices that crossed the offline
@@ -17,6 +20,7 @@ final class AnnounceDevicesGoneOffline
      * The window is wider than the one-minute schedule so a late run still
      * catches them; a second announcement only re-renders the page. Devices
      * that announced they were powering off already broadcast at the time.
+     * Offline time never counts towards a Virtual Printer being down.
      *
      * @return int How many devices were announced
      */
@@ -29,7 +33,10 @@ final class AnnounceDevicesGoneOffline
             ->notPoweringOff()
             ->whereBetween('last_seen', [$threshold->copy()->subSeconds(config('devices.online.announce_window_seconds')), $threshold])
             ->get()
-            ->each(fn (Device $device) => DeviceUpdated::dispatch($device, true))
+            ->each(function (Device $device): void {
+                ($this->pauseVirtualPrinterWatch)($device);
+                DeviceUpdated::dispatch($device, true);
+            })
             ->count();
     }
 }

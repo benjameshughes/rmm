@@ -6,6 +6,16 @@
         <flux:text class="mt-1">{{ $summary['total'] }} {{ Str::plural('device', $summary['total']) }}, updated live.</flux:text>
     </div>
 
+    @if($printStations->isNotEmpty())
+        <x-dashboard.section title="Label printing" :description="config('devices.watched_apps.virtual_printer.label').' on each print station that is online.'" data-label-printing>
+            <div class="flex flex-wrap gap-2">
+                @foreach($printStations as $station)
+                    <x-dashboard.print-station :device="$station['device']" :state="$station['state']" wire:key="print-station-{{ $station['device']->id }}" />
+                @endforeach
+            </div>
+        </x-dashboard.section>
+    @endif
+
     <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <x-device.list.summary-card label="Devices" :value="$summary['total']" icon="server" :href="route('devices.index')" />
         <x-device.list.summary-card :label="DeviceListFilter::Online->label()" :value="$summary['online']" icon="signal" tone="text-green-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::Online->value])" />

@@ -152,8 +152,9 @@ final class StoreDeviceMetrics
 
         $metric->recordDisks($this->netdataVolumes($input));
         $metric->recordNetworkInterfaces(NetdataNetworkAdapters::fromPayload($input)->rows(config('devices.network.ignored_interfaces')));
-        $metric->recordApps((new NetdataAppUsage($input['netdata_apps_cpu'] ?? [], $input['netdata_apps_mem'] ?? []))->top(config('devices.metrics.top_apps')));
-        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input);
+        $apps = new NetdataAppUsage($input['netdata_apps_cpu'] ?? [], $input['netdata_apps_mem'] ?? []);
+        $metric->recordApps($apps->top(config('devices.metrics.top_apps')));
+        $this->updateDeviceInfoFromNetdata($device, $input['netdata_info'] ?? null, $ip, $input, $apps);
         ($this->recordMetricSamples)($device, $input);
 
         MetricsReceived::dispatch($device, $metric);
@@ -361,9 +362,12 @@ final class StoreDeviceMetrics
         $device->forceFill($updates)->save();
     }
 
-    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, array $input): void
+    private function updateDeviceInfoFromNetdata(Device $device, mixed $netdataInfo, ?string $ip, array $input, NetdataAppUsage $apps): void
     {
-        $updates = $this->connectionUpdates($device, $ip, $input);
+        $updates = [
+            ...$this->connectionUpdates($device, $ip, $input),
+            ...$device->virtualPrinterReportAttributes($apps->isRunning(config('devices.watched_apps.virtual_printer.netdata_app'))),
+        ];
 
         if (is_array($netdataInfo)) {
             $agent = $netdataInfo['agents'][0] ?? null;

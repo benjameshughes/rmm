@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\DTOs\DeviceAttention;
 use App\Enums\DeviceStatus;
+use App\Enums\VirtualPrinterState;
 use App\Models\Alert;
 use App\Models\AuditLog;
 use App\Models\Device;
@@ -89,6 +90,21 @@ final class DashboardQueries
                 ->values(),
             isRebootRequired: (bool) $device->latestMetric?->reboot_required,
         );
+    }
+
+    /**
+     * Plainly online print stations and whether each can print labels, down ones first.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     * @return Collection<int, array{device: Device, state: VirtualPrinterState}>
+     */
+    public function printStations(EloquentCollection $fleet): Collection
+    {
+        return $fleet
+            ->map(fn (Device $device): array => ['device' => $device, 'state' => $device->virtualPrinterState()])
+            ->reject(fn (array $station): bool => $station['state'] === VirtualPrinterState::Unwatched)
+            ->sortBy(fn (array $station): int => $station['state'] === VirtualPrinterState::Down ? 0 : 1)
+            ->values();
     }
 
     /**

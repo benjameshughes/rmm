@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Actions\VirtualPrinter\PauseVirtualPrinterWatch;
 use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
 use App\Enums\PowerEventReason;
@@ -13,13 +14,16 @@ use Illuminate\Support\Facades\Log;
 
 final class RecordDevicePowerEvent
 {
+    public function __construct(private readonly PauseVirtualPrinterWatch $pauseVirtualPrinterWatch) {}
+
     /**
      * A device powering on is talking to us, so it counts as a check-in. One
      * powering off keeps its last_seen: it is going away, not reporting in.
      * Saving the device broadcasts DeviceUpdated, which flips open pages.
      * A shutdown kills whatever the agent was running, so those commands fail
      * now instead of sitting at Running until they time out. Sleep does not:
-     * the machine resumes and the command carries on.
+     * the machine resumes and the command carries on. Powering off or on is not
+     * plainly online, so the Virtual Printer watch starts again afterwards.
      */
     public function __invoke(Device $device, DevicePowerState $powerState, PowerEventReason $reason, ?string $ip = null): void
     {
@@ -28,6 +32,8 @@ final class RecordDevicePowerEvent
             'power_state' => $powerState,
             'power_state_changed_at' => now(),
         ])->save();
+
+        ($this->pauseVirtualPrinterWatch)($device);
 
         if ($reason === PowerEventReason::Shutdown) {
             $this->settleCommandsCutOffByShutdown($device);

@@ -32,6 +32,20 @@ final class NetdataAppUsage
         return TopApps::pick($this->apps(), $limit);
     }
 
+    /**
+     * Whether an app (by its Netdata name, e.g. `Virtual_Printer_2`) is running.
+     * Only dimensions with data in the window are parsed, but a closed app's
+     * dimensions can still sit there zero-filled, while a running app often
+     * idles at 0% CPU. A live process always holds memory, so the app counts
+     * as running only when it uses memory or spent CPU.
+     */
+    public function isRunning(string $app): bool
+    {
+        $usage = $this->apps()->get($app);
+
+        return $usage !== null && (($usage['memory_mib'] ?? 0) > 0 || ($usage['cpu_percent'] ?? 0) > 0);
+    }
+
     /** @return Collection<string, array{name: string, cpu_percent: float|null, memory_mib: float|null}> */
     private function apps(): Collection
     {
