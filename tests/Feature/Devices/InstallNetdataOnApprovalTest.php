@@ -108,3 +108,9 @@ it('downloads the versioned MSI, since GitHub has no unversioned asset on a rele
     expect(file_get_contents(resource_path('scripts/windows/install-netdata.ps1')))
         ->toContain('releases/download/$NetdataVersion/netdata-$NetdataVersion-x64.msi');
 });
+
+it('makes netdata hang up idle connections after 5s, so the agent never reuses one netdata leaves unanswered', function (): void {
+    expect(file_get_contents(resource_path('scripts/windows/install-netdata.ps1')))
+        ->toContain("'    disconnect idle clients after = 5s'")
+        ->toContain('(bind to|disconnect idle clients after)');
+});

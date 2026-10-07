@@ -69,7 +69,11 @@ if (-not $isPinnedVersion) {
 $configDir = "$env:ProgramFiles\Netdata\etc\netdata"
 $configPath = Join-Path $configDir 'netdata.conf'
 $optOutPath = Join-Path $configDir '.opt-out-from-anonymous-statistics'
-$bindLine = '    bind to = 127.0.0.1'
+# Localhost only. Hanging up idle connections after 5s makes the agent dial
+# fresh each minute: Netdata on Windows can leave a request on a reused
+# keep-alive connection unanswered until the agent times out, which blanked
+# random metrics in about one report in five.
+$webLines = @('    bind to = 127.0.0.1', '    disconnect idle clients after = 5s')
 
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
 
@@ -77,28 +81,28 @@ if (-not (Test-Path $optOutPath)) {
     New-Item -ItemType File -Path $optOutPath | Out-Null
 }
 
-# Any other `bind to` is dropped and ours goes straight under [web], adding
-# the section when missing, so the rest of an existing config is kept.
+# Any other copy of these settings is dropped and ours go straight under
+# [web], adding the section when missing, so the rest of the config is kept.
 $current = if (Test-Path $configPath) { [IO.File]::ReadAllText($configPath) } else { '' }
-$lines = @(if ($current.Trim()) { $current.TrimEnd() -split "`r?`n" | Where-Object { $_ -notmatch '^\s*bind to\s*=' } })
+$lines = @(if ($current.Trim()) { $current.TrimEnd() -split "`r?`n" | Where-Object { $_ -notmatch '^\s*(bind to|disconnect idle clients after)\s*=' } })
 $desired = [System.Collections.Generic.List[string]]::new()
 
 foreach ($line in $lines) {
     $desired.Add($line)
     if ($line.Trim() -eq '[web]') {
-        $desired.Add($bindLine)
+        $desired.AddRange([string[]]$webLines)
     }
 }
 
-if (-not $desired.Contains($bindLine)) {
+if (-not $desired.Contains($webLines[0])) {
     $desired.Add('[web]')
-    $desired.Add($bindLine)
+    $desired.AddRange([string[]]$webLines)
 }
 
 $config = ($desired -join "`r`n") + "`r`n"
 
 if ($config -ne $current) {
-    Write-Output 'Restricting Netdata to 127.0.0.1'
+    Write-Output 'Setting Netdata to 127.0.0.1 with a 5s idle disconnect'
     [IO.File]::WriteAllText($configPath, $config)
 
     if ((Get-Service -Name 'netdata' -ErrorAction SilentlyContinue).Status -eq 'Running') {
