@@ -19,8 +19,7 @@ final class SoftwareQueries
      */
     public function forDevice(Device $device, string $search = ''): Builder
     {
-        return $device->software()
-            ->getQuery()
+        return $this->withoutRuntimes($device->software()->getQuery())
             ->when($search !== '', fn (Builder $query): Builder => $this->matching($query, $search))
             ->orderByDesc('is_update_available')
             ->orderBy('name');
@@ -32,7 +31,7 @@ final class SoftwareQueries
      */
     public function fleetPackages(string $search = ''): Builder
     {
-        return $this->onFleet(DeviceSoftware::query())
+        return $this->withoutRuntimes($this->onFleet(DeviceSoftware::query()))
             ->when($search !== '', fn (Builder $query): Builder => $this->matching($query, $search))
             ->select('device_software.package_id')
             ->selectRaw('MAX(device_software.name) as name')
@@ -137,6 +136,18 @@ final class SoftwareQueries
             ->join('devices', 'devices.id', '=', 'device_software.device_id')
             ->where('devices.status', DeviceStatus::Active)
             ->where(fn (Builder $flagQuery): Builder => $flagQuery->whereNull('devices.is_monitor_only')->orWhere('devices.is_monitor_only', false));
+    }
+
+    /**
+     * Leaves out the Microsoft runtimes other apps depend on (config software.hidden).
+     */
+    private function withoutRuntimes(Builder $query): Builder
+    {
+        return $query->whereNot(fn (Builder $hidden): Builder => $hidden
+            ->where(fn (Builder $ids): Builder => collect(config('software.hidden.package_ids'))
+                ->reduce(fn (Builder $carry, string $pattern): Builder => $carry->orWhere('device_software.package_id', 'like', $pattern), $ids))
+            ->orWhere(fn (Builder $names): Builder => collect(config('software.hidden.names'))
+                ->reduce(fn (Builder $carry, string $pattern): Builder => $carry->orWhere('device_software.name', 'like', $pattern), $names)));
     }
 
     private function matching(Builder $query, string $search): Builder

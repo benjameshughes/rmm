@@ -39,6 +39,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Hidden Runtimes
+    |--------------------------------------------------------------------------
+    |
+    | Microsoft runtimes and frameworks that other apps depend on: removing
+    | them breaks those apps, so they are left out of the software lists.
+    | Patterns are SQL LIKE matches on the package ID or the name.
+    |
+    */
+
+    'hidden' => [
+        'package_ids' => [
+            'Microsoft.DotNet.%',
+            'Microsoft.VCRedist.%',
+            '%Microsoft.VCLibs%',
+            '%Microsoft.UI.Xaml%',
+            '%Microsoft.NET.Native.%',
+            '%Microsoft.WindowsAppRuntime%',
+            '%Microsoft.Advertising.Xaml%',
+            '%Microsoft.Services.Store.Engagement%',
+            '%Microsoft.LanguageExperiencePack%',
+        ],
+        'names' => [
+            'Microsoft Visual C++%',
+            'Microsoft Visual J#%',
+            'Microsoft Update Health Tools',
+            'Microsoft Windows Application Compatibility Fix Database',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Pages
     |--------------------------------------------------------------------------
     */

@@ -314,3 +314,23 @@ describe('closing the app first', function (): void {
         expect(DeviceCommand::sole()->parameters)->toBe(['PackageId' => '7zip.7zip', 'CloseApp' => 'true']);
     });
 });
+
+it('hides the Microsoft runtimes other apps depend on, but not Microsoft apps', function (array $package): void {
+    pcWith([chrome('131.0'), $package, ['package_id' => 'Microsoft.Edge', 'name' => 'Microsoft Edge', 'source' => 'winget']]);
+
+    expect(app(App\Queries\SoftwareQueries::class)->fleetPackages()->pluck('package_id')->all())
+        ->toContain('Google.Chrome', 'Microsoft.Edge')
+        ->not->toContain($package['package_id']);
+})->with([
+    'desktop runtime' => [['package_id' => 'Microsoft.DotNet.DesktopRuntime.8', 'name' => 'Microsoft .NET Windows Desktop Runtime 8.0']],
+    'vc redist' => [['package_id' => 'Microsoft.VCRedist.2015+.x64', 'name' => 'Microsoft Visual C++ v14 Redistributable (x64)']],
+    'msix native framework' => [['package_id' => 'MSIX\Microsoft.NET.Native.Framework.1.7_1.7.25531.0_x64__8wekyb3d8bbwe', 'name' => 'Microsoft.NET.Native.Framework.1.7']],
+    'arp vc redist by name' => [['package_id' => 'ARP\Machine\X86\{9A25302D-30C0-39D9-BD6F-21E6EC160475}', 'name' => 'Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.17']],
+    'ui xaml' => [['package_id' => 'Microsoft.UI.Xaml.2.8', 'name' => 'Microsoft.UI.Xaml']],
+]);
+
+it('hides the runtimes on a device page too', function (): void {
+    $device = pcWith([chrome('131.0'), ['package_id' => 'Microsoft.WindowsAppRuntime.1.8', 'name' => 'Windows App Runtime 1.8']]);
+
+    expect(app(App\Queries\SoftwareQueries::class)->forDevice($device)->pluck('package_id')->all())->toBe(['Google.Chrome']);
+});
