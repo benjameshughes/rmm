@@ -15,6 +15,9 @@ mod power;
 #[cfg(windows)]
 mod power_events;
 mod power_state;
+#[cfg(windows)]
+mod printer_spooler;
+mod printers;
 mod runtime_config;
 mod startup_grace;
 mod storage;

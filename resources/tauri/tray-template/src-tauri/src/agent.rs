@@ -12,6 +12,8 @@ use crate::commands::CommandClient;
 use crate::metrics::{KeyHealth, MetricsCollector};
 use crate::power::{self, PowerController, PowerNotifier};
 use crate::power_state::{self, PowerNotice, PowerReason};
+#[cfg(windows)]
+use crate::printers::PrinterReporter;
 use crate::startup_grace::{self, Milestone, StartupProgress};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
@@ -365,6 +367,14 @@ impl Agent {
             }
         };
 
+        let printer_handle = match self.spawn_printer_loop(&api_key, &session_token, &key_health) {
+            Ok(handle) => handle,
+            Err(e) => {
+                error!("Failed to start printer snapshots: {}", e);
+                None
+            }
+        };
+
         // Spawn update check loop as a separate task
         let update_config = self.config.clone();
         let update_token = session_token.clone();
@@ -394,6 +404,9 @@ impl Agent {
         session_token.cancel();
         let _ = heartbeat_handle.await;
         if let Some(handle) = command_handle {
+            let _ = handle.await;
+        }
+        if let Some(handle) = printer_handle {
             let _ = handle.await;
         }
         let _ = update_handle.await;
@@ -438,6 +451,41 @@ impl Agent {
         info!("Monitor-only agent: command polling is not part of this build");
         // Nothing to drain, so the startup keep-awake need not wait for it.
         self.startup_progress().mark(Milestone::CommandsDrained);
+        Ok(None)
+    }
+
+    /// Send printer snapshots on every spooler change and each metrics
+    /// interval. Windows only: other builds have no print spooler to watch.
+    #[cfg(windows)]
+    fn spawn_printer_loop(
+        &self,
+        api_key: &str,
+        session_token: &CancellationToken,
+        key_health: &Arc<KeyHealth>,
+    ) -> Result<Option<tokio::task::JoinHandle<()>>> {
+        let reporter = PrinterReporter::new(self.config.clone(), self.system_info.hostname.clone())?;
+        let (changes, listener) = crate::printer_spooler::spawn_listener(&self.config, session_token.clone())
+            .context("Failed to start the printer listener thread")?;
+        let api_key = api_key.to_string();
+        let token = session_token.clone();
+        let health = key_health.clone();
+        let gate = self.power.gate();
+
+        Ok(Some(tokio::spawn(async move {
+            reporter
+                .run(api_key, changes, crate::printer_spooler::collect_snapshot, token, health, gate)
+                .await;
+            let _ = tokio::task::spawn_blocking(move || listener.join()).await;
+        })))
+    }
+
+    #[cfg(not(windows))]
+    fn spawn_printer_loop(
+        &self,
+        _api_key: &str,
+        _session_token: &CancellationToken,
+        _key_health: &Arc<KeyHealth>,
+    ) -> Result<Option<tokio::task::JoinHandle<()>>> {
         Ok(None)
     }
 
