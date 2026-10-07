@@ -3,7 +3,10 @@
   RMM Agent MSI Installer
   - Installs rmm.exe to Program Files
   - Adds install directory to system PATH
-  - Registers and starts the Windows service
+  - Registers and starts the Windows service with Windows Installer's own
+    ServiceInstall/ServiceControl, so install, upgrade and uninstall stop,
+    replace and restart it. Remove='both' also deletes a service left behind
+    by older MSIs (which registered it with `rmm install`) before re-creating it
   - Locks the data folder to SYSTEM + Administrators (MsiLockPermissionsEx,
     Windows Installer 5.0); the service re-applies this at every start
 -->
@@ -45,6 +48,23 @@
                             DiskId='1'
                             Source='$(var.CargoTargetBinDir)\rmm.exe'
                             KeyPath='yes'/>
+                        <ServiceInstall
+                            Id='RmmService'
+                            Name='BenJHRMM'
+                            DisplayName='BenJH RMM'
+                            Description='BenJH Remote Monitoring and Management Agent - collects system metrics and enables remote management'
+                            Type='ownProcess'
+                            Start='auto'
+                            ErrorControl='normal'
+                            Account='LocalSystem'
+                            Vital='yes'/>
+                        <ServiceControl
+                            Id='RmmServiceControl'
+                            Name='BenJHRMM'
+                            Start='install'
+                            Stop='both'
+                            Remove='both'
+                            Wait='yes'/>
                     </Component>
 
                     <!-- Add to PATH -->
@@ -95,54 +115,5 @@
         <Property Id='ARPHELPLINK' Value='https://github.com/benjameshughes/rmm'/>
         <Property Id='ARPURLINFOABOUT' Value='https://github.com/benjameshughes/rmm'/>
 
-        <!-- Post-install action: Install and start service -->
-        <CustomAction
-            Id='InstallService'
-            FileKey='RmmExe'
-            ExeCommand='install'
-            Execute='deferred'
-            Impersonate='no'
-            Return='check'/>
-
-        <CustomAction
-            Id='StartService'
-            FileKey='RmmExe'
-            ExeCommand='start'
-            Execute='deferred'
-            Impersonate='no'
-            Return='ignore'/>
-
-        <CustomAction
-            Id='StopService'
-            FileKey='RmmExe'
-            ExeCommand='stop'
-            Execute='deferred'
-            Impersonate='no'
-            Return='ignore'/>
-
-        <CustomAction
-            Id='UninstallService'
-            FileKey='RmmExe'
-            ExeCommand='uninstall'
-            Execute='deferred'
-            Impersonate='no'
-            Return='ignore'/>
-
-        <InstallExecuteSequence>
-            <!-- Uninstall: Stop then uninstall service before removing files -->
-            <Custom Action='StopService' Before='RemoveFiles'>
-                (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
-            </Custom>
-            <Custom Action='UninstallService' After='StopService'>
-                (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
-            </Custom>
-            <!-- Install: Install then start service after files are in place -->
-            <Custom Action='InstallService' After='InstallFiles'>
-                NOT Installed AND NOT REMOVE
-            </Custom>
-            <Custom Action='StartService' After='InstallService'>
-                NOT Installed AND NOT REMOVE
-            </Custom>
-        </InstallExecuteSequence>
     </Product>
 </Wix>
