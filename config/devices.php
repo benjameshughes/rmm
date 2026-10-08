@@ -247,7 +247,7 @@ return [
         'store_raw_payload' => (bool) env('DEVICE_METRICS_STORE_RAW_PAYLOAD', false),
         'top_apps' => 10,
         'app_history_hours' => 24,
-        'sample_retention_hours' => 2160,
+        'sample_retention_hours' => 1440,
         'recent_commands' => 5,
         'netdata_install_script_slug' => 'install-netdata',
         'netdata_repair_script_slug' => 'repair-netdata',
