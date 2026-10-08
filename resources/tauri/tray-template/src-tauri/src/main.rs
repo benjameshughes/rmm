@@ -6,6 +6,7 @@ mod command_runner;
 mod commands;
 mod config;
 mod data_dir_security;
+mod disk_usage;
 mod enrollment;
 mod keep_awake;
 mod linux_health;
@@ -15,6 +16,9 @@ mod power;
 #[cfg(windows)]
 mod power_events;
 mod power_state;
+#[cfg(windows)]
+mod printer_spooler;
+mod printers;
 mod runtime_config;
 mod startup_grace;
 mod storage;
@@ -167,6 +171,8 @@ enum Commands {
         #[arg(long)]
         check: bool,
     },
+    /// Scan disk usage under a folder and print one line of JSON
+    Du(disk_usage::DuArgs),
 }
 
 /// Initialize logging and return the guard that must be kept alive
@@ -975,6 +981,9 @@ fn run_cli(cli: Cli) -> Result<()> {
         Some(Commands::Update { check }) => {
             check_for_updates(check)?;
         }
+        Some(Commands::Du(args)) => {
+            std::process::exit(disk_usage::run(&args));
+        }
         None => {
             // No command - check if we're being run as a service
             #[cfg(windows)]
@@ -998,6 +1007,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                         eprintln!("  rmm reenroll         Force re-enrollment");
                         eprintln!("  rmm update           Check for and apply updates");
                         eprintln!("  rmm update --check   Only check for updates");
+                        eprintln!("  rmm du <PATH>        Scan disk usage (JSON)");
                         eprintln!("  rmm --url <URL>      Set server URL");
                         eprintln!("  rmm --reset          Clear API key");
                     }

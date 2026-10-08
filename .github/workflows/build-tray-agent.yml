@@ -80,6 +80,42 @@ jobs:
         working-directory: resources/tauri/tray-template/src-tauri
         run: cargo wix --no-build --nocapture
 
+      # Prove the MSI upgrades a real install: install the latest released MSI,
+      # upgrade it with this build, check the service, then uninstall cleanly.
+      - name: Test MSI upgrade
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          function Invoke-Msi([string] $arguments, [string] $log) {
+            $process = Start-Process msiexec.exe -ArgumentList "$arguments /qn /norestart /l*v `"$log`"" -Wait -PassThru
+            if ($process.ExitCode -notin 0, 3010) {
+              Get-Content $log -Encoding Unicode | Select-String 'Return value 3|Error \d{4}' | Select-Object -First 20 | ForEach-Object { $_.Line }
+              throw "msiexec $arguments exited $($process.ExitCode)"
+            }
+          }
+
+          $new = (Get-ChildItem resources/tauri/tray-template/src-tauri/target/wix/*.msi | Select-Object -First 1).FullName
+          gh release download --repo ${{ github.repository }} --pattern '*.msi' --dir released-msi
+          $old = (Get-ChildItem released-msi/*.msi | Select-Object -First 1).FullName
+          Write-Host "Upgrading $(Split-Path $old -Leaf) to $(Split-Path $new -Leaf)"
+
+          Invoke-Msi "/i `"$old`"" old-install.log
+          if (-not (Get-Service BenJHRMM -ErrorAction SilentlyContinue)) { throw 'The released MSI did not register the service' }
+
+          Invoke-Msi "/i `"$new`"" upgrade.log
+          $service = Get-CimInstance Win32_Service -Filter "Name='BenJHRMM'"
+          if ($null -eq $service) { throw 'The service is missing after the upgrade' }
+          if ($service.StartMode -ne 'Auto') { throw "The service start mode is $($service.StartMode), expected Auto" }
+          $built = (Get-FileHash resources/tauri/tray-template/src-tauri/target/release/rmm.exe).Hash
+          $installed = (Get-FileHash "$env:ProgramFiles\BenJH RMM\rmm.exe").Hash
+          if ($built -ne $installed) { throw 'Program Files still has the old rmm.exe after the upgrade' }
+          Write-Host "Upgrade OK: service $($service.State), start mode $($service.StartMode)"
+
+          Invoke-Msi "/x `"$new`"" uninstall.log
+          if (Get-Service BenJHRMM -ErrorAction SilentlyContinue) { throw 'The service is still registered after uninstall' }
+          Write-Host 'Uninstall OK: service removed'
+
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:

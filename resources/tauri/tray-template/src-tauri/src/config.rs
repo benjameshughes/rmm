@@ -67,6 +67,58 @@ pub const DEFAULT_APT_CHECK_INTERVAL_SECS: u64 = 3600;
 /// Longest a read-only health query command (systemctl, apt-get -s) may run
 pub const DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS: u64 = 30;
 
+/// Printer listener: a change is reported once the spooler has been quiet
+/// this long (milliseconds)
+pub const DEFAULT_PRINTER_QUIET_MS: u64 = 1500;
+
+/// Printer listener: longest a burst of spooler signals can delay a report
+/// (milliseconds)
+pub const DEFAULT_PRINTER_MAX_DELAY_MS: u64 = 5000;
+
+/// Printer listener: longest single wait on the spooler, so shutdown is noticed
+/// (milliseconds)
+pub const DEFAULT_PRINTER_WAIT_SLICE_MS: u64 = 1000;
+
+/// Printer listener: first retry delay after losing the spooler (seconds)
+pub const DEFAULT_PRINTER_RETRY_MIN_SECS: u64 = 10;
+
+/// Printer listener: longest retry delay while the spooler stays down (seconds)
+pub const DEFAULT_PRINTER_RETRY_MAX_SECS: u64 = 30;
+
+/// Printer listener: re-subscribe this often even when nothing failed, so a
+/// silently restarted spooler cannot leave the listener deaf (seconds)
+pub const DEFAULT_PRINTER_RESUBSCRIBE_SECS: u64 = 600;
+
+/// `rmm du`: deepest folder level reported (the scanned root is level 0)
+pub const DEFAULT_DU_DEPTH: u32 = 4;
+
+/// `rmm du`: smallest folder reported on its own, in MB; smaller siblings
+/// are rolled into one "*" entry
+pub const DEFAULT_DU_MIN_MB: u64 = 256;
+
+/// `rmm du`: how many of the largest files are listed
+pub const DEFAULT_DU_TOP_FILES: usize = 200;
+
+/// `rmm du`: directory reader threads
+pub const DEFAULT_DU_THREADS: usize = 4;
+
+/// `rmm du`: most characters of JSON printed; above this the size threshold
+/// doubles until the report fits (command output is capped at 1M chars)
+pub const DU_JSON_BUDGET_CHARS: usize = 900_000;
+
+/// `rmm du`: most folder entries in one report
+pub const DU_MAX_NODES: usize = 4000;
+
+/// `rmm du`: how many failed paths are listed (all are counted)
+pub const DU_ERROR_SAMPLE: usize = 50;
+
+/// `rmm du`: how many file extensions are listed
+pub const DU_TOP_EXTENSIONS: usize = 30;
+
+/// `rmm du`: bytes read per directory listing call on Windows
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const DU_DIR_BUFFER_BYTES: usize = 64 * 1024;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
@@ -140,6 +192,18 @@ pub struct Config {
     pub apt_check_interval: u64,
     /// Timeout in seconds for read-only health query commands
     pub health_command_timeout: u64,
+    /// Milliseconds of spooler silence before a printer change is reported
+    pub printer_quiet_ms: u64,
+    /// Most milliseconds a burst of spooler signals can delay a report
+    pub printer_max_delay_ms: u64,
+    /// Longest single wait on the spooler in milliseconds
+    pub printer_wait_slice_ms: u64,
+    /// First retry delay in seconds after losing the spooler
+    pub printer_retry_min: u64,
+    /// Longest retry delay in seconds while the spooler stays down
+    pub printer_retry_max: u64,
+    /// Seconds between routine re-subscriptions to the spooler
+    pub printer_resubscribe: u64,
     /// Skip automatic updates
     pub skip_updates: bool,
     /// Netdata API base URL
@@ -191,6 +255,12 @@ impl Default for Config {
             boot_notice_max_uptime: DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS,
             apt_check_interval: DEFAULT_APT_CHECK_INTERVAL_SECS,
             health_command_timeout: DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS,
+            printer_quiet_ms: DEFAULT_PRINTER_QUIET_MS,
+            printer_max_delay_ms: DEFAULT_PRINTER_MAX_DELAY_MS,
+            printer_wait_slice_ms: DEFAULT_PRINTER_WAIT_SLICE_MS,
+            printer_retry_min: DEFAULT_PRINTER_RETRY_MIN_SECS,
+            printer_retry_max: DEFAULT_PRINTER_RETRY_MAX_SECS,
+            printer_resubscribe: DEFAULT_PRINTER_RESUBSCRIBE_SECS,
             skip_updates: false,
             netdata_url: DEFAULT_NETDATA_URL.to_string(),
         }
