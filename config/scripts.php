@@ -376,6 +376,20 @@ return [
             'timeout_seconds' => 120,
             'requires_admin' => false,
         ],
+        'disk-usage' => [
+            'name' => 'Disk Usage Scan',
+            'description' => 'Measure what fills a drive or folder, folder by folder, with the biggest files and known space hogs, for the device Storage tab. Changes nothing',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/disk-usage.ps1',
+            'secrets' => ['DiskUsageKeep'],
+            'timeout_seconds' => 900,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'Path', 'label' => 'Drive or folder', 'type' => 'text', 'required' => false, 'default' => 'C:\\'],
+                ['name' => 'Depth', 'label' => 'Folder levels (1 to 6)', 'type' => 'number', 'required' => false, 'default' => '4'],
+            ],
+        ],
         'system-inventory' => [
             'name' => 'System Inventory',
             'description' => 'Read the hardware, Windows, security, users, updates and third-party drivers, services and tasks, for the device System tab. Changes nothing',
@@ -448,7 +462,7 @@ return [
             'timeout_seconds' => 30,
             'requires_admin' => false,
         ],
-        'disk-usage' => [
+        'linux-disk-usage' => [
             'name' => 'Disk Usage',
             'description' => 'Show disk space usage for all mounted filesystems',
             'category' => 'info',

@@ -93,6 +93,7 @@ return [
         'network-interfaces',
         'linux-process-list',
         'disk-usage',
+        'linux-disk-usage',
         'systemd-services',
         'open-ports',
         'memory-usage',

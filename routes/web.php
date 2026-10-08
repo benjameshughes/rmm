@@ -17,6 +17,7 @@ use App\Livewire\Devices\Metrics as DeviceMetrics;
 use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending as DevicesPending;
 use App\Livewire\Devices\Printers as DevicePrinters;
+use App\Livewire\Devices\Storage as DeviceStorage;
 use App\Livewire\Devices\System as DeviceSystem;
 use App\Livewire\Hardware\Index as HardwareIndex;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
@@ -72,6 +73,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('commands', DeviceCommands::class)->name('commands');
         Route::get('apps', DeviceApps::class)->name('apps');
         Route::get('system', DeviceSystem::class)->name('system');
+        Route::get('storage', DeviceStorage::class)->name('storage');
         Route::get('printers', DevicePrinters::class)->name('printers');
         Route::get('backups', DeviceBackups::class)->name('backups');
         Route::get('details', DeviceDetails::class)->name('details');

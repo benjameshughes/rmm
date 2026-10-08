@@ -20,7 +20,8 @@ use InvalidArgumentException;
  * must be a Windows PC with backups enabled; anything else gets blanks, which
  * the scripts report as not set up. The master password goes only to a
  * script that declares it (backup-files), and only while that PC's master
- * key is pending: once it is stamped as added, it is sent blank. Ad-hoc commands and user scripts never
+ * key is pending: once it is stamped as added, it is sent blank. The disk
+ * usage scan gets the space-hog folders it must keep from config/disk_usage.php. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -64,6 +65,7 @@ final class ResolveCommandSecrets
             'ResticSha256' => config('backup.restic.sha256'),
             'ResticExeSha256' => config('backup.restic.exe_sha256'),
             'MasterPassword' => $source?->isBackupMasterKeyPending ? (string) config('backup.master_password') : '',
+            'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),
         };
     }

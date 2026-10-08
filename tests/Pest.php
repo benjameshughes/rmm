@@ -101,3 +101,20 @@ function magicPacketFor(string $mac): string
 {
     return str_repeat("\xFF", 6).str_repeat(hex2bin(str_replace(':', '', $mac)), 16);
 }
+
+/**
+ * A disk scan of C:\ as `rmm du --json` prints it (schema rmm.du/1), with dotted keys replaced.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function diskScanFixture(array $overrides = []): array
+{
+    $data = json_decode(file_get_contents(__DIR__.'/Fixtures/disk-usage-c-drive.json'), true);
+
+    collect($overrides)->each(function (mixed $value, string $key) use (&$data): void {
+        data_set($data, $key, $value);
+    });
+
+    return $data;
+}

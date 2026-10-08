@@ -254,6 +254,11 @@ final class Device extends Model
         return $this->hasOne(DeviceInventory::class)->latestOfMany('collected_at');
     }
 
+    public function diskScans(): HasMany
+    {
+        return $this->hasMany(DeviceDiskScan::class);
+    }
+
     public function pendingCommands(): HasMany
     {
         return $this->hasMany(DeviceCommand::class)->where('status', CommandStatus::Pending);

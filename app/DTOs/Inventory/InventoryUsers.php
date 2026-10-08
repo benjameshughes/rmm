@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs\Inventory;
 
+use Illuminate\Support\Str;
+
 /**
  * Local accounts, administrators, signed-in users and profiles from one system inventory.
  */
@@ -70,6 +72,20 @@ final class InventoryUsers
             'Session' => fn (array $session): ?string => $this->text($session['session_id'] ?? null),
             'Since' => fn (array $session): ?string => $this->dateTime($session['since'] ?? null),
         ]);
+    }
+
+    /**
+     * Each profile's folder name by its SID, so per-user folders named by SID
+     * (the Recycle Bin) can show who they belong to. Older inventories carry no SIDs.
+     *
+     * @return array<string, string>
+     */
+    public function profileNamesBySid(): array
+    {
+        return $this->rows('profiles')
+            ->filter(fn (array $profile): bool => $this->text($profile['sid'] ?? null) !== null && $this->text($profile['path'] ?? null) !== null)
+            ->mapWithKeys(fn (array $profile): array => [Str::upper($this->text($profile['sid'])) => Str::afterLast($this->text($profile['path']), '\\')])
+            ->all();
     }
 
     public function profiles(): InventoryTable

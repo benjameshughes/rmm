@@ -13,6 +13,7 @@ enum DeviceTab: string
     case Commands = 'commands';
     case Apps = 'apps';
     case System = 'system';
+    case Storage = 'storage';
     case Printers = 'printers';
     case Backups = 'backups';
     case Details = 'details';
@@ -25,6 +26,7 @@ enum DeviceTab: string
             self::Commands => 'Commands',
             self::Apps => 'Apps',
             self::System => 'System',
+            self::Storage => 'Storage',
             self::Printers => 'Printers',
             self::Backups => 'Backups',
             self::Details => 'Details',
@@ -39,6 +41,7 @@ enum DeviceTab: string
             self::Commands => 'command-line',
             self::Apps => 'cpu-chip',
             self::System => 'computer-desktop',
+            self::Storage => 'circle-stack',
             self::Printers => 'printer',
             self::Backups => 'cloud-arrow-up',
             self::Details => 'information-circle',

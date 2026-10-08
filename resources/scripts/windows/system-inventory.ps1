@@ -485,6 +485,7 @@ $profiles = @(Get-CimInstance -ClassName Win32_UserProfile -Filter 'Special = FA
     ForEach-Object {
         [ordered]@{
             path = Get-Text $_.LocalPath
+            sid = Get-Text $_.SID
             last_used = Format-Date $_.LastUseTime
             is_loaded = [bool]$_.Loaded
         }

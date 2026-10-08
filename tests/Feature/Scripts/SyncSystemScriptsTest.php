@@ -50,7 +50,7 @@ it('syncs every shipped system script from its file', function (): void {
     expect($logOff->platform)->toBe(ScriptPlatform::Windows);
     expect($logOff->script_content)->toBe(File::get(resource_path('scripts/windows/log-off.ps1')));
     expect(Script::findSystem('flush-dns')->script_type)->toBe(ScriptType::Cmd);
-    expect(Script::findSystem('disk-usage')->script_type)->toBe(ScriptType::Bash);
+    expect(Script::findSystem('linux-disk-usage')->script_type)->toBe(ScriptType::Bash);
 });
 
 it('is idempotent', function (): void {
