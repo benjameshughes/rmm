@@ -346,7 +346,10 @@ fn netdata_data_url(
 /// Simple metrics collector - fetches from Netdata and forwards to Laravel
 pub struct MetricsCollector {
     config: Config,
+    /// Laravel API requests (heartbeat, metrics submission).
     client: reqwest::Client,
+    /// Local Netdata requests, never on a reused connection.
+    netdata_client: reqwest::Client,
     hostname: String,
     mac_addresses: Vec<String>,
     /// Linux health checks (keeps the apt result between submissions).
@@ -361,10 +364,18 @@ impl MetricsCollector {
             .timeout(Duration::from_secs(10))
             .build()
             .context("Failed to create HTTP client")?;
+        // Reused keep-alive connections to Netdata on Windows randomly hang
+        // until the timeout; a fresh connection per request never has.
+        let netdata_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .pool_max_idle_per_host(0)
+            .build()
+            .context("Failed to create Netdata HTTP client")?;
 
         Ok(Self {
             config,
             client,
+            netdata_client,
             hostname,
             mac_addresses,
             #[cfg(not(windows))]
@@ -377,7 +388,7 @@ impl MetricsCollector {
         let url = format!("{}/api/v3/info", self.config.netdata_url);
         debug!("Fetching Netdata info from: {}", url);
 
-        match self.client.get(&url).send().await {
+        match self.netdata_client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 response.json().await.ok()
             }
@@ -427,7 +438,7 @@ impl MetricsCollector {
         );
         debug!("Fetching Netdata {} from: {}", context, url);
 
-        match self.client.get(&url).send().await {
+        match self.netdata_client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 response.json().await.ok()
             }
@@ -597,7 +608,7 @@ impl MetricsCollector {
     pub async fn check_netdata_available(&self) -> bool {
         let url = format!("{}/api/v3/info", self.config.netdata_url);
 
-        match self.client.get(&url).send().await {
+        match self.netdata_client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 debug!("Netdata is available");
                 true
@@ -966,6 +977,39 @@ mod tests {
         assert_eq!(json["linux_health"]["reboot_required"], true);
         assert_eq!(json["linux_health"]["pending_updates"], 4);
         assert_eq!(json["linux_health"]["pending_security_updates"], 1);
+    }
+
+    #[tokio::test]
+    async fn netdata_requests_never_reuse_a_connection() {
+        use std::sync::atomic::AtomicUsize;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let counter = accepted.clone();
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                counter.fetch_add(1, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    let mut request = [0u8; 4096];
+                    while matches!(socket.read(&mut request).await, Ok(read) if read > 0) {
+                        let reply = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}";
+                        let _ = socket.write_all(reply).await;
+                    }
+                });
+            }
+        });
+        let config = Config {
+            netdata_url: format!("http://{address}"),
+            ..Config::default()
+        };
+        let collector = MetricsCollector::new(config, "pc-01".to_string(), Vec::new()).unwrap();
+
+        assert!(collector.check_netdata_available().await);
+        assert!(collector.check_netdata_available().await);
+        assert_eq!(accepted.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]

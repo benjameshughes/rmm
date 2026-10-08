@@ -65,7 +65,7 @@ base64 = "0.21"
 
 # Windows-specific
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser", "dpapi", "wincrypt", "winbase", "minwinbase", "winnt", "handleapi", "minwindef", "winerror", "synchapi", "winspool"] }
+winapi = { version = "0.3", features = ["winsvc", "errhandlingapi", "winuser", "dpapi", "wincrypt", "winbase", "minwinbase", "winnt", "handleapi", "minwindef", "winerror", "synchapi", "winspool", "fileapi", "processthreadsapi", "securitybaseapi", "ntdef"] }
 
 [features]
 default = []

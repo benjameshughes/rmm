@@ -89,6 +89,36 @@ pub const DEFAULT_PRINTER_RETRY_MAX_SECS: u64 = 30;
 /// silently restarted spooler cannot leave the listener deaf (seconds)
 pub const DEFAULT_PRINTER_RESUBSCRIBE_SECS: u64 = 600;
 
+/// `rmm du`: deepest folder level reported (the scanned root is level 0)
+pub const DEFAULT_DU_DEPTH: u32 = 4;
+
+/// `rmm du`: smallest folder reported on its own, in MB; smaller siblings
+/// are rolled into one "*" entry
+pub const DEFAULT_DU_MIN_MB: u64 = 256;
+
+/// `rmm du`: how many of the largest files are listed
+pub const DEFAULT_DU_TOP_FILES: usize = 200;
+
+/// `rmm du`: directory reader threads
+pub const DEFAULT_DU_THREADS: usize = 4;
+
+/// `rmm du`: most characters of JSON printed; above this the size threshold
+/// doubles until the report fits (command output is capped at 1M chars)
+pub const DU_JSON_BUDGET_CHARS: usize = 900_000;
+
+/// `rmm du`: most folder entries in one report
+pub const DU_MAX_NODES: usize = 4000;
+
+/// `rmm du`: how many failed paths are listed (all are counted)
+pub const DU_ERROR_SAMPLE: usize = 50;
+
+/// `rmm du`: how many file extensions are listed
+pub const DU_TOP_EXTENSIONS: usize = 30;
+
+/// `rmm du`: bytes read per directory listing call on Windows
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const DU_DIR_BUFFER_BYTES: usize = 64 * 1024;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 
