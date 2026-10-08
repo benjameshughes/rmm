@@ -7,13 +7,17 @@
 #      network collectors off for good: rebuild it with lodctr /R (64 and
 #      32 bit), resync WMI and restart Netdata.
 #   3. Counters intact: restart Netdata once.
-# A repair that does not work exits 1, so it shows as a failed command.
+# Every restart asks the service to stop and, when a hung Netdata will not,
+# kills every process running from its folder before starting it again.
+# A repair that does not work exits 1, so it shows as a failed command and
+# raises an alert; rebooting the PC is left to a person.
 
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
 
 $contextsUrl = 'http://127.0.0.1:19999/api/v3/contexts?scope_contexts=system.cpu'
 $perflibKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib\009'
+$netdataFolder = "$env:ProgramFiles\Netdata"
 
 # 'silent' when the API does not answer, 'blind' when it answers without live
 # CPU data, 'healthy' otherwise. The error preference above keeps a refused
@@ -36,19 +40,45 @@ function Get-NetdataState {
     return 'healthy'
 }
 
-# Restarts the service and polls for up to a minute until CPU is reported.
+# Asks the service to stop and waits up to 20 seconds. A hung Netdata sits in
+# StopPending for good, so every process running from its folder (netdata.exe,
+# its go.d, apps, windows-events, network-viewer and scripts.d plugins, and
+# the sh.exe helpers they spawn) is then killed.
+function Stop-Netdata {
+    Stop-Service -Name 'netdata' -Force -NoWait -WarningAction SilentlyContinue
+
+    foreach ($attempt in 1..20) {
+        if ((Get-Service -Name 'netdata').Status -eq 'Stopped') {
+            return
+        }
+        Start-Sleep -Seconds 1
+    }
+
+    $processes = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $_.ExecutablePath -like "$netdataFolder\*" })
+    $names = ($processes | Select-Object -ExpandProperty Name -Unique) -join ', '
+    Write-Output "Netdata was $((Get-Service -Name 'netdata').Status) after 20 seconds; killing $($processes.Count) Netdata processes: $names"
+
+    $processes | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    Start-Sleep -Seconds 2
+}
+
+# Stops Netdata (by force if need be), starts it and polls for up to a minute
+# until CPU is reported. Leaves the outcome in $state rather than returning
+# it, so the lines it prints reach the output instead of the variable.
 function Restart-Netdata {
-    Restart-Service -Name 'netdata' -Force -WarningAction SilentlyContinue
+    Stop-Netdata
+    Start-Service -Name 'netdata'
 
     foreach ($attempt in 1..12) {
         Start-Sleep -Seconds 5
-        $state = Get-NetdataState
-        if ($state -eq 'healthy') {
-            return $state
+        if ((Get-Service -Name 'netdata').Status -eq 'Stopped') {
+            Start-Service -Name 'netdata'
+        }
+        $script:state = Get-NetdataState
+        if ($script:state -eq 'healthy') {
+            return
         }
     }
-
-    return $state
 }
 
 $service = Get-Service -Name 'netdata'
@@ -69,12 +99,12 @@ $restarted = $false
 
 if ($service.Status -ne 'Running' -or $state -eq 'silent') {
     Write-Output "Netdata service was $($service.Status) and its API $(if ($state -eq 'silent') { 'was not answering' } else { 'was answering' }); restarting it"
-    $state = Restart-Netdata
+    Restart-Netdata
     $restarted = $true
 }
 
 if ($state -eq 'healthy') {
-    Write-Output 'Netdata is reporting CPU again'
+    Write-Output 'OK: Netdata is reporting CPU again'
     exit 0
 }
 
@@ -98,16 +128,17 @@ if ($counters -notcontains 'Processor') {
 
     $counters = (Get-ItemProperty -Path $perflibKey -Name 'Counter').Counter
     Write-Output "The counter list now $(if ($counters -contains 'Processor') { 'includes' } else { 'still lacks' }) Processor; restarting Netdata"
-    $state = Restart-Netdata
+    Restart-Netdata
 } elseif (-not $restarted) {
     Write-Output 'Netdata answers without CPU data and the performance counters look intact; restarting it'
-    $state = Restart-Netdata
+    Restart-Netdata
 }
 
 if ($state -eq 'healthy') {
-    Write-Output 'Netdata is reporting CPU again'
+    Write-Output 'OK: Netdata is reporting CPU again'
     exit 0
 }
 
-Write-Output 'ATTENTION: Netdata still has no CPU data after repair'
+Write-Output "Netdata is $((Get-Service -Name 'netdata').Status) and its API is $(if ($state -eq 'silent') { 'not answering' } else { 'answering without CPU data' })"
+Write-Output 'ATTENTION: Netdata is still not reporting CPU after a forced restart. Rebooting the PC is the next step'
 exit 1

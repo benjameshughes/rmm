@@ -235,6 +235,11 @@ return [
     | list, or a hung service). Once a PC sends blank_reports_before_repair
     | reports in a row with no CPU, the repair script is queued on it, at most
     | once per netdata_repair_cooldown_hours so a dead PC is never looped on.
+    | A repair that fails or times out raises one alert from the built-in
+    | netdata_repair_alert rule, carrying the script's last ATTENTION line cut
+    | to attention_max_length characters. It resolves on the next report with
+    | CPU or a later repair that works. Switch the rule off under Alert Rules
+    | to stop raising these alerts.
     |
     */
 
@@ -249,6 +254,11 @@ return [
         'blank_reports_before_repair' => 3,
         'blank_reports_cache_key' => 'devices.metrics.blank-reports',
         'netdata_repair_cooldown_hours' => 24,
+        'netdata_repair_alert' => [
+            'rule_name' => 'Netdata repair failed',
+            'severity' => 'warning',
+            'attention_max_length' => 150,
+        ],
         'chart_ranges' => [
             '1h' => ['minutes' => 60, 'bucket_seconds' => 60],
             '24h' => ['minutes' => 1440, 'bucket_seconds' => 600],

@@ -115,6 +115,15 @@ final class AlertRule extends Model
     }
 
     /**
+     * The built-in rule behind failed Netdata repair alerts, created on first
+     * use so it can be switched off under Alert Rules like any other rule.
+     */
+    public static function netdataRepairFailed(): self
+    {
+        return self::builtIn(AlertMetric::NetdataRepairFailed, config('devices.metrics.netdata_repair_alert'));
+    }
+
+    /**
      * @param  array{rule_name: string, severity: string}  $settings
      */
     private static function builtIn(AlertMetric $metric, array $settings): self

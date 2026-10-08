@@ -214,13 +214,30 @@ it('restarts Netdata, rebuilds 64 and 32 bit performance counters and reports th
         ->toContain('"$env:SystemRoot\System32", "$env:SystemRoot\SysWOW64"')
         ->toContain('lodctr.exe" /R')
         ->toContain('winmgmt /resyncperf')
-        ->toContain("Restart-Service -Name 'netdata' -Force")
         ->toContain('ATTENTION: Netdata is not installed; run Install Netdata')
-        ->toContain('ATTENTION: Netdata still has no CPU data after repair')
         ->toContain('Nothing to do: Netdata is reporting CPU')
-        ->toContain('Netdata is reporting CPU again')
+        ->toContain('OK: Netdata is reporting CPU again')
         ->not->toContain('try {')
         ->not->toMatch('/[^\x00-\x7F]/');
 
     expect(strpos($script, 'winmgmt /resyncperf'))->toBeGreaterThan(strpos($script, 'lodctr.exe" /R'));
+});
+
+it('asks Netdata to stop, then kills every process running from its folder, and never reboots', function (): void {
+    $script = file_get_contents(resource_path('scripts/windows/repair-netdata.ps1'));
+
+    expect($script)
+        ->toContain("Stop-Service -Name 'netdata' -Force -NoWait")
+        ->toContain('$netdataFolder = "$env:ProgramFiles\Netdata"')
+        ->toContain('Where-Object { $_.ExecutablePath -like "$netdataFolder\*" }')
+        ->toContain('Stop-Process -Id $_.ProcessId -Force')
+        ->toContain('killing $($processes.Count) Netdata processes: $names')
+        ->toContain("Start-Service -Name 'netdata'")
+        ->toContain('ATTENTION: Netdata is still not reporting CPU after a forced restart. Rebooting the PC is the next step')
+        ->not->toContain('Restart-Service')
+        ->not->toContain('Restart-Computer')
+        ->not->toContain('shutdown')
+        ->not->toMatch('/Stop-Process -Name/');
+
+    expect(strpos($script, 'Stop-Process -Id'))->toBeGreaterThan(strpos($script, 'Stop-Service -Name'));
 });

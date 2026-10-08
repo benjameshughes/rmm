@@ -19,6 +19,7 @@ enum AlertMetric: string
     case PrinterProblem = 'printer_problem';
     case SpoolerDown = 'spooler_down';
     case BackupOverdue = 'backup_overdue';
+    case NetdataRepairFailed = 'netdata_repair_failed';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -42,6 +43,7 @@ enum AlertMetric: string
             self::PrinterProblem => 'Printer Problem',
             self::SpoolerDown => 'Print Spooler Down',
             self::BackupOverdue => 'Backup Overdue or Failed',
+            self::NetdataRepairFailed => 'Netdata Repair Failed',
         };
     }
 
@@ -51,7 +53,7 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue => '',
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed => '',
         };
     }
 
@@ -63,13 +65,14 @@ enum AlertMetric: string
      * Printer from one raised as metrics reports arrive. Printer problems and
      * a stopped print spooler come from built-in rules raised as printer
      * reports arrive, and overdue or failed backups from one checked hourly
-     * and after every backup run.
+     * and after every backup run. A failed Netdata repair comes from one
+     * raised when the repair script finishes.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue => false,
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed => false,
         };
     }
 }
