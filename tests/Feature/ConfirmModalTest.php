@@ -111,3 +111,18 @@ it('keeps names with quotes from breaking the confirm handler', function (): voi
     expect(confirmTrigger($html, "delete({$tag->id})"))
         ->toContain('message: '.Js::from('Delete tag \''.$tag->name.'\'?'));
 });
+
+it('asks before updating the agent on the ticked devices and queues update-agent on each', function (): void {
+    $devices = Device::factory()->active()->windows()->count(2)->create();
+
+    $page = Livewire::actingAs($this->user)->test(Index::class)
+        ->set('selectedDevices', $devices->pluck('id')->map(fn (int $id): string => (string) $id)->all());
+
+    expect(confirmTrigger($page->html(), 'bulkUpdateAgent()'))
+        ->toContain("message: 'Update the agent on ' + countLabel + ' to the latest release?'");
+
+    $page->call('bulkUpdateAgent')->assertDispatched('command-queued');
+
+    expect(DeviceCommand::query()->count())->toBe(2)
+        ->and(DeviceCommand::query()->pluck('script_id')->unique()->all())->toBe([Script::findSystem('update-agent')->id]);
+});

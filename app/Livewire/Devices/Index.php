@@ -229,6 +229,11 @@ final class Index extends Component
         $this->bulkRunSystemScript($action, 'shutdown');
     }
 
+    public function bulkUpdateAgent(BulkExecuteScript $action): void
+    {
+        $this->bulkRunSystemScript($action, 'update-agent');
+    }
+
     public function bulkRunScript(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
         abort_unless($this->bulkScriptId !== null, 422);
