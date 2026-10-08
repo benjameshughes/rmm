@@ -6,6 +6,6 @@
     @elseif($command->isPending())
         Queued...
     @else
-        Running...@if($command->startedForHumans()) started {{ $command->startedForHumans() }}@endif
+        Running...
     @endif
 </flux:button>
