@@ -3,12 +3,22 @@
         "claude_code",
         "codex"
     ],
+    "cloud": true,
     "editors": [
         "claude_code",
         "phpstorm"
     ],
-    "guidelines": [
-        "laravel/fortify"
-    ],
-    "herd_mcp": true
+    "guidelines": true,
+    "herd_mcp": true,
+    "skills": [
+        "infer-conventions",
+        "deploying-to-cloud",
+        "fortify-development",
+        "laravel-best-practices",
+        "testing-best-practices",
+        "fluxui-development",
+        "livewire-development",
+        "tailwindcss-development",
+        "echo-development"
+    ]
 }
