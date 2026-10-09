@@ -33,6 +33,9 @@ Route::middleware(['device.auth'])->group(function (): void {
     Route::post('/commands/{commandId}/started', [DeviceCommandController::class, 'started'])
         ->middleware('throttle:api.metrics');
 
+    Route::post('/commands/{commandId}/progress', [DeviceCommandController::class, 'progress'])
+        ->middleware('throttle:api.metrics');
+
     Route::post('/commands/{commandId}/result', [DeviceCommandController::class, 'result'])
         ->middleware('throttle:api.metrics');
 });

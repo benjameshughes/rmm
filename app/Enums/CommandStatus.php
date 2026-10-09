@@ -24,6 +24,22 @@ enum CommandStatus: string
         ]);
     }
 
+    /**
+     * Sent or running: the agent has it, so its script may be reporting progress.
+     */
+    public function isWithAgent(): bool
+    {
+        return in_array($this, [self::Sent, self::Running]);
+    }
+
+    /**
+     * @return array<int, self>
+     */
+    public static function withAgent(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $status): bool => $status->isWithAgent()));
+    }
+
     public function color(): string
     {
         return match ($this) {

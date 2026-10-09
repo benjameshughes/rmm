@@ -8,6 +8,7 @@ use App\Enums\CommandStatus;
 use App\Enums\DeviceStatus;
 use App\Events\AlertChanged;
 use App\Events\AuditLogged;
+use App\Events\CommandProgressed;
 use App\Events\CommandUpdated;
 use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
@@ -137,6 +138,19 @@ it('never puts command output, script content or errors in the payload', functio
     });
 });
 
+it('announces progress on the fleet and device channels without the file being worked on', function (): void {
+    $command = DeviceCommand::factory()->create([
+        'status' => CommandStatus::Running,
+        'progress' => ['schema' => 'rmm.progress/1', 'current' => 'C:\\Users\\TOP-SECRET.xlsx'],
+    ]);
+
+    $event = new CommandProgressed($command);
+
+    expect(channelNames($event))->toBe(['private-devices', "private-devices.{$command->device_id}"])
+        ->and($event->broadcastWith())->toBe(['commandId' => $command->id, 'deviceId' => $command->device_id])
+        ->and(serialize($event))->not->toContain('TOP-SECRET');
+});
+
 it('never puts device secrets or hostnames in the payload', function (): void {
     Event::fake([DeviceUpdated::class, DeviceEnrolled::class]);
 
@@ -193,6 +207,7 @@ it('queues broadcasts after commit and rescues broadcast failures', function (st
     DeviceEnrolled::class,
     DeviceUpdated::class,
     CommandUpdated::class,
+    CommandProgressed::class,
     AlertChanged::class,
     AuditLogged::class,
 ]);

@@ -50,6 +50,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Progress Lines
+    |--------------------------------------------------------------------------
+    |
+    | A long-running script may report progress while it runs by printing
+    | lines like this to stdout, flushed straight away
+    | ([Console]::Out.WriteLine then [Console]::Out.Flush() in PowerShell, so
+    | they are not caught by a pipeline or held in a buffer):
+    |
+    |   PROGRESS: {"schema":"rmm.progress/1","percent":42.5,"done":7612,
+    |     "total":18128,"unit":"files","bytes_done":1288490188,
+    |     "bytes_total":3328599654,"eta_seconds":312,"message":"Backing up",
+    |     "current":"C:\\Users\\sophie\\Documents\\x.xlsx"}
+    |
+    | One JSON object per line. Every field but schema is optional; percent
+    | is 0 to 100. The agent posts the newest line to the server at most
+    | every 5 seconds, only when it changed, and leaves these lines out of
+    | the command's output, so the verdict and the final JSON line are
+    | unaffected. The Backups tab, busy buttons and the command detail show
+    | it while the command runs. backup-files.ps1 (via Invoke-Restic in
+    | shared/restic.ps1) is the reference. See config/commands.php.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
     | Includes and Secrets
     |--------------------------------------------------------------------------
     |

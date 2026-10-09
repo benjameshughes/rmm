@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\DTOs\CommandProgress;
 use App\Enums\CommandStatus;
 use App\Enums\PackageAction;
 use App\Events\CommandUpdated;
@@ -37,6 +38,8 @@ final class DeviceCommand extends Model
         'timeout_seconds',
         'queued_by',
         'parameters',
+        'progress',
+        'progress_at',
     ];
 
     /** @var array<string, class-string> */
@@ -56,6 +59,8 @@ final class DeviceCommand extends Model
             'exit_code' => 'integer',
             'status' => CommandStatus::class,
             'parameters' => 'array',
+            'progress' => 'array',
+            'progress_at' => 'datetime',
         ];
     }
 
@@ -172,6 +177,17 @@ final class DeviceCommand extends Model
         return ($this->started_at ?? $this->sent_at)?->diffForHumans();
     }
 
+    /**
+     * How far it has got, while the agent is running it. The last report is
+     * kept after it finishes, but pages only show it while it is in flight.
+     */
+    public function liveProgress(): ?CommandProgress
+    {
+        return $this->status->isWithAgent() && is_array($this->progress)
+            ? CommandProgress::fromArray($this->progress)
+            : null;
+    }
+
     public function isPending(): bool
     {
         return $this->status === CommandStatus::Pending;
@@ -207,6 +223,8 @@ final class DeviceCommand extends Model
         $this->update([
             'status' => CommandStatus::Pending,
             'sent_at' => null,
+            'progress' => null,
+            'progress_at' => null,
         ]);
     }
 

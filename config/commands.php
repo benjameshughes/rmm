@@ -75,4 +75,27 @@ return [
 
     'per_page' => 15,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Command Progress
+    |--------------------------------------------------------------------------
+    |
+    | A long script reports how far it has got by printing lines that start
+    | with this prefix, followed by one JSON object in the rmm.progress/1
+    | schema. The agent posts the newest to /api/commands/{id}/progress at
+    | most every few seconds and strips the lines from the final output; the
+    | server strips any an older agent left in. Strings are capped at these
+    | lengths, and the current item is cut in the middle for display. See
+    | config/scripts.php for the line format scripts print.
+    |
+    */
+
+    'progress' => [
+        'line_prefix' => 'PROGRESS: ',
+        'max_unit_length' => 20,
+        'max_message_length' => 255,
+        'max_current_length' => 1000,
+        'current_display_length' => 80,
+    ],
+
 ];
