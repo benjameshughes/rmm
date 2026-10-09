@@ -31,7 +31,11 @@
         @endcan
 
         @can('runAdHocCommand', $device)
-            <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary">Run Command</flux:button>
+            @if($adHocCommand)
+                <x-device.commands.busy :command="$adHocCommand" variant="primary" size="base" label="Running command..." data-run-command-busy />
+            @else
+                <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary" data-run-command>Run Command</flux:button>
+            @endif
         @endcan
 
         @can('runCommands', $device)

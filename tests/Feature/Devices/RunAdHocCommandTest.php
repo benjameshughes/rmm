@@ -11,6 +11,7 @@ use App\Livewire\Devices\Header;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\DeviceCommand;
+use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -196,6 +197,45 @@ it('names an ad-hoc command after the first line of what was typed', function (s
     'truncated' => ['Get-ChildItem -Recurse C:\\Users', 'Ad-hoc command: Get-ChildItem -Recur...'],
     'nothing printable' => ["  \n ", 'Ad-hoc command'],
 ]);
+
+it('shows Run Command as running while an ad-hoc command is in flight, live, until it finishes', function (): void {
+    $device = Device::factory()->active()->windows()->create();
+
+    $header = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->assertSeeHtml('data-run-command')
+        ->assertDontSeeHtml('data-run-command-busy')
+        ->set('commandText', 'Get-Process')
+        ->call('runAdHocCommand')
+        ->assertSeeHtml('data-run-command-busy')
+        ->assertSee('Queued...');
+
+    $command = DeviceCommand::query()->sole();
+    $command->markAsRunning();
+
+    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id])
+        ->assertSee('Running command...')
+        ->assertSeeHtml('data-run-command-busy');
+
+    $command->markAsCompleted('done', 0);
+
+    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id])
+        ->assertDontSeeHtml('data-run-command-busy')
+        ->assertDontSee('Running command...')
+        ->assertSeeHtml('data-run-command');
+});
+
+it('leaves Run Command alone while only scripts run', function (): void {
+    $device = Device::factory()->active()->windows()->create();
+    DeviceCommand::factory()->create([
+        'device_id' => $device->id,
+        'script_id' => Script::factory()->create()->id,
+        'status' => CommandStatus::Running,
+    ]);
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->assertSeeHtml('data-run-command')
+        ->assertDontSeeHtml('data-run-command-busy');
+});
 
 it('lists an ad-hoc command on the commands tab and opens its detail', function (): void {
     $device = Device::factory()->active()->windows()->create();

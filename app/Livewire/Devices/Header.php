@@ -12,6 +12,7 @@ use App\Enums\ScriptType;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\Script;
 use App\Queries\AgentVersionQueries;
 use Flux\Flux;
@@ -60,6 +61,13 @@ final class Header extends Component
 
     #[On('echo-private:devices,LatestAgentVersionChanged')]
     public function refreshLatestAgentVersion(): void {}
+
+    /**
+     * Re-renders so Run Command shows the ad-hoc command in flight, and goes back once it finishes.
+     */
+    #[On('echo-private:devices.{device.id},CommandUpdated')]
+    #[On('command-queued')]
+    public function refreshCommands(): void {}
 
     public function updatedSelectedScriptId(): void
     {
@@ -162,6 +170,14 @@ final class Header extends Component
         $this->dispatch('command-queued');
     }
 
+    /**
+     * The newest typed command still queued or running, for the busy Run Command button.
+     */
+    private function inFlightAdHocCommand(): ?DeviceCommand
+    {
+        return $this->device->isMonitorOnly ? null : $this->device->inFlightCommands()->whereNull('script_id')->latest('id')->first();
+    }
+
     private function resetCommandForm(): void
     {
         $this->resetValidation(['commandText', 'commandType', 'commandTimeoutSeconds']);
@@ -179,6 +195,7 @@ final class Header extends Component
             'operatingSystem' => $this->device->operatingSystem(),
             'printerProblem' => $this->device->printerProblemLabel(),
             'scripts' => $this->showScriptModal ? Script::query()->orderBy('name')->get() : collect(),
+            'adHocCommand' => $this->inFlightAdHocCommand(),
         ]);
     }
 }
