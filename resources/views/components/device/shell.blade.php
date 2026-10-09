@@ -8,6 +8,10 @@
         </flux:breadcrumbs>
 
         <livewire:devices.header :device="$device" :key="'device-header-'.$device->id" />
+
+        @can('deletePaths', $device)
+            <livewire:devices.delete-path :device="$device" :key="'delete-path-'.$device->id" />
+        @endcan
     </div>
 
     <div class="border-b border-zinc-200 dark:border-zinc-700">

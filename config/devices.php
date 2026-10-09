@@ -345,4 +345,70 @@ return [
         'prepare_script_slug' => 'prepare-wake-on-lan',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Delete Path
+    |--------------------------------------------------------------------------
+    |
+    | Files and folders on a Windows PC can be deleted from the Storage tab
+    | or the device header. Delete removes them for good; Quarantine moves
+    | them into C:\ProgramData\RMM\Quarantine\<UTC time>-<id> on the system
+    | drive, where they still take up space until purge-quarantine removes
+    | them quarantine_days later (queued daily by quarantine:purge, or now
+    | from the Storage tab). Typing the name to confirm is required when the
+    | latest scan puts the path over confirm_typing_over_bytes, or when no
+    | scan has measured it at all.
+    |
+    | Paths are refused on the server and again by the script on the PC,
+    | which receives this list as RMM_DeletePathProtected when it fetches
+    | the command. Every entry is relative to a drive root and applies on
+    | any drive; `*` stands for one folder name. Trees are refused along
+    | with everything inside them, exact entries only on their own (inside
+    | them is fine), and root files only at a drive root. Drive roots, UNC
+    | and relative paths, wildcards, variables, `..`, 8.3 short names and
+    | trailing dots or spaces are always refused.
+    |
+    */
+
+    'delete_path' => [
+        'slug' => 'remove-path',
+        'purge_slug' => 'purge-quarantine',
+        'restore_slug' => 'restore-quarantine',
+        'schema' => 'rmm.remove-path/1',
+        'purge_schema' => 'rmm.purge-quarantine/1',
+        'restore_schema' => 'rmm.restore-quarantine/1',
+        'quarantine_days' => 7,
+        'confirm_typing_over_bytes' => 1024 ** 3,
+        'quarantine_folder_pattern' => '/^\d{8}T\d{6}Z-[0-9a-f]{8}$/',
+        'protected' => [
+            'trees' => [
+                'Windows',
+                'Program Files',
+                'Program Files (x86)',
+                'ProgramData\\Microsoft',
+                'ProgramData\\BenJH RMM',
+                'ProgramData\\RMM',
+                'System Volume Information',
+                'Recovery',
+                'Boot',
+                'EFI',
+            ],
+            'exact' => [
+                '$Recycle.Bin',
+                'ProgramData',
+                'Users',
+                'Users\\*',
+                'Documents and Settings',
+            ],
+            'root_files' => [
+                'pagefile.sys',
+                'hiberfil.sys',
+                'swapfile.sys',
+                'DumpStack.log*',
+                'bootmgr',
+                'BOOTNXT',
+            ],
+        ],
+    ],
+
 ];

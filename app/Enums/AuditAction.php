@@ -31,6 +31,10 @@ enum AuditAction: string
     case DeviceEnrolmentReset = 'device.enrolment_reset';
     case DeviceDeleted = 'device.deleted';
     case DeviceWakeRequested = 'device.wake_requested';
+    case PathDeleted = 'device.path_deleted';
+    case PathQuarantined = 'device.path_quarantined';
+    case QuarantinePurged = 'device.quarantine_purged';
+    case QuarantineRestored = 'device.quarantine_restored';
     case CommandQueued = 'command.queued';
     case CommandCancelled = 'command.cancelled';
     case AlertRuleCreated = 'alert_rule.created';
@@ -67,6 +71,10 @@ enum AuditAction: string
             self::DeviceEnrolmentReset => 'Enrolment reset',
             self::DeviceDeleted => 'Device deleted',
             self::DeviceWakeRequested => 'Wake requested',
+            self::PathDeleted => 'Path deleted',
+            self::PathQuarantined => 'Path quarantined',
+            self::QuarantinePurged => 'Quarantine purged',
+            self::QuarantineRestored => 'Quarantine restored',
             self::CommandQueued => 'Command queued',
             self::CommandCancelled => 'Command cancelled',
             self::AlertRuleCreated => 'Alert rule created',
@@ -80,9 +88,9 @@ enum AuditAction: string
     public function color(): string
     {
         return match ($this) {
-            self::LoginFailed, self::TwoFactorDisabled, self::UserDeleted, self::ScriptDeleted, self::DeviceDeleted => 'red',
-            self::LoginFromNewDevice, self::PasswordReset, self::UserPasswordChanged, self::ScriptContentChanged, self::DeviceEnrolmentReset => 'amber',
-            self::Login, self::TwoFactorEnabled, self::TwoFactorConfirmed, self::DeviceApproved, self::AlertResolved => 'green',
+            self::LoginFailed, self::TwoFactorDisabled, self::UserDeleted, self::ScriptDeleted, self::DeviceDeleted, self::PathDeleted, self::QuarantinePurged => 'red',
+            self::LoginFromNewDevice, self::PasswordReset, self::UserPasswordChanged, self::ScriptContentChanged, self::DeviceEnrolmentReset, self::PathQuarantined => 'amber',
+            self::Login, self::TwoFactorEnabled, self::TwoFactorConfirmed, self::DeviceApproved, self::AlertResolved, self::QuarantineRestored => 'green',
             self::CommandQueued, self::DeviceWakeRequested => 'blue',
             default => 'zinc',
         };

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Enums\ScriptPlatform;
 use App\Models\Device;
 use App\Models\User;
 
@@ -61,6 +62,14 @@ final class DevicePolicy
     public function runAdHocCommand(User $user, Device $device): bool
     {
         return ! $device->isMonitorOnly;
+    }
+
+    /**
+     * Deleting, quarantining, purging and restoring files runs on Windows PCs only.
+     */
+    public function deletePaths(User $user, Device $device): bool
+    {
+        return ! $device->isMonitorOnly && $device->platform() === ScriptPlatform::Windows;
     }
 
     public function wake(User $user, Device $device): bool

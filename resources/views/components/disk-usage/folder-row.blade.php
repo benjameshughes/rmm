@@ -1,4 +1,4 @@
-@props(['row', 'href', 'canScanFolder' => false])
+@props(['row', 'href', 'canScanFolder' => false, 'canDelete' => false, 'deleting' => null])
 
 <flux:table.row {{ $attributes }} data-folder="{{ $row->name }}">
     <flux:table.cell class="max-w-xs">
@@ -23,8 +23,21 @@
         @endif
     </flux:table.cell>
     <flux:table.cell align="end">
-        @if($canScanFolder && $row->canScanDeeper)
-            <flux:button size="xs" variant="ghost" icon="magnifying-glass" wire:click="scanFolder('{{ $row->indexPath }}')" data-scan-folder>Scan this folder</flux:button>
+        @if($deleting)
+            <x-device.commands.busy :command="$deleting" variant="ghost" size="xs" label="Deleting..." />
+        @elseif(! $row->isRollup && ($canDelete || ($canScanFolder && $row->canScanDeeper)))
+            <flux:dropdown position="bottom" align="end">
+                <flux:button size="xs" variant="ghost" icon="ellipsis-horizontal" aria-label="Actions for {{ $row->name }}" data-folder-actions />
+
+                <flux:menu>
+                    @if($canScanFolder && $row->canScanDeeper)
+                        <flux:menu.item wire:click="scanFolder('{{ $row->indexPath }}')" icon="magnifying-glass" data-scan-folder>Scan this folder</flux:menu.item>
+                    @endif
+                    @if($canDelete)
+                        <flux:menu.item wire:click="$dispatch('delete-path', { path: {{ Js::from($row->path) }}, kind: 'folder' })" icon="trash" variant="danger" data-delete-folder>Delete...</flux:menu.item>
+                    @endif
+                </flux:menu>
+            </flux:dropdown>
         @endif
     </flux:table.cell>
 </flux:table.row>

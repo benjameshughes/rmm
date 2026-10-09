@@ -16,6 +16,7 @@ final readonly class DiskFolderRow
     /**
      * @param  array<int, DiskNodeFlag>  $badges
      * @param  int|null  $change  Bytes since the previous scan; null when there is nothing to compare
+     * @param  bool  $isRollup  The "(other)" row of folders too small to list, which is no real folder
      */
     public function __construct(
         public int $index,
@@ -30,6 +31,7 @@ final readonly class DiskFolderRow
         public bool $isNew,
         public bool $canOpen,
         public bool $canScanDeeper,
+        public bool $isRollup = false,
     ) {}
 
     public function allocatedForHumans(): string

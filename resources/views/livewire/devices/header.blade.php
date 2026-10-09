@@ -31,11 +31,23 @@
         @endcan
 
         @can('runAdHocCommand', $device)
-            @if($adHocCommand)
-                <x-device.commands.busy :command="$adHocCommand" variant="primary" size="base" label="Running command..." data-run-command-busy />
-            @else
-                <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary" data-run-command>Run Command</flux:button>
-            @endif
+            <flux:button.group>
+                @if($adHocCommand)
+                    <x-device.commands.busy :command="$adHocCommand" variant="primary" size="base" label="Running command..." data-run-command-busy />
+                @else
+                    <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary" data-run-command>Run Command</flux:button>
+                @endif
+
+                @can('deletePaths', $device)
+                    <flux:dropdown position="bottom" align="end">
+                        <flux:button icon="chevron-down" variant="primary" aria-label="More commands" />
+
+                        <flux:menu>
+                            <flux:menu.item wire:click="$dispatch('delete-path')" icon="trash" variant="danger" data-delete-path-entry>Delete path...</flux:menu.item>
+                        </flux:menu>
+                    </flux:dropdown>
+                @endcan
+            </flux:button.group>
         @endcan
 
         @can('runCommands', $device)

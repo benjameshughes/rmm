@@ -17,3 +17,4 @@ Schedule::command('commands:expire-stale')->everyMinute();
 Schedule::command('agent:check-version')->hourly();
 Schedule::command('backups:check')->hourly();
 Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class, AuditLog::class, MetricSample::class]])->hourly();
+Schedule::command('quarantine:purge')->dailyAt('03:00');

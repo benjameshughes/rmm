@@ -261,6 +261,11 @@ final class Device extends Model
         return $this->hasMany(DeviceDiskScan::class);
     }
 
+    public function quarantines(): HasMany
+    {
+        return $this->hasMany(DeviceQuarantine::class);
+    }
+
     public function pendingCommands(): HasMany
     {
         return $this->hasMany(DeviceCommand::class)->where('status', CommandStatus::Pending);

@@ -45,6 +45,7 @@ final class BuildDiskFolderRows
                 isNew: $isCompared && $previousSize === null,
                 canOpen: $tree->hasChildren($node->index),
                 canScanDeeper: $tree->isPruned($node->index),
+                isRollup: $isOther,
             );
         });
     }

@@ -15,6 +15,10 @@
                 <flux:error name="scan" />
             </div>
         </x-dashboard.section>
+
+        @if($quarantineItems->isNotEmpty())
+            <x-disk-usage.quarantine :items="$quarantineItems" :can-change="$canDelete" />
+        @endif
     @else
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3">
@@ -70,7 +74,7 @@
                         </flux:table.columns>
                         <flux:table.rows>
                             @foreach($rows as $row)
-                                <x-disk-usage.folder-row :row="$row" :href="$nodeUrl($row->indexPath)" :can-scan-folder="$canScanFolder" wire:key="folder-{{ $latest->id }}-{{ $row->index }}" />
+                                <x-disk-usage.folder-row :row="$row" :href="$nodeUrl($row->indexPath)" :can-scan-folder="$canScanFolder" :can-delete="$isDeletable($row->path)" :deleting="$deleting->get($row->path)" wire:key="folder-{{ $latest->id }}-{{ $row->index }}" />
                             @endforeach
                         </flux:table.rows>
                     </flux:table>
@@ -90,6 +94,7 @@
                             <flux:table.column>File</flux:table.column>
                             <flux:table.column align="end">Size</flux:table.column>
                             <flux:table.column align="end" class="hidden sm:table-cell">Modified</flux:table.column>
+                            <flux:table.column></flux:table.column>
                         </flux:table.columns>
                         <flux:table.rows>
                             @foreach($topFiles as $file)
@@ -97,6 +102,9 @@
                                     <flux:table.cell class="max-w-md truncate font-mono text-xs" :title="$file['path']">{{ $file['path'] }}</flux:table.cell>
                                     <flux:table.cell align="end" class="tabular-nums">{{ $file['size'] }}</flux:table.cell>
                                     <flux:table.cell align="end" class="hidden sm:table-cell">{{ $file['modified'] ?? '—' }}</flux:table.cell>
+                                    <flux:table.cell align="end">
+                                        <x-disk-usage.file-actions :path="$file['path']" :deleting="$file['deleting']" :can-delete="$isDeletable($file['path'])" />
+                                    </flux:table.cell>
                                 </flux:table.row>
                             @endforeach
                         </flux:table.rows>
@@ -119,5 +127,9 @@
                 @endif
             </x-dashboard.section>
         </div>
+
+        @if($quarantineItems->isNotEmpty())
+            <x-disk-usage.quarantine :items="$quarantineItems" :can-change="$canDelete" />
+        @endif
     @endif
 </x-device.shell>
