@@ -45,6 +45,7 @@ it('renders an accessible progress bar with its label and the current item', fun
     $html = Blade::render('<x-device.commands.progress :progress="$progress" />', ['progress' => halfwayProgress()]);
 
     expect($html)->toContain('data-flux-progress')
+        ->toContain('wire:key="command-progress-42.5"')
         ->toContain('role="progressbar"')
         ->toContain('aria-valuenow="42.5"')
         ->toContain('aria-valuemin="0"')

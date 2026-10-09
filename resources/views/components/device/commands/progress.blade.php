@@ -1,10 +1,11 @@
-{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. The width is rendered as well as the value: Flux only reads value when it boots, so the server's width is what moves the bar after each Livewire morph. --}}
+{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. Flux only reads the value when the bar boots, so each new figure gets a fresh bar via wire:key, and the width is rendered up front so it is right before Flux boots. --}}
 @props(['progress' => null, 'withMessage' => true])
 
 @php($percent = $progress?->percent())
 
 <div {{ $attributes->class('min-w-0 space-y-1.5') }} data-command-progress>
     <flux:progress
+        wire:key="command-progress-{{ $percent ?? 'waiting' }}"
         :value="$percent ?? 100"
         color="blue"
         :class="$percent === null ? 'animate-pulse' : null"
