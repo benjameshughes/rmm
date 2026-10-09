@@ -14,7 +14,7 @@
                     <flux:error name="path" />
                 </div>
             @else
-                <flux:input wire:model.blur="path" label="Path" placeholder="C:\Veeam Backup Cache" class:input="font-mono" autocomplete="off" data-delete-path-input />
+                <flux:input wire:model.live.blur="path" label="Path" placeholder="C:\Veeam Backup Cache" class:input="font-mono" autocomplete="off" data-delete-path-input />
             @endif
 
             @if($target)

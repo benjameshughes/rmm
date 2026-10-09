@@ -9,7 +9,6 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\DevicePrinter;
 use App\Models\User;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Livewire;
 
 function tabPc(array $attributes = []): Device
@@ -139,7 +138,7 @@ it('refuses a job that is not in the printer\'s latest snapshot, or another devi
     $elsewhere = DevicePrinter::factory()->create(['name' => 'Other']);
 
     Livewire::test(Printers::class, ['device' => $device])->call('cancelJob', $printer->id, 999)->assertNotFound();
-    expect(fn () => Livewire::test(Printers::class, ['device' => $device])->call('clearQueue', $elsewhere->id))->toThrow(ModelNotFoundException::class);
+    Livewire::test(Printers::class, ['device' => $device])->call('clearQueue', $elsewhere->id)->assertNotFound();
 
     expect(DeviceCommand::query()->count())->toBe(0);
 });

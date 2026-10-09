@@ -7,7 +7,6 @@ use App\Models\Alert;
 use App\Models\Device;
 use App\Models\User;
 use App\Notifications\AlertTriggered;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
@@ -118,8 +117,9 @@ it('refuses to open another user\'s notification', function (): void {
     Alert::factory()->triggered()->create();
 
     Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
-        ->call('open', $colleague->notifications()->sole()->id);
-})->throws(ModelNotFoundException::class);
+        ->call('open', $colleague->notifications()->sole()->id)
+        ->assertNotFound();
+});
 
 it('marks every notification read', function (): void {
     Alert::factory()->count(3)->triggered()->create();

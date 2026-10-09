@@ -10,7 +10,6 @@ use App\Models\DeviceCommand;
 use App\Models\DeviceSoftware;
 use App\Models\Script;
 use App\Models\User;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -113,8 +112,9 @@ it('only changes packages from this device\'s own inventory', function (): void 
 
     $apps = Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device]);
 
-    expect(fn () => $apps->call('uninstallPackage', $elsewhere->id))->toThrow(ModelNotFoundException::class)
-        ->and(DeviceCommand::query()->count())->toBe(0);
+    $apps->call('uninstallPackage', $elsewhere->id)->assertNotFound();
+
+    expect(DeviceCommand::query()->count())->toBe(0);
 });
 
 it('surfaces the agent version gate instead of queueing', function (): void {
