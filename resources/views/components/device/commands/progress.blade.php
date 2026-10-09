@@ -1,13 +1,14 @@
-{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. --}}
+{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. The width is rendered as well as the value: Flux only reads value when it boots, so the server's width is what moves the bar after each Livewire morph. --}}
 @props(['progress' => null, 'withMessage' => true])
 
 @php($percent = $progress?->percent())
 
 <div {{ $attributes->class('min-w-0 space-y-1.5') }} data-command-progress>
-    <x-device.usage-bar
-        :percent="$percent ?? 100"
-        :color="$percent === null ? 'animate-pulse bg-blue-500/40' : 'bg-blue-500 dark:bg-blue-400'"
-        thin
+    <flux:progress
+        :value="$percent ?? 100"
+        color="blue"
+        :class="$percent === null ? 'animate-pulse' : null"
+        style="--flux-progress-percentage: {{ number_format($percent ?? 100, 1) }}%"
         role="progressbar"
         :aria-label="$progress?->message ?? 'Progress'"
         aria-valuemin="0"

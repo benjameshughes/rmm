@@ -44,12 +44,13 @@ function reportProgress(DeviceCommand $command, CommandProgress $progress, strin
 it('renders an accessible progress bar with its label and the current item', function (): void {
     $html = Blade::render('<x-device.commands.progress :progress="$progress" />', ['progress' => halfwayProgress()]);
 
-    expect($html)->toContain('role="progressbar"')
+    expect($html)->toContain('data-flux-progress')
+        ->toContain('role="progressbar"')
         ->toContain('aria-valuenow="42.5"')
         ->toContain('aria-valuemin="0"')
         ->toContain('aria-valuemax="100"')
         ->toContain('aria-label="Backing up"')
-        ->toContain('width: 42.5%')
+        ->toContain('--flux-progress-percentage: 42.5%')
         ->toContain('42% · 7,612 / 18,128 files · ~5 min left')
         ->toContain('C:\\Users\\sophie\\Documents\\x.xlsx')
         ->toContain('dark:');
