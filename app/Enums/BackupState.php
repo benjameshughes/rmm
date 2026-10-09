@@ -32,6 +32,18 @@ enum BackupState: string
         return in_array($this, [self::Partial, self::Stale, self::Failed], true);
     }
 
+    /**
+     * Worst first, for lists that put red rows at the top.
+     */
+    public function rank(): int
+    {
+        return match ($this) {
+            self::Failed => 0,
+            self::Stale, self::Partial => 1,
+            self::Healthy, self::NeverBackedUp, self::NotConfigured => 2,
+        };
+    }
+
     public function label(): string
     {
         return match ($this) {

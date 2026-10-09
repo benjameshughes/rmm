@@ -26,6 +26,7 @@
                     <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>{{ __('Pending') }}</flux:navlist.item>
                     <flux:navlist.item icon="squares-plus" :href="route('software.index')" :current="request()->routeIs('software.*')" wire:navigate>{{ __('Software') }}</flux:navlist.item>
                     <flux:navlist.item icon="cpu-chip" :href="route('hardware.index')" :current="request()->routeIs('hardware.*')" wire:navigate>{{ __('Hardware') }}</flux:navlist.item>
+                    <flux:navlist.item icon="cloud-arrow-up" :href="route('backups.index')" :current="request()->routeIs('backups.*')" wire:navigate>{{ __('Backups') }}</flux:navlist.item>
                 </flux:navlist.group>
 
                 <flux:navlist.group :heading="__('Automation')" class="grid">

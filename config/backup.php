@@ -146,4 +146,59 @@ return [
 
     'error_max_length' => 500,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Server Backups
+    |--------------------------------------------------------------------------
+    |
+    | Linux servers back themselves up with their own scripts (restic to
+    | scarif). Each script writes a JSON status file, and the agent sends
+    | every one with its metrics report under `backups`, the same entries
+    | every minute until a file changes. The RMM only watches: nothing here
+    | ever runs a command on a server.
+    |
+    | max_jobs and max_snapshots cap what one report may hold; anything past
+    | them is ignored. A job whose status file has not been reported for
+    | forget_missing_after_hours shows as "status file missing" (it is kept,
+    | never deleted, and can be forgotten from its Backups tab).
+    |
+    | Health, worst first: missing, then unreadable (the agent could not
+    | parse the status file), then failed (the last run's exit code was not
+    | 0), then overdue (the newest snapshot is older than
+    | stale_after_minutes; jobs run hourly, so 150 allows one missed run),
+    | then shrunk: the newest snapshot processed less than shrink_threshold
+    | times the median of the shrink_baseline_snapshots before it that
+    | processed anything. Zero-byte snapshots are left out of that median,
+    | so a dump that keeps failing (mysqldump dies, restic backs up 0 bytes
+    | every hour) stays flagged instead of becoming the new normal.
+    |
+    | Any of those raises the built-in alert below, one per job, checked as
+    | reports arrive and hourly. It resolves once the job is healthy.
+    |
+    */
+
+    'servers' => [
+        'max_jobs' => 32,
+        'max_snapshots' => 200,
+        'forget_missing_after_hours' => 72,
+        'stale_after_minutes' => 150,
+        'shrink_threshold' => 0.5,
+        'shrink_baseline_snapshots' => 5,
+
+        'alert' => [
+            'rule_name' => 'Server backup overdue, failed or shrunk',
+            'severity' => 'warning',
+        ],
+
+        /*
+        | The Backups tab charts each job's snapshots over chart_days, grouped
+        | by the database into about chart_points buckets, and lists them
+        | snapshots_per_page at a time.
+        */
+
+        'chart_days' => 30,
+        'chart_points' => 150,
+        'snapshots_per_page' => 10,
+    ],
+
 ];

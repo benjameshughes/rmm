@@ -13,6 +13,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Windows PCs back their user profiles up with restic once their backup
@@ -31,6 +32,14 @@ trait BacksUpFiles
     public function backupSnapshots(): HasMany
     {
         return $this->hasMany(DeviceBackupSnapshot::class);
+    }
+
+    /**
+     * The newest snapshot listed, for the size column of the fleet backups page.
+     */
+    public function latestBackupSnapshot(): HasOne
+    {
+        return $this->hasOne(DeviceBackupSnapshot::class)->latestOfMany('taken_at');
     }
 
     public function scopeWithBackupCredentials(Builder $query): Builder

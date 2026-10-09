@@ -15,6 +15,7 @@ use App\Events\DeviceEnrolled;
 use App\Events\DeviceUpdated;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\BacksUpFiles;
+use App\Models\Concerns\ReportsServerBackups;
 use App\Models\Concerns\WatchesPrinters;
 use App\Models\Concerns\WatchesVirtualPrinter;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,6 +38,7 @@ final class Device extends Model
     /** @use HasFactory<\Database\Factories\DeviceFactory> */
     use HasFactory;
 
+    use ReportsServerBackups;
     use WatchesPrinters;
     use WatchesVirtualPrinter;
 

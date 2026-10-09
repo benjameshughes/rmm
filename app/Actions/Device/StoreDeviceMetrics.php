@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Actions\ServerBackup\StoreServerBackups;
 use App\DTOs\NetdataAppUsage;
 use App\DTOs\NetdataCpuMetric;
 use App\DTOs\NetdataDiskMetrics;
@@ -15,6 +16,7 @@ use App\Events\DeviceUpdated;
 use App\Events\MetricsReceived;
 use App\Models\Device;
 use App\Models\DeviceMetric;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -26,15 +28,26 @@ use Illuminate\Support\Str;
  */
 final class StoreDeviceMetrics
 {
-    public function __construct(private readonly RecordMetricSamples $recordMetricSamples) {}
+    public function __construct(
+        private readonly RecordMetricSamples $recordMetricSamples,
+        private readonly StoreServerBackups $storeServerBackups,
+    ) {}
 
+    /**
+     * A server's backup status files ride along as `backups`; agents that
+     * predate them, or servers without the folder, leave the key out.
+     */
     public function __invoke(Device $device, array $input, ?string $ip = null): DeviceMetric
     {
-        if ($this->isRawNetdataFormat($input)) {
-            return $this->handleRawNetdata($device, $input, $ip);
+        $metric = $this->isRawNetdataFormat($input)
+            ? $this->handleRawNetdata($device, $input, $ip)
+            : $this->handleStandardMetrics($device, $input, $ip);
+
+        if (array_key_exists('backups', $input)) {
+            ($this->storeServerBackups)($device, $input['backups']);
         }
 
-        return $this->handleStandardMetrics($device, $input, $ip);
+        return $metric;
     }
 
     private function isRawNetdataFormat(array $input): bool
@@ -179,10 +192,11 @@ final class StoreDeviceMetrics
 
     /**
      * Every useful field is extracted into columns, so the raw request is only kept while debugging the agent.
+     * Backup status files are left out: they carry hundreds of snapshots and are stored on their own.
      */
     private function rawPayload(array $input): ?array
     {
-        return config('devices.metrics.store_raw_payload') ? $input : null;
+        return config('devices.metrics.store_raw_payload') ? Arr::except($input, 'backups') : null;
     }
 
     private function parseCpuMetric(mixed $input): ?float

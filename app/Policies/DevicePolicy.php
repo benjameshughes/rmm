@@ -50,6 +50,14 @@ final class DevicePolicy
         return ! $device->isMonitorOnly;
     }
 
+    /**
+     * Forgetting a server backup job only drops the RMM's own record of it, so it is fine on a monitor-only server.
+     */
+    public function forgetServerBackupJob(User $user, Device $device): bool
+    {
+        return true;
+    }
+
     public function runAdHocCommand(User $user, Device $device): bool
     {
         return ! $device->isMonitorOnly;

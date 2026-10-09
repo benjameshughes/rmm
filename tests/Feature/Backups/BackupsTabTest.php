@@ -68,10 +68,13 @@ it('asks for credentials and hides the buttons on a PC that is not set up', func
         ->assertStatus(422);
 });
 
-it('only backs up Windows PCs', function (): void {
+it('only backs up Windows PCs, and shows a Linux server its own backup jobs instead', function (): void {
     $this->actingAs($this->user)
         ->get(route('devices.backups', Device::factory()->active()->linux()->create()))
-        ->assertSee('File backups are only for Windows PCs.');
+        ->assertSuccessful()
+        ->assertDontSee('Back up now')
+        ->assertDontSee('Enable backups below', false)
+        ->assertSeeLivewire('devices.server-backups');
 });
 
 it('backs up now with no start delay, and refreshes snapshots', function (): void {

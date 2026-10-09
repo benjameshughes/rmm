@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentTrayController;
 use App\Livewire\AlertRules\Index as AlertRulesIndex;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Audit\Index as AuditIndex;
+use App\Livewire\Backups\Index as BackupsIndex;
 use App\Livewire\Dashboard;
 use App\Livewire\DeviceGroups\Index as DeviceGroupsIndex;
 use App\Livewire\Devices\Agent as DevicesAgent;
@@ -85,6 +86,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Hardware
     Route::get('hardware', HardwareIndex::class)->name('hardware.index');
+
+    // Backups
+    Route::get('backups', BackupsIndex::class)->name('backups.index');
 
     // Scripts
     Route::get('scripts', ScriptsIndex::class)->name('scripts.index');

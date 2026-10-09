@@ -106,6 +106,47 @@ final class MetricChart
     }
 
     /**
+     * How much a server backup job read each time, averaged per bucket.
+     *
+     * @param  Collection<int, array{time: string, size: ?float, added: ?float}>  $rows  From ServerBackupQueries::charts
+     */
+    public static function backupSize(Collection $rows): self
+    {
+        return self::inBytes('Size backed up', $rows, ['field' => 'size', 'label' => 'Processed', 'color' => 'text-sky-500 dark:text-sky-400', 'swatch' => 'bg-sky-500']);
+    }
+
+    /**
+     * New data a server backup job stored, summed per bucket.
+     *
+     * @param  Collection<int, array{time: string, size: ?float, added: ?float}>  $rows  From ServerBackupQueries::charts
+     */
+    public static function backupDataAdded(Collection $rows): self
+    {
+        return self::inBytes('Data added', $rows, ['field' => 'added', 'label' => 'Added', 'color' => 'text-violet-500 dark:text-violet-400', 'swatch' => 'bg-violet-500']);
+    }
+
+    /**
+     * Byte counts scaled to the unit that suits the largest, so the axis reads "1.2 GB" rather than "1,234,567,890".
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  array{field: string, label: string, color: string, swatch: string}  $series
+     */
+    private static function inBytes(string $title, Collection $rows, array $series): self
+    {
+        $field = $series['field'];
+        $largest = (float) $rows->max($field);
+        $units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
+        $power = $largest < 1024 ? 0 : min(count($units) - 1, (int) floor(log($largest, 1024)));
+
+        $scaled = $rows->map(fn (array $row): array => [
+            ...$row,
+            $field => $row[$field] === null ? null : round($row[$field] / 1024 ** $power, 2),
+        ]);
+
+        return self::make($title, ['style' => 'unit', 'unit' => $units[$power], 'maximumFractionDigits' => 1], $scaled, [$series], 'Not enough snapshots in the last '.config('backup.servers.chart_days').' days to draw a chart yet.');
+    }
+
+    /**
      * Flux needs two points to draw a line.
      */
     public function isDrawable(): bool

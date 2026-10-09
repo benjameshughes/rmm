@@ -30,7 +30,8 @@ it('only offers threshold based metrics for user rules', function (): void {
         ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::SpoolerDown)
         ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::BackupOverdue)
         ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::NetdataRepairFailed)
-        ->and(AlertMetric::thresholdBased())->toHaveCount(count(AlertMetric::cases()) - 7);
+        ->and(AlertMetric::thresholdBased())->not->toContain(AlertMetric::ServerBackupProblem)
+        ->and(AlertMetric::thresholdBased())->toHaveCount(count(AlertMetric::cases()) - 8);
 });
 
 it('skips the outdated-agent rule when evaluating metrics', function (): void {

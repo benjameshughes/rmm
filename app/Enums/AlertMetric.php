@@ -20,6 +20,7 @@ enum AlertMetric: string
     case SpoolerDown = 'spooler_down';
     case BackupOverdue = 'backup_overdue';
     case NetdataRepairFailed = 'netdata_repair_failed';
+    case ServerBackupProblem = 'server_backup_problem';
 
     /** @return array<int, self> The metrics a user can build an alert rule around */
     public static function thresholdBased(): array
@@ -44,6 +45,7 @@ enum AlertMetric: string
             self::SpoolerDown => 'Print Spooler Down',
             self::BackupOverdue => 'Backup Overdue or Failed',
             self::NetdataRepairFailed => 'Netdata Repair Failed',
+            self::ServerBackupProblem => 'Server Backup Overdue, Failed or Shrunk',
         };
     }
 
@@ -53,7 +55,7 @@ enum AlertMetric: string
             self::Cpu, self::Ram, self::Disk, self::DiskBusy, self::PageFile => '%',
             self::CpuQueue => ' threads',
             self::Offline => ' min',
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed => '',
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed, self::ServerBackupProblem => '',
         };
     }
 
@@ -66,13 +68,14 @@ enum AlertMetric: string
      * a stopped print spooler come from built-in rules raised as printer
      * reports arrive, and overdue or failed backups from one checked hourly
      * and after every backup run. A failed Netdata repair comes from one
-     * raised when the repair script finishes.
+     * raised when the repair script finishes, and a server backup that is
+     * overdue, failed or shrunk from one raised as reports arrive and hourly.
      */
     public function isThresholdBased(): bool
     {
         return match ($this) {
             self::Cpu, self::Ram, self::Disk, self::CpuQueue, self::DiskBusy, self::PageFile, self::Offline => true,
-            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed => false,
+            self::AgentOutdated, self::ScriptFailed, self::VirtualPrinterDown, self::PrinterProblem, self::SpoolerDown, self::BackupOverdue, self::NetdataRepairFailed, self::ServerBackupProblem => false,
         };
     }
 }

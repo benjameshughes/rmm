@@ -1,8 +1,6 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Backups">
     @if(! $isWindows)
-        <flux:card>
-            <flux:text>File backups are only for Windows PCs.</flux:text>
-        </flux:card>
+        <livewire:devices.server-backups :device="$device" :key="'server-backups-'.$device->id" />
     @else
         <flux:card class="space-y-4" data-backup-state="{{ $state->value }}">
             <div class="flex flex-wrap items-start justify-between gap-3">

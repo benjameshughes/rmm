@@ -115,6 +115,16 @@ final class AlertRule extends Model
     }
 
     /**
+     * The built-in rule behind server backup alerts (overdue, failed, shrunk,
+     * unreadable or missing), created on first use so it can be switched off
+     * under Alert Rules like any other rule.
+     */
+    public static function serverBackupProblem(): self
+    {
+        return self::builtIn(AlertMetric::ServerBackupProblem, config('backup.servers.alert'));
+    }
+
+    /**
      * The built-in rule behind failed Netdata repair alerts, created on first
      * use so it can be switched off under Alert Rules like any other rule.
      */

@@ -110,6 +110,7 @@ final class MetricsRequest extends FormRequest
             'monitor_only' => ['nullable', 'boolean'],
             'mac_addresses' => ['nullable', 'array', 'max:32'],
             'mac_addresses.*' => ['string', 'mac_address'],
+            'backups' => ['nullable', 'array'],
             'payload' => ['nullable', 'array'],
             'recorded_at' => ['nullable', 'date'],
             'timestamp' => ['nullable', 'date'],
@@ -151,6 +152,7 @@ final class MetricsRequest extends FormRequest
             'linux_health.pending_security_updates.integer' => 'Pending security updates must be a whole number.',
             'linux_health.pending_security_updates.min' => 'Pending security updates cannot be negative.',
             'linux_health.checked_updates_at.date' => 'The update check time must be an RFC 3339 date.',
+            'backups.array' => 'Backups must be a list of backup status files.',
             'netdata_processes.array' => 'Processes must be a raw Netdata response.',
             'netdata_disk_inodes.array' => 'Disk inodes must be a raw Netdata response.',
         ];
