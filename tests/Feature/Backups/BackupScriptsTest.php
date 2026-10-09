@@ -8,6 +8,7 @@ use App\Enums\ScriptCategory;
 use App\Enums\ScriptPlatform;
 use App\Models\Script;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 beforeEach(fn () => app(SyncSystemScripts::class)());
 
@@ -116,6 +117,51 @@ it('restores into a new folder without overwriting anything', function (): void 
 
 it('lists snapshots of this PC only', function (): void {
     expect(backupScriptFile('backup-snapshots.ps1'))->toContain("@('snapshots', '--host', \$env:COMPUTERNAME, '--json')");
+});
+
+it('streams restic status as PROGRESS lines in the rmm.progress/1 schema without keeping them', function (): void {
+    $shared = backupScriptFile('shared/restic.ps1');
+    $invoke = Str::between($shared, 'function Invoke-Restic(', "\n}\n");
+    $write = Str::between($shared, 'function Write-ResticProgress(', "\n}\n");
+
+    expect($shared)->toContain("\$env:RESTIC_PROGRESS_FPS = '0.2'")
+        ->not->toContain("RESTIC_PROGRESS_FPS = '0.0166'")
+        ->and($invoke)->toContain('& $restic @arguments 2>&1 | ForEach-Object {')
+        ->toContain(<<<'PS'
+        elseif ($line -match '^\{"message_type":"status"' -and $line.TrimEnd().EndsWith('}')) {
+                    Write-ResticProgress $line
+                }
+        PS)
+        ->toContain(<<<'PS'
+        elseif ($line -notmatch '^\{"message_type":"(status|verbose_status)"') {
+                    $stdout.Add($line)
+        PS)
+        ->not->toMatch('/\$\w+\s*=\s*&\s*\$restic/')
+        ->and($write)->toContain("schema = 'rmm.progress/1'")
+        ->toContain("unit = 'files'")
+        ->toContain('$progress.percent = [math]::Round([double]$status.percent_done * 100, 1)')
+        ->toContain('$status.files_done')
+        ->toContain('$status.total_files')
+        ->toContain('$status.bytes_done')
+        ->toContain('$status.total_bytes')
+        ->toContain('$progress.eta_seconds = [long]$status.seconds_remaining')
+        ->toContain('$progress.current = "$(@($status.current_files)[0])"')
+        ->toContain('ConvertTo-Json -InputObject $progress -Compress')
+        ->toContain("[Console]::Out.WriteLine('PROGRESS: ' + \$json)")
+        ->toContain('[Console]::Out.Flush()')
+        ->not->toContain('Write-Output')
+        ->and(config('commands.progress.line_prefix'))->toBe('PROGRESS: ');
+});
+
+it('keeps reading the backup summary and errors from what Invoke-Restic collected', function (): void {
+    expect(backupScriptFile('backup-files.ps1'))
+        ->toContain(<<<'PS'
+        $summaryLine = $run.Stdout | Where-Object { $_ -match '^\{"message_type":"summary"' } | Select-Object -Last 1
+        PS)
+        ->toContain(<<<'PS'
+        $errorLines = @($run.Stderr | Where-Object { "$_" -match '^\{"message_type":"error"' })
+        PS)
+        ->toContain("'--json'");
 });
 
 it('pins a real restic release by version, zip and exe sha256', function (): void {

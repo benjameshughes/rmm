@@ -15,6 +15,10 @@
 # Add-ResticMasterKey). Failing to add it never fails the backup; master_key
 # in the result says added, present, failed or not_requested.
 #
+# While restic runs, its status (every 5 seconds) is printed as PROGRESS:
+# lines for the Backups tab (see Invoke-Restic); the agent keeps them out of
+# the output, so the verdict and the JSON line below are unchanged.
+#
 # Exit 0: backed up (or nothing had changed). Exit 3: backed up, but some
 # files could not be read; they are listed. Anything else: no snapshot, with
 # restic's reason. The last line is one JSON object for the Backups tab.

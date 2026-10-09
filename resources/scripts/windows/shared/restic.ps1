@@ -170,7 +170,7 @@ function Set-ResticRepository {
 
     $env:RESTIC_REPOSITORY = "rest:$restUrl/$repositoryName/"
     $env:RESTIC_PASSWORD = $env:RMM_ResticPassword
-    $env:RESTIC_PROGRESS_FPS = '0.0166'
+    $env:RESTIC_PROGRESS_FPS = '0.2'
     $env:GOMAXPROCS = '2'
 
     $script:resticArguments = @('--cache-dir', $resticCacheDir)
@@ -222,19 +222,57 @@ function Test-BackupCredentials {
     return [bool]("$env:RMM_RepositoryName".Trim() -and "$env:RMM_ResticPassword")
 }
 
+# Turns one restic --json status line (backup or restore) into a PROGRESS:
+# line in the rmm.progress/1 schema; see config/scripts.php. It goes
+# straight to the console and is flushed, so it neither lands in the
+# caller's pipeline nor waits in a buffer. The agent posts the newest one to
+# the RMM and leaves these lines out of the output. Anything outside ASCII
+# is escaped, so the JSON survives whatever code page the console has.
+function Write-ResticProgress([string] $line) {
+    $status = $line | ConvertFrom-Json
+    $isRestore = $null -ne $status.files_restored
+    $progress = @{
+        schema = 'rmm.progress/1'
+        unit = 'files'
+        message = $(if ($isRestore) { 'Restoring' } else { 'Backing up' })
+    }
+    $done = if ($isRestore) { $status.files_restored } else { $status.files_done }
+    $bytesDone = if ($isRestore) { $status.bytes_restored } else { $status.bytes_done }
+
+    if ($null -ne $status.percent_done) { $progress.percent = [math]::Round([double]$status.percent_done * 100, 1) }
+    if ($null -ne $done) { $progress.done = [long]$done }
+    if ($null -ne $status.total_files) { $progress.total = [long]$status.total_files }
+    if ($null -ne $bytesDone) { $progress.bytes_done = [long]$bytesDone }
+    if ($null -ne $status.total_bytes) { $progress.bytes_total = [long]$status.total_bytes }
+    if ($null -ne $status.seconds_remaining) { $progress.eta_seconds = [long]$status.seconds_remaining }
+    if ($status.current_files) { $progress.current = "$(@($status.current_files)[0])" }
+
+    $json = ConvertTo-Json -InputObject $progress -Compress
+    $json = [regex]::Replace($json, '[^\x00-\x7F]', { param($match) '\u{0:x4}' -f [int][char]$match.Value })
+    [Console]::Out.WriteLine('PROGRESS: ' + $json)
+    [Console]::Out.Flush()
+}
+
 # Runs restic at below-normal priority, keeping its JSON lines (stdout) and
-# its error lines (stderr) apart. Progress lines are dropped as they arrive.
+# its error lines (stderr) apart. Lines are handled as restic prints them,
+# never collected first: each status line becomes a PROGRESS: line and is
+# not kept, and verbose status lines are dropped.
 function Invoke-Restic([string[]] $arguments) {
     $stdout = New-Object System.Collections.Generic.List[string]
     $stderr = New-Object System.Collections.Generic.List[string]
     (Get-Process -Id $PID).PriorityClass = 'BelowNormal'
 
     & $restic @arguments 2>&1 | ForEach-Object {
+        $line = "$_"
+
         if ($_ -is [System.Management.Automation.ErrorRecord]) {
             $stderr.Add($_.ToString())
         }
-        elseif ("$_" -notmatch '^\{"message_type":"(status|verbose_status)"') {
-            $stdout.Add("$_")
+        elseif ($line -match '^\{"message_type":"status"' -and $line.TrimEnd().EndsWith('}')) {
+            Write-ResticProgress $line
+        }
+        elseif ($line -notmatch '^\{"message_type":"(status|verbose_status)"') {
+            $stdout.Add($line)
         }
     }
 
