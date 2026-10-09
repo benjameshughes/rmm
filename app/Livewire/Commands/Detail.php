@@ -32,6 +32,7 @@ final class Detail extends Component
 
     /** @param array{commandId?: int} $event */
     #[On('echo-private:devices,CommandUpdated')]
+    #[On('echo-private:devices,CommandProgressed')]
     public function refreshCommand(array $event): void
     {
         if (($event['commandId'] ?? null) === $this->commandId) {

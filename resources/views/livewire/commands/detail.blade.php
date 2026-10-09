@@ -38,6 +38,10 @@
                     </div>
                 </dl>
 
+                @if($progress = $command->liveProgress())
+                    <x-device.commands.progress :progress="$progress" />
+                @endif
+
                 @if($command->error_message)
                     <flux:callout variant="danger" icon="exclamation-triangle" :heading="$command->error_message" />
                 @endif

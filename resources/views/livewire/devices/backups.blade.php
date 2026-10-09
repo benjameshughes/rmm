@@ -30,6 +30,15 @@
                 @endcan
             </div>
 
+            @if($isBackingUp)
+                <flux:callout color="blue" icon="cloud-arrow-up" data-backing-up>
+                    <flux:callout.heading>Backing up now…</flux:callout.heading>
+                    <flux:callout.text>
+                        <x-device.commands.progress :progress="$backupProgress" :with-message="false" />
+                    </flux:callout.text>
+                </flux:callout>
+            @endif
+
             <flux:error name="script" />
             <flux:error name="backup" />
 

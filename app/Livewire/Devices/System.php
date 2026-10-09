@@ -32,6 +32,7 @@ final class System extends Component
     }
 
     #[On('echo-private:devices.{device.id},CommandUpdated')]
+    #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
     public function refreshCommands(): void {}
 

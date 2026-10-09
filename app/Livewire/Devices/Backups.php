@@ -42,6 +42,7 @@ final class Backups extends Component
     }
 
     #[On('echo-private:devices.{device.id},CommandUpdated')]
+    #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
     public function refreshCommands(): void {}
 
@@ -72,6 +73,8 @@ final class Backups extends Component
     public function render(): View
     {
         $isWindows = $this->device->platform() === ScriptPlatform::Windows;
+        $inFlight = $isWindows ? $this->inFlightBackupCommands() : collect();
+        $runningBackup = $inFlight->get(BackupScript::BackUp->value);
 
         return view('livewire.devices.backups', [
             'isWindows' => $isWindows,
@@ -79,7 +82,9 @@ final class Backups extends Component
             'problem' => $this->device->backupProblem(),
             'backups' => $isWindows ? $this->device->backups()->latest('finished_at')->latest('id')->limit(config('backup.history_shown'))->get() : collect(),
             'snapshots' => $isWindows ? $this->device->backupSnapshots()->latest('taken_at')->get() : collect(),
-            'inFlight' => $isWindows ? $this->inFlightBackupCommands() : collect(),
+            'inFlight' => $inFlight,
+            'isBackingUp' => (bool) $runningBackup?->status->isWithAgent(),
+            'backupProgress' => $runningBackup?->liveProgress(),
         ])->title(DeviceTab::Backups->pageTitle($this->device));
     }
 

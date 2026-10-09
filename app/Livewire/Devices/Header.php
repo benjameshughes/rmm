@@ -66,6 +66,7 @@ final class Header extends Component
      * Re-renders so Run Command shows the ad-hoc command in flight, and goes back once it finishes.
      */
     #[On('echo-private:devices.{device.id},CommandUpdated')]
+    #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
     public function refreshCommands(): void {}
 
