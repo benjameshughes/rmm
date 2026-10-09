@@ -82,6 +82,7 @@ it('backs up whole profiles from a shadow copy, skipping caches and huge files',
         ->toContain("-Filter 'Special = FALSE'")
         ->toContain("\$_.SID -like 'S-1-5-21-*'")
         ->toContain("'!AppData\\Local\\Packages\\Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe\\LocalState'")
+        ->toContain("'AppData\\Local\\Microsoft\\WindowsApps'")
         ->toContain("'NTUSER.DAT*'")
         ->toContain("'*.ost'")
         ->toContain("status = 'skipped'")

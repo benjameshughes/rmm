@@ -35,6 +35,7 @@ $excludes = @(
     '!AppData\Local\Packages\Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe\LocalState',
     'AppData\Local\Temp',
     'AppData\Local\Microsoft\Windows\INetCache',
+    'AppData\Local\Microsoft\WindowsApps',
     'Cache*',
     'node_modules',
     '$Recycle.Bin',
