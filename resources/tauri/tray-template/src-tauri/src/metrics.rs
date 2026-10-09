@@ -289,6 +289,9 @@ pub struct RawMetricsPayload {
     /// Failed units, pending reboot and pending updates (Linux only)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linux_health: Option<crate::linux_health::LinuxHealth>,
+    /// Backup status files (Linux only; omitted without a status directory)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backups: Option<Vec<crate::backups::BackupStatus>>,
 }
 
 // ============================================================================
@@ -525,6 +528,7 @@ impl MetricsCollector {
             netdata_net_drops,
             netdata_net_speed,
             linux_health: None,
+            backups: None,
         }
     }
 
@@ -591,6 +595,7 @@ impl MetricsCollector {
     pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
         let mut metrics = self.collect_metrics().await;
         metrics.linux_health = self.collect_linux_health().await;
+        metrics.backups = crate::backups::collect().await;
         let outcome = self.submit_metrics(&metrics, api_key).await;
 
         if outcome == RequestOutcome::Success {
@@ -776,6 +781,7 @@ mod tests {
             netdata_net_drops: None,
             netdata_net_speed: None,
             linux_health: None,
+            backups: None,
         }
     }
 
@@ -847,6 +853,19 @@ mod tests {
         let json: serde_json::Value = serde_json::to_value(&payload).unwrap();
 
         assert_eq!(json["mac_addresses"][0], "bc:24:11:8d:62:14");
+    }
+
+    #[test]
+    fn sends_backups_only_when_there_is_a_status_directory() {
+        let without = serde_json::to_value(empty_payload()).unwrap();
+        assert!(without.get("backups").is_none());
+
+        let payload = RawMetricsPayload {
+            backups: Some(vec![]),
+            ..empty_payload()
+        };
+        let with = serde_json::to_value(&payload).unwrap();
+        assert_eq!(with["backups"], serde_json::json!([]));
     }
 
     #[test]

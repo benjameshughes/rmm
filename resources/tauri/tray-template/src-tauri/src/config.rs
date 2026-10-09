@@ -119,6 +119,23 @@ pub const DU_TOP_EXTENSIONS: usize = 30;
 #[cfg_attr(not(windows), allow(dead_code))]
 pub const DU_DIR_BUFFER_BYTES: usize = 64 * 1024;
 
+/// Backup status files written by backup scripts, one `<job>.json` per job
+/// (Linux agent, read only)
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const BACKUP_STATUS_DIR: &str = "/var/lib/rmm/backups";
+
+/// Most backup status files read per report
+pub const BACKUP_STATUS_MAX_FILES: usize = 32;
+
+/// Larger backup status files are skipped (4 MiB)
+pub const BACKUP_STATUS_MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
+
+/// Newest snapshots sent per backup job
+pub const BACKUP_SNAPSHOTS_SENT: usize = 200;
+
+/// Most characters of a backup status file's parse error sent
+pub const BACKUP_ERROR_MAX_CHARS: usize = 300;
+
 /// Default Netdata API base URL
 pub const DEFAULT_NETDATA_URL: &str = "http://127.0.0.1:19999";
 

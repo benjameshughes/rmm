@@ -2,6 +2,7 @@
 // No GUI - runs as a headless service managed via web panel
 
 mod agent;
+mod backups;
 mod command_runner;
 mod commands;
 mod config;
