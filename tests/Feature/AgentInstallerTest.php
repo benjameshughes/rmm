@@ -111,7 +111,7 @@ it('skips the Netdata install when the pinned version is there and restarts it o
     expect($script)
         ->toStartWith('#!/usr/bin/env bash')
         ->toContain('set -euo pipefail')
-        ->toContain('"ii ${NETDATA_VERSION}"*)')
+        ->toContain('[hi]"i ${NETDATA_VERSION}"*)')
         ->toContain('already installed')
         ->toContain('config_changed=1')
         ->toContain('if [ "$config_changed" -eq 1 ]; then')

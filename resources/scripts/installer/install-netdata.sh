@@ -30,7 +30,7 @@ command -v apt-get >/dev/null 2>&1 || fail "only Debian and Ubuntu are supported
 installed="$(dpkg-query -W -f='${db:Status-Abbrev}${Version}' netdata 2>/dev/null || true)"
 
 case "$installed" in
-    "ii ${NETDATA_VERSION}"*)
+    [hi]"i ${NETDATA_VERSION}"*)
         echo "Netdata ${NETDATA_VERSION} is already installed"
         ;;
     *)
