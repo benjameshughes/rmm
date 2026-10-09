@@ -96,6 +96,8 @@ it('installs the pinned Netdata on localhost before the Linux agent, never claim
         ->toContain('--no-updates')
         ->toContain('--disable-telemetry')
         ->toContain('apt-mark hold netdata')
+        ->toContain('Package: netdata*\\nPin: version %s*\\nPin-Priority: 1001')
+        ->toContain('/etc/apt/preferences.d/netdata')
         ->toContain('bind to = 127.0.0.1')
         ->toContain('.opt-out-from-anonymous-statistics')
         ->not->toContain('--claim');

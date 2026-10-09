@@ -36,6 +36,11 @@ case "$installed" in
     *)
         command -v wget >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq wget; }
 
+        # Pin every netdata* package (core, plugins, dashboard) to the one
+        # release; otherwise apt pairs the pinned core with newer plugins that
+        # depend on a newer core, and the install fails.
+        printf 'Package: netdata*\nPin: version %s*\nPin-Priority: 1001\n' "${NETDATA_VERSION}" > /etc/apt/preferences.d/netdata
+
         echo "Installing Netdata ${NETDATA_VERSION}..."
         wget -O /tmp/nd-kickstart.sh https://get.netdata.cloud/kickstart.sh && sh /tmp/nd-kickstart.sh --non-interactive --stable-channel --native-only --install-version "${NETDATA_VERSION}" --no-updates --disable-telemetry
         rm -f /tmp/nd-kickstart.sh
