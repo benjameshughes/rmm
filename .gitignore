@@ -22,3 +22,7 @@ yarn-error.log
 /.vscode
 /.zed
 /.playwright-mcp
+
+.claude/
+.agents/
+AGENTS.md
