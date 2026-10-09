@@ -16,6 +16,7 @@
 // The executor is only called from Windows builds and tests.
 #![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
+use crate::command_progress::{ProgressLines, ProgressSender};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -157,7 +158,8 @@ pub fn parameter_env_vars(parameters: &HashMap<String, String>) -> Vec<(String, 
 }
 
 /// Execute `content` as a script of `script_type` within `limits`, exposing
-/// each of `parameters` as an `RMM_<NAME>` environment variable. Refuses on
+/// each of `parameters` as an `RMM_<NAME>` environment variable. `PROGRESS: `
+/// lines on stdout go to `progress` instead of the output. Refuses on
 /// monitor-only (non-Windows) builds.
 pub async fn run_script(
     script_type: &ScriptType,
@@ -165,15 +167,16 @@ pub async fn run_script(
     parameters: &HashMap<String, String>,
     command_id: u64,
     limits: &RunLimits,
+    progress: ProgressSender,
 ) -> ExecutionResult {
     #[cfg(windows)]
     {
-        run_script_unchecked(script_type, content, parameters, command_id, limits).await
+        run_script_unchecked(script_type, content, parameters, command_id, limits, progress).await
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (script_type, content, parameters, command_id, limits);
+        let _ = (script_type, content, parameters, command_id, limits, progress);
         ExecutionResult::failed(MONITOR_ONLY_REFUSAL.to_string(), Instant::now())
     }
 }
@@ -184,6 +187,7 @@ async fn run_script_unchecked(
     parameters: &HashMap<String, String>,
     command_id: u64,
     limits: &RunLimits,
+    progress: ProgressSender,
 ) -> ExecutionResult {
     let started = Instant::now();
 
@@ -208,7 +212,7 @@ async fn run_script_unchecked(
         }
     };
 
-    let result = execute(script_type, &script_path, parameters, limits, started).await;
+    let result = execute(script_type, &script_path, parameters, limits, progress, started).await;
     let _ = std::fs::remove_file(&script_path);
     result
 }
@@ -259,6 +263,7 @@ async fn execute(
     script_path: &Path,
     parameters: &HashMap<String, String>,
     limits: &RunLimits,
+    progress: ProgressSender,
     started: Instant,
 ) -> ExecutionResult {
     let mut command = interpreter_command(script_type, script_path);
@@ -280,10 +285,10 @@ async fn execute(
     };
 
     let byte_limit = limits.output_limit.saturating_mul(4);
-    let stdout_buffer = CapturedOutput::default();
-    let stderr_buffer = CapturedOutput::default();
-    let stdout_task = tokio::spawn(read_capped(child.stdout.take(), byte_limit, stdout_buffer.clone()));
-    let stderr_task = tokio::spawn(read_capped(child.stderr.take(), byte_limit, stderr_buffer.clone()));
+    let stdout_buffer = Capture::scanning_progress(byte_limit, progress);
+    let stderr_buffer = Capture::plain(byte_limit);
+    let stdout_task = tokio::spawn(read_capped(child.stdout.take(), stdout_buffer.clone()));
+    let stderr_task = tokio::spawn(read_capped(child.stderr.take(), stderr_buffer.clone()));
 
     let (exit_code, timed_out) = match tokio::time::timeout(limits.timeout, child.wait()).await {
         Ok(Ok(status)) => (status.code().unwrap_or(-1), false),
@@ -320,9 +325,65 @@ async fn execute(
 /// Output captured so far, shared with the reader task so a pipe that never
 /// closes (a background child still holding it after a timeout) cannot throw
 /// away what was already read.
-type CapturedOutput = std::sync::Arc<std::sync::Mutex<Vec<u8>>>;
+type CapturedOutput = std::sync::Arc<std::sync::Mutex<Capture>>;
 
-async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, limit: usize, captured: CapturedOutput) {
+/// One pipe's output, capped at `limit` bytes. Stdout also has its progress
+/// lines taken out (they count toward nothing).
+struct Capture {
+    bytes: Vec<u8>,
+    limit: usize,
+    progress: Option<ProgressLines>,
+}
+
+impl Capture {
+    fn plain(limit: usize) -> CapturedOutput {
+        Self::shared(limit, None)
+    }
+
+    fn scanning_progress(limit: usize, progress: ProgressSender) -> CapturedOutput {
+        Self::shared(limit, Some(ProgressLines::new(progress)))
+    }
+
+    fn shared(limit: usize, progress: Option<ProgressLines>) -> CapturedOutput {
+        std::sync::Arc::new(std::sync::Mutex::new(Self {
+            bytes: Vec::new(),
+            limit,
+            progress,
+        }))
+    }
+
+    fn push(&mut self, chunk: &[u8]) {
+        let Some(progress) = self.progress.as_mut() else {
+            return self.keep(chunk);
+        };
+
+        let mut output = Vec::with_capacity(chunk.len());
+        progress.feed(chunk, &mut output);
+        self.keep(&output);
+    }
+
+    fn keep(&mut self, bytes: &[u8]) {
+        let room = self.limit.saturating_sub(self.bytes.len());
+        self.bytes.extend_from_slice(&bytes[..bytes.len().min(room)]);
+    }
+
+    /// Everything kept, including a last line that had no newline.
+    fn take(&mut self) -> Vec<u8> {
+        if let Some(mut progress) = self.progress.take() {
+            let mut output = Vec::new();
+            progress.finish(&mut output);
+            self.keep(&output);
+        }
+
+        std::mem::take(&mut self.bytes)
+    }
+}
+
+fn lock(captured: &CapturedOutput) -> std::sync::MutexGuard<'_, Capture> {
+    captured.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, captured: CapturedOutput) {
     let Some(mut pipe) = pipe else {
         return;
     };
@@ -334,9 +395,7 @@ async fn read_capped<R: AsyncRead + Unpin>(pipe: Option<R>, limit: usize, captur
             Ok(read) => read,
         };
 
-        let mut buffer = captured.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let room = limit.saturating_sub(buffer.len());
-        buffer.extend_from_slice(&chunk[..read.min(room)]);
+        lock(&captured).push(&chunk[..read]);
     }
 }
 
@@ -347,7 +406,7 @@ async fn drain(mut task: tokio::task::JoinHandle<()>, captured: &CapturedOutput,
         task.abort();
     }
 
-    std::mem::take(&mut *captured.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
+    lock(captured).take()
 }
 
 #[cfg(windows)]
@@ -504,6 +563,7 @@ mod tests {
             &HashMap::new(),
             1,
             &limits(dir.path(), 5, 100),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -522,6 +582,7 @@ mod tests {
             &HashMap::new(),
             1,
             &limits(dir.path(), 5, 100),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -540,6 +601,7 @@ mod tests {
             &HashMap::new(),
             7,
             &limits(dir.path(), 10, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -577,6 +639,7 @@ mod tests {
                 &HashMap::new(),
                 1,
                 &limits(dir.path(), 5, 100),
+                crate::command_progress::channel().0,
             )
             .await;
 
@@ -617,6 +680,7 @@ mod tests {
             &parameters,
             11,
             &limits(dir.path(), 10, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -636,6 +700,7 @@ mod tests {
             &parameters,
             12,
             &limits(dir.path(), 60, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -650,12 +715,63 @@ mod tests {
         let (mut writer, reader) = tokio::io::duplex(64);
         writer.write_all(b"before").await.unwrap();
 
-        let captured = CapturedOutput::default();
-        let task = tokio::spawn(read_capped(Some(reader), 1000, captured.clone()));
+        let captured = Capture::plain(1000);
+        let task = tokio::spawn(read_capped(Some(reader), captured.clone()));
         let output = drain(task, &captured, Duration::from_millis(200)).await;
 
         assert_eq!(output, b"before");
         drop(writer);
+    }
+
+    #[test]
+    fn stdout_capture_drops_progress_lines_before_the_cap() {
+        let (sender, receiver) = crate::command_progress::channel();
+        let captured = Capture::scanning_progress(6, sender);
+
+        lock(&captured).push(b"PROGRESS: {\"n\":1}\nabc\nPROGRESS: {\"n\":2}\ndefgh");
+        lock(&captured).push(b"\nPROGRESS: {\"n\":3}");
+
+        assert_eq!(lock(&captured).take(), b"abc\nde");
+        assert_eq!(*receiver.borrow(), Some(serde_json::json!({"n": 3})));
+    }
+
+    #[tokio::test]
+    async fn keeps_a_held_partial_line_when_the_pipe_never_closes() {
+        use tokio::io::AsyncWriteExt;
+
+        let (mut writer, reader) = tokio::io::duplex(64);
+        writer.write_all(b"done\nPROGRESS: not json").await.unwrap();
+
+        let captured = Capture::scanning_progress(1000, crate::command_progress::channel().0);
+        let task = tokio::spawn(read_capped(Some(reader), captured.clone()));
+        let output = drain(task, &captured, Duration::from_millis(200)).await;
+
+        assert_eq!(output, b"done\nPROGRESS: not json");
+        drop(writer);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn reports_progress_lines_and_leaves_them_out_of_the_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let (sender, receiver) = crate::command_progress::channel();
+
+        let result = run_script_unchecked(
+            &ScriptType::Sh,
+            "echo start\necho 'PROGRESS: {\"percent\":50}'\necho 'PROGRESS: {\"percent\":100}'\necho end\necho 'PROGRESS: {\"x\":1}' >&2\n",
+            &HashMap::new(),
+            13,
+            &limits(dir.path(), 10, 1000),
+            sender,
+        )
+        .await;
+
+        assert_eq!(result.exit_code, 0, "output: {}", result.output);
+        assert_eq!(
+            result.output,
+            format!("start\nend\n{}PROGRESS: {{\"x\":1}}\n", STDERR_SEPARATOR)
+        );
+        assert_eq!(*receiver.borrow(), Some(serde_json::json!({"percent": 100})));
     }
 
     #[cfg(unix)]
@@ -670,6 +786,7 @@ mod tests {
             &HashMap::new(),
             8,
             &limits(dir.path(), 1, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -694,6 +811,7 @@ mod tests {
             &HashMap::new(),
             9,
             &limits(dir.path(), 60, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
@@ -713,6 +831,7 @@ mod tests {
             &HashMap::new(),
             10,
             &limits(dir.path(), 60, 1000),
+            crate::command_progress::channel().0,
         )
         .await;
 
