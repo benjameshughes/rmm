@@ -257,12 +257,6 @@ final class Index extends Component
         }
     }
 
-    public function updateOutdatedAgents(BulkExecuteScript $action, AgentVersionQueries $agentVersions): void
-    {
-        $action(Script::findSystem('update-agent'), $this->authorizeCommandableDevices($agentVersions->outdatedDevices()), auth()->user());
-        $this->dispatch('command-queued');
-    }
-
     public function powerOff(Device $device, ExecuteScriptOnDevice $action): void
     {
         $this->runSystemScript($action, $device, 'shutdown');
@@ -287,7 +281,6 @@ final class Index extends Component
             'summary' => $summary,
             'isFiltered' => $this->search !== '' || $this->groupFilter !== '' || $this->tagFilter !== '' || $this->listFilter !== null,
             'latestAgentVersion' => $agentVersions->latest(),
-            'outdatedAgentCount' => $summary['outdated'],
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->orderBy('name')->get(),

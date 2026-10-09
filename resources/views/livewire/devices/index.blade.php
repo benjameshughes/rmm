@@ -19,18 +19,6 @@
         <x-device.list.summary-chip label="Open alerts" :value="$summary['openAlerts']" dot="bg-rose-500" :href="route('alerts.index')" />
     </div>
 
-    @if($outdatedAgentCount > 0)
-        <flux:callout icon="arrow-up-circle" color="amber" inline>
-            <flux:callout.heading>{{ $outdatedAgentCount }} {{ Str::plural('device', $outdatedAgentCount) }} running an old agent (latest {{ $latestAgentVersion }})</flux:callout.heading>
-
-            <x-slot name="actions">
-                <flux:button size="sm" x-on:click="$dispatch('confirm-action', { heading: 'Update agents', message: {{ Js::from('Update the agent on '.$outdatedAgentCount.' '.Str::plural('device', $outdatedAgentCount).'?') }}, confirm: 'Update', action: () => $wire.updateOutdatedAgents() })" icon="arrow-path">
-                    Update all
-                </flux:button>
-            </x-slot>
-        </flux:callout>
-    @endif
-
     <div class="flex flex-wrap items-center gap-4">
         <flux:input wire:model.live.debounce.300ms="search" placeholder="Search hostname, IP, OS..." class="max-w-sm" icon="magnifying-glass" />
         <flux:select wire:model.live="groupFilter" placeholder="All Groups" class="max-w-48">

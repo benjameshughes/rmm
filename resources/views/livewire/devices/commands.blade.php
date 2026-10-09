@@ -17,7 +17,7 @@
                             </div>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <x-device.commands.status :command="$command" />
+                            <x-device.commands.status :command="$command" :waiting-for-wake="$command->isPending() && ! $device->isOnline" />
                         </flux:table.cell>
                         <flux:table.cell>{{ $command->queued_at->diffForHumans() }}</flux:table.cell>
                         <flux:table.cell>{{ $command->queuedBy?->name ?? '—' }}</flux:table.cell>

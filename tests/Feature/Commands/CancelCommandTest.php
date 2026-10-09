@@ -8,7 +8,6 @@ use App\Enums\CommandStatus;
 use App\Events\CommandUpdated;
 use App\Livewire\Commands\Detail;
 use App\Livewire\Devices\Commands;
-use App\Livewire\Devices\InFlight;
 use App\Livewire\Scripts\Show as ScriptsShow;
 use App\Models\AuditLog;
 use App\Models\Device;
@@ -52,7 +51,6 @@ function commandSurfaces(): array
 {
     return [
         'device commands tab' => fn (DeviceCommand $command) => Livewire::test(Commands::class, ['device' => $command->device]),
-        'device in-flight strip' => fn (DeviceCommand $command) => Livewire::test(InFlight::class, ['device' => $command->device]),
         'script page' => fn (DeviceCommand $command) => Livewire::test(ScriptsShow::class, ['script' => $command->script]),
         'command detail' => fn (DeviceCommand $command) => Livewire::test(Detail::class)->dispatch('show-command', commandId: $command->id),
     ];
@@ -65,21 +63,21 @@ it('shows Cancel on your own pending command', function (string $surface): void 
     commandSurfaces()[$surface]($command)
         ->assertSeeHtml(cancelButton($command))
         ->assertSeeHtml('Cancel this command before it runs?');
-})->with(['device commands tab', 'device in-flight strip', 'script page', 'command detail']);
+})->with(['device commands tab', 'script page', 'command detail']);
 
 it('hides Cancel on a pending command someone else queued', function (string $surface): void {
     $command = queuedCommand(User::factory()->create());
     $this->actingAs($this->user);
 
     commandSurfaces()[$surface]($command)->assertDontSeeHtml(cancelButton($command));
-})->with(['device commands tab', 'device in-flight strip', 'script page', 'command detail']);
+})->with(['device commands tab', 'script page', 'command detail']);
 
 it('hides Cancel once the agent has fetched your command', function (string $surface): void {
     $command = queuedCommand($this->user, ['status' => CommandStatus::Sent, 'sent_at' => now()]);
     $this->actingAs($this->user);
 
     commandSurfaces()[$surface]($command)->assertDontSeeHtml(cancelButton($command));
-})->with(['device commands tab', 'device in-flight strip', 'script page', 'command detail']);
+})->with(['device commands tab', 'script page', 'command detail']);
 
 it('cancels your pending command, broadcasts it and confirms', function (string $surface): void {
     $command = queuedCommand($this->user);
@@ -98,7 +96,7 @@ it('cancels your pending command, broadcasts it and confirms', function (string 
 
     Event::assertDispatched(CommandUpdated::class, fn (CommandUpdated $event): bool => $event->commandId === $command->id
         && $event->status === CommandStatus::Cancelled->value);
-})->with(['device commands tab', 'device in-flight strip', 'script page', 'command detail']);
+})->with(['device commands tab', 'script page', 'command detail']);
 
 it('refuses to cancel a pending command someone else queued', function (): void {
     $command = queuedCommand(User::factory()->create());

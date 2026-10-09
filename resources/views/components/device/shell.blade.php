@@ -8,8 +8,6 @@
         </flux:breadcrumbs>
 
         <livewire:devices.header :device="$device" :key="'device-header-'.$device->id" />
-
-        <livewire:devices.in-flight :device="$device" :key="'device-in-flight-'.$device->id" />
     </div>
 
     <div class="border-b border-zinc-200 dark:border-zinc-700">

@@ -22,60 +22,41 @@ beforeEach(function (): void {
     $this->user = User::factory()->create();
 });
 
-it('shows the update badge and banner for outdated agents', function (): void {
+it('shows the update badge for outdated agents without a banner', function (): void {
     Device::factory()->active()->create(['hostname' => 'OLD-PC', 'agent_version' => '0.5.0']);
     Device::factory()->active()->create(['hostname' => 'NEW-PC', 'agent_version' => '0.5.1']);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertSee('1 device running an old agent (latest 0.5.1)')
         ->assertSee('Update available 0.5.0')
         ->assertSeeHtml('>0.5.1<')
-        ->assertSee('Update all');
+        ->assertDontSee('running an old agent')
+        ->assertDontSee('Update all');
 });
 
-it('shows no badge or banner when every agent is current', function (): void {
+it('shows no badge when every agent is current', function (): void {
     Device::factory()->active()->create(['agent_version' => '0.5.1']);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertDontSee('running an old agent')
         ->assertDontSee('Update available');
 });
 
-it('shows no badge or banner before the latest version is known', function (): void {
+it('shows no badge before the latest version is known', function (): void {
     Cache::forget(config('agent.latest_version_cache_key'));
     Device::factory()->active()->create(['agent_version' => '0.1.0']);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertDontSee('running an old agent')
         ->assertDontSee('Update available');
 });
 
-it('queues the update-agent script on outdated active devices only', function (): void {
-    $outdated = Device::factory()->active()->create(['agent_version' => '0.5.0']);
-    Device::factory()->active()->create(['agent_version' => '0.5.1']);
-    Device::factory()->create(['agent_version' => '0.4.0']);
-    Device::factory()->active()->create(['agent_version' => null]);
-
-    Livewire::actingAs($this->user)->test(Index::class)
-        ->call('updateOutdatedAgents')
-        ->assertDispatched('command-queued');
-
-    $command = DeviceCommand::query()->sole();
-    expect($command->device_id)->toBe($outdated->id)
-        ->and($command->script_id)->toBe(Script::findSystem('update-agent')->id)
-        ->and($command->queued_by)->toBe($this->user->id);
-});
-
-it('refreshes badges and banner when a new release is announced', function (): void {
+it('refreshes badges when a new release is announced', function (): void {
     Device::factory()->active()->create(['agent_version' => '0.5.1']);
 
     $component = Livewire::actingAs($this->user)->test(Index::class)
-        ->assertDontSee('running an old agent');
+        ->assertDontSee('Update available');
 
     Cache::forever(config('agent.latest_version_cache_key'), '0.6.0');
 
     $component->dispatch('echo-private:devices,LatestAgentVersionChanged', ['version' => '0.6.0'])
-        ->assertSee('1 device running an old agent (latest 0.6.0)')
         ->assertSee('Update available 0.5.1');
 });
 
