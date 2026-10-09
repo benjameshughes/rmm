@@ -10,14 +10,16 @@
 // Only Windows builds (and tests) start the command loop.
 #![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
+use crate::command_progress::{self, Posted, ProgressSink};
 use crate::command_runner::{self, ExecutionResult, RunLimits, ScriptType};
-use crate::config::Config;
+use crate::config::{Config, PROGRESS_POST_INTERVAL};
 use crate::keep_awake::KeepAwake;
 use crate::metrics::{KeyHealth, RequestOutcome};
 use crate::power::PowerController;
 use crate::startup_grace::{Milestone, StartupProgress};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,6 +48,12 @@ struct ResultPayload<'a> {
     output: &'a str,
     error_message: Option<&'a str>,
     timed_out: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ProgressPayload<'a> {
+    progress: &'a Value,
+    at: String,
 }
 
 /// The server's command queue as the drain loop sees it, so the drain logic
@@ -157,6 +165,22 @@ impl CommandQueue for ServerQueue<'_> {
     }
 }
 
+/// Progress posts for one running command.
+struct ServerProgress<'a> {
+    client: &'a CommandClient,
+    api_key: &'a str,
+    command_id: u64,
+    key_health: &'a KeyHealth,
+}
+
+impl ProgressSink for ServerProgress<'_> {
+    async fn post(&mut self, progress: &Value) -> Posted {
+        self.client
+            .send_progress(self.api_key, self.command_id, progress, self.key_health)
+            .await
+    }
+}
+
 pub struct CommandClient {
     config: Config,
     client: reqwest::Client,
@@ -242,12 +266,24 @@ impl CommandClient {
             return false;
         }
 
-        let result = command_runner::run_script(
-            &script_type,
-            &command.script_content,
-            &command.parameters,
-            command.id,
-            &self.run_limits(command.timeout_seconds),
+        let (progress, updates) = command_progress::channel();
+        let sink = ServerProgress {
+            client: self,
+            api_key,
+            command_id: command.id,
+            key_health,
+        };
+
+        let result = command_progress::while_running(
+            command_runner::run_script(
+                &script_type,
+                &command.script_content,
+                &command.parameters,
+                command.id,
+                &self.run_limits(command.timeout_seconds),
+                progress,
+            ),
+            command_progress::post_progress(updates, PROGRESS_POST_INTERVAL, sink, command.id),
         )
         .await;
 
@@ -354,6 +390,38 @@ impl CommandClient {
         status.is_success()
     }
 
+    /// Best effort: the caller warns once and never retries.
+    async fn send_progress(&self, api_key: &str, command_id: u64, progress: &Value, key_health: &KeyHealth) -> Posted {
+        let url = format!(
+            "{}/api/commands/{}/progress",
+            self.config.base_url, command_id
+        );
+        let payload = ProgressPayload {
+            progress,
+            at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        let response = self
+            .client
+            .post(&url)
+            .header("X-Agent-Key", api_key)
+            .header("Accept", "application/json")
+            .json(&payload)
+            .send()
+            .await;
+
+        let status = match response {
+            Ok(response) => response.status(),
+            Err(e) => {
+                key_health.record(RequestOutcome::Inconclusive);
+                return Posted::Failed(e.to_string());
+            }
+        };
+
+        key_health.record(RequestOutcome::from_status(status));
+        progress_outcome(status)
+    }
+
     async fn report_result(
         &self,
         api_key: &str,
@@ -399,6 +467,15 @@ impl CommandClient {
                 status.as_u16()
             );
         }
+    }
+}
+
+/// 404/409/410/422 mean the command already finished or was cancelled.
+fn progress_outcome(status: reqwest::StatusCode) -> Posted {
+    match status.as_u16() {
+        _ if status.is_success() => Posted::Accepted,
+        404 | 409 | 410 | 422 => Posted::Gone,
+        code => Posted::Failed(format!("server answered {}", code)),
     }
 }
 
@@ -724,6 +801,38 @@ mod tests {
         assert_eq!(json["output"], "partial");
         assert_eq!(json["error_message"], "Command timed out after 10 seconds");
         assert_eq!(json["timed_out"], true);
+    }
+
+    #[test]
+    fn serialises_the_progress_payload_the_server_expects() {
+        let progress = serde_json::json!({"percent": 40, "stage": "Downloading"});
+        let payload = ProgressPayload {
+            progress: &progress,
+            at: "2026-10-09T08:00:00+00:00".to_string(),
+        };
+
+        assert_eq!(
+            serde_json::to_value(&payload).unwrap(),
+            serde_json::json!({
+                "progress": {"percent": 40, "stage": "Downloading"},
+                "at": "2026-10-09T08:00:00+00:00"
+            })
+        );
+    }
+
+    #[test]
+    fn treats_finished_or_cancelled_commands_as_gone() {
+        use reqwest::StatusCode;
+
+        assert_eq!(progress_outcome(StatusCode::OK), Posted::Accepted);
+        assert_eq!(progress_outcome(StatusCode::NO_CONTENT), Posted::Accepted);
+        for status in [404, 409, 410, 422] {
+            assert_eq!(progress_outcome(StatusCode::from_u16(status).unwrap()), Posted::Gone);
+        }
+        assert_eq!(
+            progress_outcome(StatusCode::INTERNAL_SERVER_ERROR),
+            Posted::Failed("server answered 500".to_string())
+        );
     }
 
     #[test]

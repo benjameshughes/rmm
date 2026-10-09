@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 // Default interval constants (in seconds)
 /// Default interval for collecting and submitting metrics
@@ -40,6 +41,16 @@ pub const DEFAULT_COMMAND_REQUEST_TIMEOUT_SECS: u64 = 30;
 
 /// How long to wait for a killed script's output pipes to close
 pub const DEFAULT_COMMAND_DRAIN_GRACE_SECS: u64 = 5;
+
+/// A command's stdout line starting with this, followed by a JSON object, is
+/// a progress update rather than output
+pub const PROGRESS_LINE_PREFIX: &str = "PROGRESS: ";
+
+/// Larger progress JSON is ignored (the line is kept as output)
+pub const PROGRESS_MAX_JSON_BYTES: usize = 4096;
+
+/// Least time between progress posts for one command
+pub const PROGRESS_POST_INTERVAL: Duration = Duration::from_secs(5);
 
 /// HTTP timeout for sleep/wake/boot power notices
 pub const DEFAULT_POWER_REQUEST_TIMEOUT_SECS: u64 = 5;

@@ -3,6 +3,7 @@
 
 mod agent;
 mod backups;
+mod command_progress;
 mod command_runner;
 mod commands;
 mod config;
