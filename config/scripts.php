@@ -89,6 +89,12 @@ return [
     | parameters or the audit log. A script with secrets needs an agent that
     | passes parameters on.
     |
+    | A system script marked `internal` belongs to one feature (Delete path,
+    | the Storage, Printers and Backups tabs, the software pages, the Update
+    | agent buttons) that queues it with its own parameters, checks and
+    | confirmation. It is left out of every Run Script picker and schedule,
+    | and those refuse it.
+    |
     */
 
     'system' => [
@@ -204,6 +210,7 @@ return [
             'description' => 'List the PC\'s backup snapshots on the backup server, for its Backups tab',
             'category' => 'backup',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/backup-snapshots.ps1',
             'includes' => ['windows/shared/restic.ps1'],
             'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
@@ -215,6 +222,7 @@ return [
             'description' => 'Restore files from a backup snapshot into a new folder, never overwriting anything. Source Device restores another PC\'s backup onto this one',
             'category' => 'backup',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/backup-restore.ps1',
             'includes' => ['windows/shared/restic.ps1'],
             'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256'],
@@ -232,6 +240,7 @@ return [
             'description' => 'Remove every job from one printer\'s queue. Jobs stuck at Deleting need the print spooler restarted',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/clear-print-queue.ps1',
             'timeout_seconds' => 120,
             'requires_admin' => true,
@@ -244,6 +253,7 @@ return [
             'description' => 'Remove one job from one printer\'s queue by its job number',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/cancel-print-job.ps1',
             'timeout_seconds' => 60,
             'requires_admin' => true,
@@ -257,6 +267,7 @@ return [
             'description' => 'Restart the Windows print spooler, killing it if it hangs, and wait for it to run again. Releases stuck jobs',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/restart-print-spooler.ps1',
             'timeout_seconds' => 120,
             'requires_admin' => true,
@@ -266,6 +277,7 @@ return [
             'description' => 'Print the Windows test page on one printer',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/print-test-page.ps1',
             'timeout_seconds' => 60,
             'requires_admin' => true,
@@ -314,6 +326,7 @@ return [
             'description' => 'Silently install one app machine-wide by its winget package ID, such as Mozilla.Firefox, installing winget first if it is missing',
             'category' => 'updates',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/winget-install.ps1',
             'timeout_seconds' => 1800,
             'requires_admin' => true,
@@ -335,6 +348,7 @@ return [
             'description' => 'Silently upgrade one machine-wide app by its winget package ID, such as Mozilla.Firefox, installing winget first if it is missing',
             'category' => 'updates',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/winget-upgrade.ps1',
             'timeout_seconds' => 1800,
             'requires_admin' => true,
@@ -348,6 +362,7 @@ return [
             'description' => 'Silently uninstall one app by its package ID from the software inventory, installing winget first if it is missing',
             'category' => 'updates',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/winget-uninstall.ps1',
             'timeout_seconds' => 1800,
             'requires_admin' => true,
@@ -361,6 +376,7 @@ return [
             'description' => 'Install the latest RMM agent release. The agent restarts itself mid-run, so the command completes when the device reports its new version',
             'category' => 'updates',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/update-agent.ps1',
             'timeout_seconds' => 300,
             'requires_admin' => true,
@@ -406,6 +422,7 @@ return [
             'description' => 'Measure what fills a drive or folder, folder by folder, with the biggest files and known space hogs, for the device Storage tab. Changes nothing',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/disk-usage.ps1',
             'secrets' => ['DiskUsageKeep'],
             'timeout_seconds' => 900,
@@ -420,6 +437,7 @@ return [
             'description' => 'Delete one file or folder, or move it into quarantine on the system drive. Never follows junctions or symlinks, and refuses Windows, program and profile folders. Queued from the Storage tab or the device header, which confirm it first',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/remove-path.ps1',
             'includes' => ['windows/shared/remove-path.ps1'],
             'secrets' => ['DeletePathProtected'],
@@ -436,6 +454,7 @@ return [
             'description' => 'Delete quarantined files and folders older than the given number of days, or one quarantine folder now. Queued daily for PCs holding quarantined items',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/purge-quarantine.ps1',
             'includes' => ['windows/shared/remove-path.ps1'],
             'timeout_seconds' => 3600,
@@ -450,6 +469,7 @@ return [
             'description' => 'Move one quarantined file or folder back where it came from, unless something already exists there',
             'category' => 'maintenance',
             'platform' => 'windows',
+            'internal' => true,
             'file' => 'windows/restore-quarantine.ps1',
             'includes' => ['windows/shared/remove-path.ps1'],
             'secrets' => ['DeletePathProtected'],

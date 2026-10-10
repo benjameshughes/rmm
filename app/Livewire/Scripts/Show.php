@@ -7,6 +7,7 @@ namespace App\Livewire\Scripts;
 use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceStatus;
+use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\CancelsCommands;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
@@ -45,6 +46,7 @@ final class Show extends Component
      */
     public function executeOnDevices(BulkExecuteScript $action, ValidateScriptParameterValues $validateParameters): void
     {
+        throw_if($this->script->is_internal, ScriptCannotBeRunDirectly::internal($this->script));
         abort_if($this->selectedDeviceIds === [], 422);
 
         $devices = Device::query()->whereIn('id', $this->selectedDeviceIds)->get()

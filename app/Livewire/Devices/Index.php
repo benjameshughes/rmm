@@ -10,6 +10,7 @@ use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\DeviceListFilter;
 use App\Enums\DeviceListSort;
+use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Livewire\Concerns\OrganisesSelectedDevices;
 use App\Livewire\Concerns\WakesDevices;
@@ -239,6 +240,8 @@ final class Index extends Component
         abort_unless($this->bulkScriptId !== null, 422);
 
         $script = Script::findOrFail($this->bulkScriptId);
+        throw_if($script->is_internal, ScriptCannotBeRunDirectly::internal($script));
+
         $parameters = $this->validatedParameterValues($validateParameters, $script);
         $devices = $this->authorizedSelectedDevices();
         $queued = $action($script, $devices, auth()->user(), $parameters);
@@ -283,7 +286,7 @@ final class Index extends Component
             'latestAgentVersion' => $agentVersions->latest(),
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),
-            'scripts' => Script::query()->orderBy('name')->get(),
+            'scripts' => Script::query()->runnableDirectly()->orderBy('name')->get(),
         ]);
     }
 

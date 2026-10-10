@@ -9,6 +9,7 @@ use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\ScriptType;
+use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Livewire\Concerns\WakesDevices;
 use App\Models\Device;
@@ -111,6 +112,8 @@ final class Header extends Component
         abort_unless($this->selectedScriptId !== null, 422);
 
         $script = Script::findOrFail($this->selectedScriptId);
+        throw_if($script->is_internal, ScriptCannotBeRunDirectly::internal($script));
+
         $action($script, $this->device, auth()->user(), parameters: $this->validatedParameterValues($validateParameters, $script));
 
         $this->showScriptModal = false;
@@ -195,7 +198,7 @@ final class Header extends Component
             'statusColor' => $this->device->statusColor(),
             'operatingSystem' => $this->device->operatingSystem(),
             'printerProblem' => $this->device->printerProblemLabel(),
-            'scripts' => $this->showScriptModal ? Script::query()->orderBy('name')->get() : collect(),
+            'scripts' => $this->showScriptModal ? Script::query()->runnableDirectly()->orderBy('name')->get() : collect(),
             'adHocCommand' => $this->inFlightAdHocCommand(),
         ]);
     }

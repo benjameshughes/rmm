@@ -27,6 +27,7 @@ final class Script extends Model
         'script_type',
         'script_content',
         'is_system',
+        'is_internal',
         'timeout_seconds',
         'requires_admin',
         'parameters',
@@ -36,6 +37,7 @@ final class Script extends Model
     {
         return [
             'is_system' => 'boolean',
+            'is_internal' => 'boolean',
             'requires_admin' => 'boolean',
             'timeout_seconds' => 'integer',
             'category' => ScriptCategory::class,
@@ -77,6 +79,15 @@ final class Script extends Model
     public function scopeSystem($query)
     {
         return $query->where('is_system', true);
+    }
+
+    /**
+     * Scripts a person may pick to run or schedule: everything but the
+     * internal system scripts that only their own feature queues.
+     */
+    public function scopeRunnableDirectly($query)
+    {
+        return $query->where('is_internal', false);
     }
 
     public function scopeUserCreated($query)

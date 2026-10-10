@@ -23,7 +23,7 @@ final class RunScheduledTask
      */
     public function __invoke(ScheduledTask $task): int
     {
-        if (! $task->is_active || ($task->action->requiresScript() && $task->script === null)) {
+        if (! $task->is_active || ($task->action->requiresScript() && ($task->script === null || $task->script->is_internal))) {
             return 0;
         }
 

@@ -10,9 +10,13 @@
             @if($script->is_system)
                 <flux:badge color="blue" size="lg">System</flux:badge>
             @endif
-            <flux:button wire:click="$set('showExecuteModal', true)" variant="primary" icon="play">
-                Execute
-            </flux:button>
+            @if($script->is_internal)
+                <flux:badge color="zinc" size="lg" data-internal-badge>Internal</flux:badge>
+            @else
+                <flux:button wire:click="$set('showExecuteModal', true)" variant="primary" icon="play">
+                    Execute
+                </flux:button>
+            @endif
             @unless($script->is_system)
                 <flux:button as="a" :href="route('scripts.edit', $script)" wire:navigate icon="pencil-square">
                     Edit
@@ -21,6 +25,12 @@
         </div>
     </div>
     <flux:separator variant="subtle" />
+
+    @if($script->is_internal)
+        <flux:callout icon="lock-closed" variant="secondary" heading="Queued by its own feature">
+            <flux:callout.text>This script is internal plumbing. Its feature queues it with its own checks and confirmation, so it is never offered in Run Script or schedules.</flux:callout.text>
+        </flux:callout>
+    @endif
 
     <div class="grid gap-6 md:grid-cols-2">
         <flux:card>

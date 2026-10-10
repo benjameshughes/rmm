@@ -42,6 +42,9 @@
                                 @if($script->is_system)
                                     <flux:badge size="sm" color="blue">System</flux:badge>
                                 @endif
+                                @if($script->is_internal)
+                                    <flux:badge size="sm" color="zinc" data-internal-badge>Internal</flux:badge>
+                                @endif
                                 @if($script->description)
                                     <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ Str::limit($script->description, 60) }}</flux:text>
                                 @endif

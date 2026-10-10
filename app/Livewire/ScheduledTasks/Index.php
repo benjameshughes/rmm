@@ -8,6 +8,7 @@ use App\Actions\Schedule\RunScheduledTask;
 use App\Actions\Script\ValidateScriptParameterValues;
 use App\Enums\ScheduledTaskAction;
 use App\Enums\ScheduleTargetType;
+use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\EntersScriptParameterValues;
 use App\Models\Device;
 use App\Models\DeviceGroup;
@@ -62,6 +63,7 @@ final class Index extends Component
         $this->authorize('create', ScheduledTask::class);
 
         $this->validate($this->validationRules(), $this->validationMessages());
+        $this->ensureScriptRunsDirectly();
         $parameters = $this->validatedParameters($validateParameters);
 
         $task = ScheduledTask::create([
@@ -99,6 +101,7 @@ final class Index extends Component
         abort_unless($this->editingId !== null, 422);
 
         $this->validate($this->validationRules(), $this->validationMessages());
+        $this->ensureScriptRunsDirectly();
         $parameters = $this->validatedParameters($validateParameters);
 
         $task = ScheduledTask::findOrFail($this->editingId);
@@ -155,7 +158,7 @@ final class Index extends Component
 
         return view('livewire.scheduled-tasks.index', [
             'tasks' => $tasks,
-            'scripts' => Script::query()->orderBy('name')->get(),
+            'scripts' => Script::query()->runnableDirectly()->orderBy('name')->get(),
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),
             'devices' => Device::query()->orderBy('hostname')->limit(50)->get(),
@@ -176,6 +179,17 @@ final class Index extends Component
     protected function parameterScript(): ?Script
     {
         return $this->requiresScript && $this->script_id !== null ? Script::find($this->script_id) : null;
+    }
+
+    private function ensureScriptRunsDirectly(): void
+    {
+        $script = $this->parameterScript();
+
+        if ($script === null) {
+            return;
+        }
+
+        throw_if($script->is_internal, ScriptCannotBeRunDirectly::internal($script));
     }
 
     /**
