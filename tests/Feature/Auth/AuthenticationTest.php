@@ -65,3 +65,25 @@ test('users can logout', function () {
     $response->assertRedirect(route('home'));
     $this->assertGuest();
 });
+test('login screen offers logging in with authentik', function () {
+    $this->get(route('login'))
+        ->assertOk()
+        ->assertSee(route('authentik-login.redirect'), false);
+});
+
+test('the password login stays available as break glass alongside authentik', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+
+    $this->post(route('login.store'), ['email' => $user->email, 'password' => 'password'])
+        ->assertSessionHasNoErrors();
+
+    $this->assertAuthenticatedAs($user);
+});
+
+test('authentik refusals land back on the login page with a reason', function () {
+    $this->get(route('authentik-login.callback', ['error' => 'access_denied', 'state' => 'anything']))
+        ->assertRedirect(route('login'))
+        ->assertSessionHasErrors('authentik');
+
+    $this->assertGuest();
+});

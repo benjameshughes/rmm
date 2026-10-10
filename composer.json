@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "ben/authentik-login": "^1.0",
         "laravel/fortify": "^1.41",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
@@ -95,6 +96,10 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "repositories": [{
+        "name": "authentik-login",
+        "type": "vcs",
+        "url": "https://git.fnstr.uk/ben/authentik-login.git"
+    },{
         "name": "flux-pro",
         "type": "composer",
         "url": "https://composer.fluxui.dev"
