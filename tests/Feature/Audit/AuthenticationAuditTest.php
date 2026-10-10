@@ -9,6 +9,7 @@ use App\Models\Device;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Testing\TestResponse;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Laravel\Fortify\Events\TwoFactorAuthenticationConfirmed;
@@ -19,7 +20,7 @@ beforeEach(function (): void {
     $this->user = User::factory()->withoutTwoFactor()->create(['email' => 'ben@example.com']);
 });
 
-function signIn(string $email, string $password, string $userAgent = 'AuditBrowser/1.0'): Illuminate\Testing\TestResponse
+function signIn(string $email, string $password, string $userAgent = 'AuditBrowser/1.0'): TestResponse
 {
     return test()->withHeader('User-Agent', $userAgent)->post(route('login.store'), [
         'email' => $email,
@@ -110,7 +111,7 @@ it('records two-factor being enabled, confirmed and disabled', function (): void
 });
 
 it('records a wake request', function (): void {
-    listenForWakePackets();
+    $listener = listenForWakePackets();
     $device = Device::factory()->active()->create(['hostname' => 'SLEEPY-PC', 'mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
 
     $this->actingAs($this->user);
@@ -124,7 +125,7 @@ it('records a wake request', function (): void {
 });
 
 it('records a scheduled wake with no actor', function (): void {
-    listenForWakePackets();
+    $listener = listenForWakePackets();
     $device = Device::factory()->active()->create(['mac_addresses' => ['AA:BB:CC:DD:EE:FF']]);
 
     app(WakeDevice::class)($device);

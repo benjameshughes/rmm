@@ -34,7 +34,7 @@ it('wakes only the targeted devices that are asleep and have a MAC', function ()
 });
 
 it('records the run of a wake schedule', function (): void {
-    listenForWakePackets();
+    $listener = listenForWakePackets();
     $task = ScheduledTask::factory()->wake()->create(['last_run_at' => null, 'next_run_at' => null]);
 
     app(RunScheduledTask::class)($task);
