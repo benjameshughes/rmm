@@ -164,7 +164,7 @@ it('renders the summary component from a metric, with the page file as a usage b
         ->assertSee('Page File')
         ->assertSee('25.0%')
         ->assertSee('512.0 MB / 2.0 GB')
-        ->assertSee('style="width: 25.0%"', false);
+        ->assertSee('--flux-progress-percentage: 25%', false);
 
     $this->blade('<x-device.stats.summary :metric="$metric" />', ['metric' => null])
         ->assertSee('CPU Usage')
@@ -175,13 +175,13 @@ it('renders the summary component from a metric, with the page file as a usage b
 it('colours the page file bar from the configured thresholds', function (float $usedMib, string $barColor): void {
     expect(DeviceMetric::factory()->make(['swap_used_mib' => $usedMib, 'swap_total_mib' => 1000.0])->pageFileBarColor())->toBe($barColor);
 })->with([
-    'comfortable' => [300.0, 'bg-blue-500'],
-    'filling up' => [750.0, 'bg-amber-500'],
-    'full' => [990.0, 'bg-red-500'],
+    'comfortable' => [300.0, 'blue'],
+    'filling up' => [750.0, 'amber'],
+    'full' => [990.0, 'red'],
 ]);
 
 it('shows how busy the disks are on the disk storage card', function (): void {
-    $disks = collect([['name' => 'C:', 'mountPoint' => null, 'usedPercent' => 50.0, 'usedForHumans' => '50.0%', 'freeForHumans' => null, 'barColor' => 'bg-blue-500', 'inodeForHumans' => null, 'inodeColor' => '']]);
+    $disks = collect([['name' => 'C:', 'mountPoint' => null, 'usedPercent' => 50.0, 'usedForHumans' => '50.0%', 'freeForHumans' => null, 'barColor' => 'blue', 'inodeForHumans' => null, 'inodeColor' => '']]);
 
     $this->blade('<x-device.disk-storage :disks="$disks" busy="42.0%" />', ['disks' => $disks])->assertSee('42.0% busy');
     $this->blade('<x-device.disk-storage :disks="$disks" />', ['disks' => $disks])->assertDontSee('busy');

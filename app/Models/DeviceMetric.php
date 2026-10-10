@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Models\Concerns\FormatsMebibytes;
 use Carbon\CarbonInterval;
+use Database\Factories\DeviceMetricFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ final class DeviceMetric extends Model
 {
     use FormatsMebibytes;
 
-    /** @use HasFactory<\Database\Factories\DeviceMetricFactory> */
+    /** @use HasFactory<DeviceMetricFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -275,9 +276,9 @@ final class DeviceMetric extends Model
         $percent = $this->pageFilePercent();
 
         return match (true) {
-            $percent >= config('devices.swap.critical_percent') => 'bg-red-500',
-            $percent >= config('devices.swap.warning_percent') => 'bg-amber-500',
-            default => 'bg-blue-500',
+            $percent >= config('devices.swap.critical_percent') => 'red',
+            $percent >= config('devices.swap.warning_percent') => 'amber',
+            default => 'blue',
         };
     }
 
@@ -348,9 +349,9 @@ final class DeviceMetric extends Model
     private function loadBarColor(?float $percent): string
     {
         return match (true) {
-            $percent > config('devices.load.critical_percent') => 'bg-red-500',
-            $percent > config('devices.load.warning_percent') => 'bg-amber-500',
-            default => 'bg-blue-500',
+            $percent > config('devices.load.critical_percent') => 'red',
+            $percent > config('devices.load.warning_percent') => 'amber',
+            default => 'blue',
         };
     }
 

@@ -125,8 +125,8 @@ it('shows uptime and disk usage computed by the models', function (): void {
         ->assertSee('5.0 GB free of 100.0 GB')
         ->assertSee('95.0% used')
         ->assertSee('20.0% used')
-        ->assertSeeHtml('bg-red-500')
-        ->assertSeeHtml('bg-blue-500');
+        ->assertSeeHtml('var(--color-red-600)')
+        ->assertSeeHtml('var(--color-blue-600)');
 });
 
 it('formats uptime like the device page always has', function (?int $seconds, ?string $expected): void {
@@ -144,7 +144,7 @@ it('colours disk usage from the configured thresholds', function (float $availab
 
     expect($device->diskUsage()->first()['barColor'])->toBe($barColor);
 })->with([
-    'healthy' => [50.0, 'bg-blue-500'],
-    'filling up' => [20.0, 'bg-amber-500'],
-    'full' => [5.0, 'bg-red-500'],
+    'healthy' => [50.0, 'blue'],
+    'filling up' => [20.0, 'amber'],
+    'full' => [5.0, 'red'],
 ]);

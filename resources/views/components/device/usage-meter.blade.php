@@ -1,4 +1,4 @@
-@props(['label', 'value' => null, 'percent' => null, 'color' => 'bg-blue-500'])
+@props(['label', 'value' => null, 'percent' => null, 'color' => 'blue'])
 
 <div {{ $attributes->class('grid grid-cols-[2.75rem_1fr_3rem] items-center gap-2') }}>
     <flux:text size="xs" class="truncate">{{ $label }}</flux:text>

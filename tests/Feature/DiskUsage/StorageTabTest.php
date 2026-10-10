@@ -17,6 +17,7 @@ use App\Models\DeviceDiskScan;
 use App\Models\DeviceInventory;
 use App\Models\Script;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -27,7 +28,7 @@ beforeEach(function (): void {
     $this->device = Device::factory()->active()->windows()->create(['hostname' => 'OFFICE-PC', 'agent_version' => '0.9.0']);
 });
 
-function storedDiskScan(Device $device, array $overrides = [], ?Carbon\CarbonInterface $scannedAt = null): DeviceDiskScan
+function storedDiskScan(Device $device, array $overrides = [], ?CarbonInterface $scannedAt = null): DeviceDiskScan
 {
     $data = diskScanFixture($overrides);
 
@@ -41,6 +42,9 @@ it('shows the top of the latest scan with the volume, space hogs, largest files 
         ->assertSee('Scanned 1 hour ago.')
         ->assertSee('Scan now')
         ->assertSeeHtml('data-volume-bar')
+        ->assertSeeHtml('data-flux-progress')
+        ->assertSeeHtml('wire:key="usage-bar-')
+        ->assertSeeHtml('var(--color-blue-600)')
         ->assertSee('100.0 GB free of 256.0 GB')
         ->assertSeeInOrder(['Users', 'Windows', 'Program Files', '$Recycle.Bin', 'Documents and Settings', '(other)'])
         ->assertSeeInOrder(['Space hogs', 'Outlook data', 'anna', '25.0 GB'])

@@ -31,13 +31,4 @@ enum TrendDirection: string
             default => 'zinc',
         };
     }
-
-    public function barColor(): string
-    {
-        return match ($this) {
-            self::Improved => 'bg-green-500',
-            self::Worse => 'bg-red-500',
-            default => 'bg-zinc-500 dark:bg-zinc-400',
-        };
-    }
 }

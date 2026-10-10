@@ -91,11 +91,11 @@ it('flags disks at or over the warning threshold and colours them critical at th
         ->assertSeeInOrder(['DISKY', '/var', number_format($usedPercent, 1).'%'])
         ->assertSeeHtml($barColor);
 })->with([
-    'under warning' => [74.0, null, 'bg-blue-500'],
-    'at warning' => [75.0, 'warning', 'bg-amber-500'],
-    'over warning' => [82.0, 'warning', 'bg-amber-500'],
-    'at critical' => [90.0, 'critical', 'bg-red-500'],
-    'over critical' => [92.0, 'critical', 'bg-red-500'],
+    'under warning' => [74.0, null, 'var(--color-blue-600)'],
+    'at warning' => [75.0, 'warning', 'var(--color-amber-600)'],
+    'over warning' => [82.0, 'warning', 'var(--color-amber-600)'],
+    'at critical' => [90.0, 'critical', 'var(--color-red-600)'],
+    'over critical' => [92.0, 'critical', 'var(--color-red-600)'],
 ]);
 
 it('reads disk thresholds from config', function (): void {
@@ -267,6 +267,24 @@ describe('live refresh', function (): void {
         $dashboard->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
             ->assertDontSee('All clear')
             ->assertSee('FILLING-UP');
+    });
+
+    it('rebuilds a disk bar with its new figure and colour when a heartbeat redraws', function (): void {
+        $device = healthyDevice(['hostname' => 'FILLING-UP', 'disks' => diskAt(82.0)]);
+
+        $dashboard = Livewire::actingAs($this->user)->test(Dashboard::class)
+            ->assertSeeHtml('wire:key="usage-bar-82"')
+            ->assertSeeHtml('--flux-progress-percentage: 82%')
+            ->assertSeeHtml('var(--color-amber-600)');
+
+        $device->update(['disks' => diskAt(93.0)]);
+        $this->travel(config('dashboard.heartbeat_refresh_seconds'))->seconds();
+
+        $dashboard->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
+            ->assertSeeHtml('wire:key="usage-bar-93"')
+            ->assertSeeHtml('--flux-progress-percentage: 93%')
+            ->assertSeeHtml('var(--color-red-600)')
+            ->assertDontSeeHtml('wire:key="usage-bar-82"');
     });
 
     it('refreshes recent activity from the audit channel', function (): void {
