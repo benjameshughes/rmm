@@ -12,7 +12,7 @@
                 <flux:badge size="sm" :color="$flag->color()" :title="$flag->description()" wire:key="flag-{{ $row->index }}-{{ $flag->value }}" data-flag="{{ $flag->name }}">{{ $flag->label() }}</flux:badge>
             @endforeach
         </div>
-        <x-device.usage-bar :percent="$row->percentOfParent" color="bg-blue-500" thin class="mt-1.5" />
+        <x-device.usage-bar :percent="$row->percentOfParent" color="blue" thin class="mt-1.5" />
     </flux:table.cell>
     <flux:table.cell align="end" class="tabular-nums">{{ $row->allocatedForHumans() }}</flux:table.cell>
     <flux:table.cell align="end" class="hidden tabular-nums sm:table-cell">{{ $row->percentForHumans() }}</flux:table.cell>

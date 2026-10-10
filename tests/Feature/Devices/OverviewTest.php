@@ -89,7 +89,10 @@ it('shows a full page file as a red usage bar', function (): void {
     Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeHtml('data-swap-usage')
         ->assertSeeInOrder(['Page File', '95.0%', '9.5 GB / 10.0 GB'])
-        ->assertSeeHtml('bg-red-500" style="width: 95.0%"');
+        ->assertSeeHtml('data-flux-progress')
+        ->assertSeeHtml('var(--color-red-600)')
+        ->assertSeeHtml('--flux-progress-percentage: 95%')
+        ->assertSeeHtml('aria-valuenow="95"');
 });
 
 it('keeps the overview query count flat as commands, alerts and disks pile up', function (): void {

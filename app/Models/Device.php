@@ -18,6 +18,7 @@ use App\Models\Concerns\BacksUpFiles;
 use App\Models\Concerns\ReportsServerBackups;
 use App\Models\Concerns\WatchesPrinters;
 use App\Models\Concerns\WatchesVirtualPrinter;
+use Database\Factories\DeviceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,7 +36,7 @@ final class Device extends Model
     use Auditable;
     use BacksUpFiles;
 
-    /** @use HasFactory<\Database\Factories\DeviceFactory> */
+    /** @use HasFactory<DeviceFactory> */
     use HasFactory;
 
     use ReportsServerBackups;
@@ -548,9 +549,9 @@ final class Device extends Model
                 'usedForHumans' => $usedPercent === null ? null : number_format($usedPercent, 1).'%',
                 'freeForHumans' => $totalGb !== null && $availableGb !== null ? number_format($availableGb, 1).' GB free of '.number_format($totalGb, 1).' GB' : null,
                 'barColor' => match (true) {
-                    $usedPercent >= config('devices.disk.critical_percent') => 'bg-red-500',
-                    $usedPercent >= config('devices.disk.warning_percent') => 'bg-amber-500',
-                    default => 'bg-blue-500',
+                    $usedPercent >= config('devices.disk.critical_percent') => 'red',
+                    $usedPercent >= config('devices.disk.warning_percent') => 'amber',
+                    default => 'blue',
                 },
                 'usedRoundedForHumans' => $usedPercent === null ? null : number_format($usedPercent).'%',
                 'usedTextColor' => match (true) {

@@ -23,11 +23,11 @@
         <div class="space-y-1.5">
             <div class="grid grid-cols-[3rem_1fr] items-center gap-2">
                 <flux:text size="xs">Before</flux:text>
-                <x-device.usage-bar :percent="$change->previousShare()" color="bg-zinc-400 dark:bg-zinc-500" thin />
+                <x-device.usage-bar :percent="$change->previousShare()" color="zinc" thin />
             </div>
             <div class="grid grid-cols-[3rem_1fr] items-center gap-2">
                 <flux:text size="xs">Now</flux:text>
-                <x-device.usage-bar :percent="$change->currentShare()" :color="$direction->barColor()" thin />
+                <x-device.usage-bar :percent="$change->currentShare()" :color="$direction->color()" thin />
             </div>
         </div>
     @endunless

@@ -1,4 +1,4 @@
-@props(['label', 'value' => null, 'detail' => null, 'percent' => null, 'color' => 'bg-blue-500'])
+@props(['label', 'value' => null, 'detail' => null, 'percent' => null, 'color' => 'blue'])
 
 <flux:card {{ $attributes->class('space-y-2') }}>
     <x-device.stats.stat :label="$label" :value="$value" :detail="$detail" />

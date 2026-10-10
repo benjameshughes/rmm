@@ -1,19 +1,15 @@
-{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. Flux only reads the value when the bar boots, so each new figure gets a fresh bar via wire:key, and the width is rendered up front so it is right before Flux boots. --}}
+{{-- How far a running command has got. Without a progress report yet (or one with no figures) the bar pulses instead. Drop the script's message where a heading already says what is running. --}}
 @props(['progress' => null, 'withMessage' => true])
 
 @php($percent = $progress?->percent())
 
 <div {{ $attributes->class('min-w-0 space-y-1.5') }} data-command-progress>
-    <flux:progress
-        wire:key="command-progress-{{ $percent ?? 'waiting' }}"
+    <x-live-progress
+        key="command-progress"
         :value="$percent ?? 100"
         color="blue"
         :class="$percent === null ? 'animate-pulse' : null"
-        style="--flux-progress-percentage: {{ number_format($percent ?? 100, 1) }}%"
-        role="progressbar"
         :aria-label="$progress?->message ?? 'Progress'"
-        aria-valuemin="0"
-        aria-valuemax="100"
         :aria-valuenow="$percent === null ? null : round($percent, 1)"
         :aria-valuetext="$progress?->label() ?: null"
     />

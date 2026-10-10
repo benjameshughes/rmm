@@ -160,9 +160,9 @@ it('colours CPU and RAM bars from the configured thresholds', function (float $p
     expect($metric->cpuBarColor())->toBe($color)
         ->and($metric->ramBarColor())->toBe($color);
 })->with([
-    'idle' => [20.0, 'bg-blue-500'],
-    'busy' => [75.0, 'bg-amber-500'],
-    'maxed' => [95.0, 'bg-red-500'],
+    'idle' => [20.0, 'blue'],
+    'busy' => [75.0, 'amber'],
+    'maxed' => [95.0, 'red'],
 ]);
 
 it('links each row to every device tab from its overflow menu', function (): void {
