@@ -7,6 +7,7 @@ namespace App\Actions\Script;
 use App\Enums\ScriptPlatform;
 use App\Models\Device;
 use App\Models\DeviceCommand;
+use App\Models\ZebraTemplate;
 use InvalidArgumentException;
 
 /**
@@ -23,7 +24,9 @@ use InvalidArgumentException;
  * key is pending: once it is stamped as added, it is sent blank. The disk
  * usage scan gets the space-hog folders it must keep from config/disk_usage.php,
  * and the delete and restore scripts the protected paths from config/devices.php
- * as JSON, so the PC refuses them too. Ad-hoc commands and user scripts never
+ * as JSON, so the PC refuses them too. install-zebra gets the ZDesigner driver
+ * pin and match patterns from config/zebra.php and the Zebra template's
+ * settings. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -67,6 +70,16 @@ final class ResolveCommandSecrets
             'ResticSha256' => config('backup.restic.sha256'),
             'ResticExeSha256' => config('backup.restic.exe_sha256'),
             'MasterPassword' => $source?->isBackupMasterKeyPending ? (string) config('backup.master_password') : '',
+            'ZebraDriverUrl' => (string) config('zebra.driver.url'),
+            'ZebraDriverSha256' => (string) config('zebra.driver.sha256'),
+            'ZebraDriverInf' => (string) config('zebra.driver.inf'),
+            'ZebraDriverName' => (string) config('zebra.driver.name'),
+            'ZebraDriverPrefix' => (string) config('zebra.driver.prefix'),
+            'ZebraMatch' => implode('|', config('zebra.match')),
+            'ZebraPnpWaitSeconds' => (string) config('zebra.pnp_wait_seconds'),
+            'ZebraTemplate' => (string) ZebraTemplate::current()?->settings,
+            'ZebraTemplateDriver' => (string) ZebraTemplate::current()?->driver_name,
+            'ZebraTemplateMaxChars' => (string) config('zebra.template_max_chars'),
             'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
             'DeletePathProtected' => json_encode(config('devices.delete_path.protected'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),

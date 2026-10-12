@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Devices;
 
 use App\Actions\Printer\QueuePrinterAction;
+use App\Actions\Printer\QueueZebraTemplateCapture;
 use App\DTOs\Printers\PrinterCommands;
 use App\DTOs\Printers\PrintJob;
 use App\Enums\DeviceTab;
@@ -13,6 +14,7 @@ use App\Enums\ScriptPlatform;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\DevicePrinter;
+use App\Models\ZebraTemplate;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,7 +25,8 @@ use Livewire\Component;
 
 /**
  * Every print queue on the PC and its jobs, from the agent's latest snapshot,
- * with the print queue scripts one click away.
+ * with the print queue scripts one click away, plus installing the Zebra
+ * label printer and capturing the Zebra template it restores.
  */
 #[Layout('components.layouts.app')]
 final class Printers extends Component
@@ -81,6 +84,23 @@ final class Printers extends Component
         $this->announceQueued(PrinterAction::RestartSpooler, "On {$this->device->hostname}.");
     }
 
+    public function installZebra(QueuePrinterAction $action): void
+    {
+        $this->authorize('runCommands', $this->device);
+
+        $action(PrinterAction::InstallZebra, $this->device, auth()->user());
+        $this->announceQueued(PrinterAction::InstallZebra, "On {$this->device->hostname}.");
+    }
+
+    public function captureZebraTemplate(int $printerId, QueueZebraTemplateCapture $action): void
+    {
+        $this->authorize('runCommands', $this->device);
+
+        $printer = $this->findPrinter($printerId);
+        $action($printer, auth()->user());
+        $this->announceQueued(PrinterAction::CaptureZebraTemplate, "From {$printer->name} on {$this->device->hostname}.");
+    }
+
     private function runOnPrinter(PrinterAction $printerAction, int $printerId, QueuePrinterAction $action): void
     {
         $this->authorize('runCommands', $this->device);
@@ -115,6 +135,7 @@ final class Printers extends Component
             'isSpoolerDown' => $this->device->spooler_down_since !== null,
             'commands' => new PrinterCommands($isWindows ? $this->inFlightPrinterCommands() : collect()),
             'jobsShown' => config('printers.jobs_shown'),
+            'zebraTemplate' => $isWindows ? ZebraTemplate::current() : null,
         ])->title(DeviceTab::Printers->pageTitle($this->device));
     }
 

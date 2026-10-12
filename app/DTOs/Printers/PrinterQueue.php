@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTOs\Printers;
 
 use App\Enums\PrinterStatusFlag;
+use App\Models\ZebraTemplate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -72,6 +73,15 @@ final readonly class PrinterQueue
     public function connectionForHumans(): string
     {
         return collect([$this->portName, $this->driverName])->filter()->implode(' · ');
+    }
+
+    /**
+     * Whether the queue runs on Zebra's own ZDesigner driver, the only one
+     * whose settings can become the Zebra template.
+     */
+    public function usesZDesignerDriver(): bool
+    {
+        return ZebraTemplate::isZDesignerDriver($this->driverName);
     }
 
     /**

@@ -6,6 +6,8 @@ namespace App\Enums;
 
 /**
  * What the Printers tab can do to a PC's print queues, each a system script.
+ * InstallZebra sets up the label printer on the ZDesigner driver;
+ * CaptureZebraTemplate saves one ZDesigner queue's settings for it to restore.
  */
 enum PrinterAction: string
 {
@@ -13,6 +15,8 @@ enum PrinterAction: string
     case CancelJob = 'cancel-print-job';
     case RestartSpooler = 'restart-print-spooler';
     case PrintTestPage = 'print-test-page';
+    case InstallZebra = 'install-zebra';
+    case CaptureZebraTemplate = 'capture-zebra-template';
 
     public function label(): string
     {
@@ -21,6 +25,8 @@ enum PrinterAction: string
             self::CancelJob => 'Cancel job',
             self::RestartSpooler => 'Restart spooler',
             self::PrintTestPage => 'Print test page',
+            self::InstallZebra => 'Install Zebra',
+            self::CaptureZebraTemplate => 'Use as Zebra template',
         };
     }
 
@@ -31,6 +37,8 @@ enum PrinterAction: string
             self::CancelJob => 'Cancelling the job',
             self::RestartSpooler => 'Restarting the print spooler',
             self::PrintTestPage => 'Test page queued',
+            self::InstallZebra => 'Installing the Zebra',
+            self::CaptureZebraTemplate => 'Capturing the Zebra template',
         };
     }
 }

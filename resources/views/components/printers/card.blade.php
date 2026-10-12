@@ -13,6 +13,13 @@
 
         @can('runCommands', $device)
             <div class="flex flex-wrap items-center gap-2">
+                @if($queue->usesZDesignerDriver())
+                    @if($commands->for(App\Enums\PrinterAction::CaptureZebraTemplate, $printer->name))
+                        <x-device.commands.busy :command="$commands->for(App\Enums\PrinterAction::CaptureZebraTemplate, $printer->name)" variant="ghost" />
+                    @else
+                        <flux:button size="sm" variant="ghost" icon="bookmark" x-on:click="$dispatch('confirm-action', { heading: 'Use as Zebra template', message: {{ Js::from('Save the printer settings of '.$printer->name.' on '.$device->hostname.' (paper size, darkness, speed, media) as the Zebra template? Install Zebra applies them on every PC from then on, replacing the current template.') }}, confirm: 'Use as template', action: () => $wire.captureZebraTemplate({{ $printer->id }}) })" data-capture-zebra-template>Use as Zebra template</flux:button>
+                    @endif
+                @endif
                 <x-device.commands.run-button :command="$commands->for(App\Enums\PrinterAction::PrintTestPage, $printer->name)" action="printTestPage({{ $printer->id }})" icon="document" variant="ghost">Test page</x-device.commands.run-button>
                 @if($commands->for(App\Enums\PrinterAction::ClearQueue, $printer->name))
                     <x-device.commands.busy :command="$commands->for(App\Enums\PrinterAction::ClearQueue, $printer->name)" />
