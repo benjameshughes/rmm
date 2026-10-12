@@ -32,3 +32,12 @@
         <x-inventory.collapsible :table="$software->scheduledTasks()" heading="Scheduled tasks" name="scheduled-tasks" />
     </flux:accordion>
 </flux:card>
+
+<flux:card>
+    <flux:heading size="sm" class="mb-2">Diagnostics</flux:heading>
+    <flux:text size="sm" class="mb-4">What was listening for TCP connections when the inventory ran, and the latest Critical and Error events from the System log.</flux:text>
+    <flux:accordion transition>
+        <x-inventory.collapsible :table="$software->listeningPorts()" heading="Listening ports" name="listening-ports" />
+        <x-inventory.collapsible :table="$software->recentErrors()" heading="Recent system errors" name="recent-errors" />
+    </flux:accordion>
+</flux:card>

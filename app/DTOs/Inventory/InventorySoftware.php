@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\DTOs\Inventory;
 
 /**
- * Updates, the software environment and what third parties added (drivers,
- * startup items, services and scheduled tasks) from one system inventory.
+ * Updates, the software environment, what third parties added (drivers,
+ * startup items, services and scheduled tasks), listening ports and recent
+ * System log errors from one system inventory.
  */
 final class InventorySoftware
 {
@@ -99,6 +100,27 @@ final class InventorySoftware
             'Path' => fn (array $task): ?string => $this->text($task['path'] ?? null),
             'Name' => fn (array $task): ?string => $this->text($task['name'] ?? null),
             'State' => fn (array $task): ?string => $this->text($task['state'] ?? null),
+        ]);
+    }
+
+    public function listeningPorts(): InventoryTable
+    {
+        return $this->table('listening_ports', [
+            'Port' => fn (array $listener): ?string => $this->text($listener['port'] ?? null),
+            'Address' => fn (array $listener): ?string => $this->text($listener['address'] ?? null),
+            'Process' => fn (array $listener): ?string => $this->text($listener['process_name'] ?? null),
+            'PID' => fn (array $listener): ?string => $this->text($listener['process_id'] ?? null),
+        ]);
+    }
+
+    public function recentErrors(): InventoryTable
+    {
+        return $this->table('recent_errors', [
+            'Time' => fn (array $event): ?string => $this->dateTime($event['time'] ?? null),
+            'Level' => fn (array $event): ?string => $this->text($event['level'] ?? null),
+            'Source' => fn (array $event): ?string => $this->text($event['provider'] ?? null),
+            'Event ID' => fn (array $event): ?string => $this->text($event['event_id'] ?? null),
+            'Message' => fn (array $event): ?string => $this->text($event['message'] ?? null),
         ]);
     }
 }

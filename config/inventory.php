@@ -33,6 +33,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Device Problems
+    |--------------------------------------------------------------------------
+    |
+    | Windows gives every device that is not working a problem code. This one
+    | means somebody disabled the device, so it shows amber where the rest
+    | show red.
+    |
+    */
+
+    'device_disabled_problem_code' => 22,
+
+    /*
+    |--------------------------------------------------------------------------
     | Pages
     |--------------------------------------------------------------------------
     */

@@ -74,6 +74,61 @@ it('colours security settings by how safe they are', function (): void {
         ]);
 });
 
+it('shows each adapter with its address, gateway and DNS servers', function (): void {
+    inventoried($this->device);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Up · 1 Gbps', '192.168.10.57/24 · DHCP', '192.168.10.1', '192.168.10.1, 1.1.1.1'])
+        ->assertSeeInOrder(['Intel(R) Iris(R) Xe Graphics', '1920x1080', 'OK']);
+});
+
+it('shows static addressing and leaves the network settings blank for an adapter read through the CIM fallback', function (): void {
+    inventoried($this->device, ['data' => ['network_adapters' => [
+        ['name' => 'Ethernet', 'ipv4_addresses' => ['10.0.0.5/24', '10.0.0.6/24'], 'default_gateway' => '10.0.0.1', 'dns_servers' => ['10.0.0.1'], 'is_dhcp' => false],
+        ['name' => 'Ethernet 2', 'ipv4_addresses' => null, 'default_gateway' => null, 'dns_servers' => null, 'is_dhcp' => null],
+    ]]]);
+
+    $adapters = $this->device->fresh()->latestInventory->snapshot()->hardware()->networkAdapters();
+
+    expect($adapters->columns)->toBe(['Name', 'Description', 'MAC', 'Link', 'IPv4', 'Gateway', 'DNS', 'Driver'])
+        ->and($adapters->rows)->toBe([
+            ['Ethernet', null, null, null, '10.0.0.5/24, 10.0.0.6/24 · Static', '10.0.0.1', '10.0.0.1', null],
+            ['Ethernet 2', null, null, null, null, null, null, null],
+        ]);
+});
+
+it('makes devices Windows says are not working stand out, amber when only disabled', function (): void {
+    inventoried($this->device);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Device problems', 'Realtek USB Audio · MEDIA', 'Cannot start · Code 10 · Error']);
+
+    expect($this->device->fresh()->latestInventory->snapshot()->hardware()->deviceProblems()->mapWithKeys(fn ($check) => [$check->value => $check->color])->all())->toBe([
+        'Disabled · Code 22 · Error' => 'amber',
+        'Cannot start · Code 10 · Error' => 'red',
+    ]);
+});
+
+it('says so plainly when no device has a problem', function (): void {
+    inventoried($this->device, ['data' => ['device_problems' => []]]);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Device problems', 'Present devices', 'No problems']);
+
+    expect($this->device->fresh()->latestInventory->snapshot()->hardware()->deviceProblems()->sole()->color)->toBe('green');
+});
+
+it('lists the listening ports and the recent system errors in London time', function (): void {
+    inventoried($this->device, ['data' => [
+        'listening_ports' => [['address' => '0.0.0.0', 'port' => 445, 'process_id' => 4, 'process_name' => 'System']],
+        'recent_errors' => [['time' => '2026-10-05T08:02:11.0000000Z', 'provider' => 'Service Control Manager', 'event_id' => 7031, 'level' => 'Error', 'message' => 'The Dell TechHub service terminated unexpectedly.']],
+    ]]);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Listening ports (1)', '445', '0.0.0.0', 'System', '4'])
+        ->assertSeeInOrder(['Recent system errors (1)', '5 Oct 2026, 09:02', 'Error', 'Service Control Manager', '7031', 'The Dell TechHub service terminated unexpectedly.']);
+});
+
 it('copes with an inventory where most sections are missing', function (): void {
     inventoried($this->device, ['data' => ['windows' => ['caption' => 'Microsoft Windows 10 Pro'], 'security' => ['bitlocker' => 'garbage']]]);
 
@@ -81,7 +136,11 @@ it('copes with an inventory where most sections are missing', function (): void 
         ->assertSee('Microsoft Windows 10 Pro')
         ->assertSee('BitLocker is not available on this edition of Windows.')
         ->assertSee('The Administrators group could not be read.')
-        ->assertSee('No battery.');
+        ->assertSee('No battery.')
+        ->assertSee('Not reported. Run the inventory again to check.')
+        ->assertDontSee('No problems')
+        ->assertSee('Listening ports (0)')
+        ->assertSee('Recent system errors (0)');
 });
 
 it('explains the missing inventory and runs it on request', function (): void {

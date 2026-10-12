@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\DTOs\Inventory;
 
+use Illuminate\Support\Collection;
+
 /**
- * Memory, storage, displays, printers, adapters, peripherals and battery from one system inventory.
+ * Memory, storage, displays, printers, adapters, peripherals, device problems and battery from one system inventory.
  */
 final class InventoryHardware
 {
@@ -102,6 +104,7 @@ final class InventoryHardware
             'Name' => fn (array $gpu): ?string => $this->text($gpu['name'] ?? null),
             'Driver' => fn (array $gpu): ?string => $this->joined(' · ', $this->text($gpu['driver_version'] ?? null), $this->date($gpu['driver_date'] ?? null)),
             'Resolution' => fn (array $gpu): ?string => $this->text($gpu['resolution'] ?? null),
+            'Status' => fn (array $gpu): ?string => $this->text($gpu['status'] ?? null),
         ]);
     }
 
@@ -134,6 +137,13 @@ final class InventoryHardware
             'Description' => fn (array $adapter): ?string => $this->text($adapter['description'] ?? null),
             'MAC' => fn (array $adapter): ?string => $this->text($adapter['mac_address'] ?? null),
             'Link' => fn (array $adapter): ?string => $this->joined(' · ', $this->text($adapter['status'] ?? null), $this->text($adapter['link_speed'] ?? null)),
+            'IPv4' => fn (array $adapter): ?string => $this->joined(' · ', $this->listed($adapter['ipv4_addresses'] ?? null), match ($adapter['is_dhcp'] ?? null) {
+                true => 'DHCP',
+                false => 'Static',
+                default => null,
+            }),
+            'Gateway' => fn (array $adapter): ?string => $this->text($adapter['default_gateway'] ?? null),
+            'DNS' => fn (array $adapter): ?string => $this->listed($adapter['dns_servers'] ?? null),
             'Driver' => fn (array $adapter): ?string => $this->joined(' · ', $this->text($adapter['driver_provider'] ?? null), $this->text($adapter['driver_version'] ?? null), $this->text($adapter['driver_date'] ?? null)),
         ]);
     }
@@ -162,6 +172,31 @@ final class InventoryHardware
     }
 
     /**
+     * One red badge per device Windows says is not working, amber when it was only disabled.
+     * A single green badge when there are none, and nothing when the inventory predates the check.
+     *
+     * @return Collection<int, InventoryCheck>
+     */
+    public function deviceProblems(): Collection
+    {
+        if (! is_array($this->data['device_problems'] ?? null)) {
+            return collect();
+        }
+
+        $problems = $this->rows('device_problems')->map(function (array $device): InventoryCheck {
+            $code = $this->text($device['problem_code'] ?? null);
+
+            return new InventoryCheck(
+                $this->joined(' · ', $this->text($device['name'] ?? null) ?? 'Unknown device', $this->text($device['class'] ?? null)),
+                $this->joined(' · ', $this->text($device['problem'] ?? null), $code === null ? null : "Code {$code}", $this->text($device['status'] ?? null)) ?? 'Problem',
+                ($device['problem_code'] ?? null) === config('inventory.device_disabled_problem_code') ? 'amber' : 'red',
+            );
+        });
+
+        return $problems->isEmpty() ? collect([new InventoryCheck('Present devices', 'No problems', 'green')]) : $problems;
+    }
+
+    /**
      * @return array<string, string>
      */
     public function battery(): array
@@ -179,5 +214,17 @@ final class InventoryHardware
             'Charge' => $charge === null ? null : "{$charge}%",
             'Health' => $this->joined(' · ', $health === null ? null : "{$health}% of design capacity", $capacities),
         ]);
+    }
+
+    /**
+     * A list of plain values as one comma-separated cell, tolerating a lone value where a list was expected.
+     */
+    private function listed(mixed $value): ?string
+    {
+        return $this->joined(', ', ...collect(is_array($value) ? $value : [$value])
+            ->map(fn (mixed $item): ?string => $this->text($item))
+            ->filter()
+            ->values()
+            ->all());
     }
 }

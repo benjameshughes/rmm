@@ -25,7 +25,7 @@
         {"drive": "C:", "label": "OS", "file_system": "NTFS", "size_gb": 475.7, "free_gb": 301.2}
     ],
     "gpus": [
-        {"name": "Intel(R) Iris(R) Xe Graphics", "driver_version": "31.0.101.4502", "driver_date": "2023-06-20T01:00:00.0000000+01:00", "resolution": "1920x1080"}
+        {"name": "Intel(R) Iris(R) Xe Graphics", "driver_version": "31.0.101.4502", "driver_date": "2023-06-20T01:00:00.0000000+01:00", "resolution": "1920x1080", "status": "OK"}
     ],
     "monitors": [
         {"manufacturer": "DEL", "name": "DELL P2422H", "product_code": "A0C4", "serial": "CN0V1RXJ-FCC00-2BJ-3T1L", "year": 2022, "week": 18},
@@ -43,9 +43,13 @@
         "keyboards": [{"name": "Standard PS/2 Keyboard", "manufacturer": null}],
         "pointing_devices": [{"name": "HID-compliant mouse", "manufacturer": "Microsoft"}]
     },
+    "device_problems": [
+        {"class": "Bluetooth", "name": "Intel(R) Wireless Bluetooth(R)", "status": "Error", "problem_code": 22, "problem": "Disabled"},
+        {"class": "MEDIA", "name": "Realtek USB Audio", "status": "Error", "problem_code": 10, "problem": "Cannot start"}
+    ],
     "network_adapters": [
-        {"name": "Ethernet", "description": "Intel(R) Ethernet Connection (16) I219-LM", "mac_address": "A4-BB-6D-12-34-56", "link_speed": "1 Gbps", "status": "Up", "driver_version": "12.19.2.45", "driver_date": "2023-03-14", "driver_provider": "Intel"},
-        {"name": "Wi-Fi", "description": "Intel(R) Wi-Fi 6E AX211 160MHz", "mac_address": "D4-54-8B-AB-CD-EF", "link_speed": "0 bps", "status": "Disconnected", "driver_version": "23.40.0.4", "driver_date": "2024-02-01", "driver_provider": "Intel"}
+        {"name": "Ethernet", "description": "Intel(R) Ethernet Connection (16) I219-LM", "mac_address": "A4-BB-6D-12-34-56", "link_speed": "1 Gbps", "status": "Up", "driver_version": "12.19.2.45", "driver_date": "2023-03-14", "driver_provider": "Intel", "ipv4_addresses": ["192.168.10.57/24"], "default_gateway": "192.168.10.1", "dns_servers": ["192.168.10.1", "1.1.1.1"], "is_dhcp": true},
+        {"name": "Wi-Fi", "description": "Intel(R) Wi-Fi 6E AX211 160MHz", "mac_address": "D4-54-8B-AB-CD-EF", "link_speed": "0 bps", "status": "Disconnected", "driver_version": "23.40.0.4", "driver_date": "2024-02-01", "driver_provider": "Intel", "ipv4_addresses": [], "default_gateway": null, "dns_servers": [], "is_dhcp": true}
     ],
     "battery": {"name": "DELL M033W33", "charge_percent": 87, "design_capacity_mwh": 54000, "full_charge_capacity_mwh": 47520, "health_percent": 88},
     "windows": {
@@ -114,6 +118,15 @@
     "drivers": [
         {"device_name": "Intel(R) Iris(R) Xe Graphics", "provider": "Intel Corporation", "version": "31.0.101.4502", "date": "2023-06-20T01:00:00.0000000+01:00", "is_signed": true},
         {"device_name": "Realtek Audio", "provider": "Realtek Semiconductor Corp.", "version": "6.0.9549.1", "date": "2023-08-01T01:00:00.0000000+01:00", "is_signed": true}
+    ],
+    "listening_ports": [
+        {"address": "0.0.0.0", "port": 135, "process_id": 1124, "process_name": "svchost"},
+        {"address": "0.0.0.0", "port": 445, "process_id": 4, "process_name": "System"},
+        {"address": "127.0.0.1", "port": 19999, "process_id": 5120, "process_name": "netdata"}
+    ],
+    "recent_errors": [
+        {"time": "2026-10-05T08:02:11.0000000+01:00", "provider": "Service Control Manager", "event_id": 7031, "level": "Error", "message": "The Dell TechHub service terminated unexpectedly."},
+        {"time": "2026-10-03T17:40:55.0000000+01:00", "provider": "Microsoft-Windows-Kernel-Power", "event_id": 41, "level": "Critical", "message": "The system has rebooted without cleanly shutting down first."}
     ],
     "startup": [
         {"name": "Teams", "command": "\"C:\\Users\\sarah\\AppData\\Local\\Microsoft\\Teams\\Update.exe\" --processStart \"Teams.exe\"", "location": "HKU\\S-1-5-21-1\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", "user": "OFFICE-PC\\sarah"}

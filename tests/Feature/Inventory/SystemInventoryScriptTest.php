@@ -42,9 +42,13 @@ it('prints one compact JSON line with every agreed section and flags total failu
         ->toContain('MSFT_PhysicalDisk')
         ->toContain('WmiMonitorID')
         ->toContain('Win32_EncryptableVolume')
+        ->toContain("'ConfigManagerErrorCode <> 0 AND ConfigManagerErrorCode <> 45'")
+        ->toContain('Get-NetTCPConnection -State Listen')
+        ->toContain("LogName = 'System'; Level = @(1, 2)")
+        ->toContain('-MaxEvents $maxRecentErrors -ErrorAction SilentlyContinue')
         ->not->toContain('catch');
 
-    collect(['system', 'cpu', 'memory', 'disks', 'volumes', 'gpus', 'monitors', 'printers', 'usb_devices', 'input_devices', 'network_adapters', 'battery', 'windows', 'security', 'users', 'updates', 'software_environment', 'drivers', 'startup', 'services_non_microsoft', 'scheduled_tasks_non_microsoft', 'collected_at'])
+    collect(['system', 'cpu', 'memory', 'disks', 'volumes', 'gpus', 'monitors', 'printers', 'usb_devices', 'input_devices', 'device_problems', 'network_adapters', 'battery', 'windows', 'security', 'users', 'updates', 'software_environment', 'drivers', 'startup', 'services_non_microsoft', 'scheduled_tasks_non_microsoft', 'listening_ports', 'recent_errors', 'collected_at'])
         ->each(fn (string $section) => expect(systemInventoryScript())->toContain("    {$section} = "));
 });
 

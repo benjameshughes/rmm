@@ -1,6 +1,7 @@
 # Read-only deep inventory of the PC: hardware, Windows, security, users,
-# updates and what third parties have added (drivers, startup items, services,
-# scheduled tasks). Prints ONE line of compact JSON for the server to store.
+# updates, what third parties have added (drivers, startup items, services,
+# scheduled tasks), listening ports and recent System log errors. Prints ONE
+# line of compact JSON for the server to store.
 #
 # Runs as SYSTEM under Windows PowerShell 5.1 and never changes anything. Every
 # section reads with errors silenced and null checks, so a class missing on
@@ -22,6 +23,11 @@ $maxStartup = 100
 $maxServices = 200
 $maxTasks = 200
 $maxUsbDevices = 100
+$maxDeviceProblems = 100
+$maxListeningPorts = 200
+$maxRecentErrors = 25
+$maxErrorMessageLength = 200
+$recentErrorDays = 3
 
 $windowsApplicationId = '55c92734-d682-4d71-983e-d6ec3f16059f'
 $administratorsSid = 'S-1-5-32-544'
@@ -35,6 +41,8 @@ $licenseStatuses = @{ 0 = 'Unlicensed'; 1 = 'Licensed'; 2 = 'Out-of-box grace'; 
 $protectionStatuses = @{ 0 = 'Off'; 1 = 'On'; 2 = 'Unknown' }
 $conversionStatuses = @{ 0 = 'Fully decrypted'; 1 = 'Fully encrypted'; 2 = 'Encryption in progress'; 3 = 'Decryption in progress'; 4 = 'Encryption paused'; 5 = 'Decryption paused' }
 $vbsStatuses = @{ 0 = 'Off'; 1 = 'Configured, not running'; 2 = 'Running' }
+$deviceProblemCodes = @{ 1 = 'Not configured correctly'; 3 = 'Driver may be corrupted'; 10 = 'Cannot start'; 12 = 'Not enough free resources'; 14 = 'Needs the PC rebooted'; 18 = 'Drivers need reinstalling'; 22 = 'Disabled'; 24 = 'Not present or not working'; 28 = 'Drivers not installed'; 31 = 'Not working properly'; 39 = 'Driver cannot be loaded'; 43 = 'Reported a problem'; 52 = 'Driver signature not verified' }
+$eventLevels = @{ 1 = 'Critical'; 2 = 'Error' }
 
 function Get-Text($value) {
     if ($null -eq $value) { return $null }
@@ -51,6 +59,14 @@ function Get-Coalesced($first, $second) {
 function Format-Date($value) {
     if ($value -is [DateTime]) { return $value.ToString('o') }
     return $null
+}
+
+function Get-FirstLine($value, $maxLength) {
+    $text = Get-Text $value
+    if ($null -eq $text) { return $null }
+    $line = ($text -split "`r?`n")[0].Trim()
+    if ($line.Length -gt $maxLength) { return $line.Substring(0, $maxLength - 3) + '...' }
+    return $line
 }
 
 function Get-Gigabytes($bytes) {
@@ -225,6 +241,7 @@ $gpus = @(Get-CimInstance -ClassName Win32_VideoController -ErrorAction Silently
         driver_version = Get-Text $_.DriverVersion
         driver_date = Format-Date $_.DriverDate
         resolution = $resolution
+        status = Get-Text $_.Status
     }
 })
 
@@ -280,17 +297,44 @@ $inputDevices = [ordered]@{
     pointing_devices = $pointingDevices
 }
 
+# Devices Windows says are not working. Code 45 is a device that is not plugged
+# in, which is no fault, so it is left out along with anything not present.
+$deviceProblems = @(Get-CimInstance -ClassName Win32_PnPEntity -Filter 'ConfigManagerErrorCode <> 0 AND ConfigManagerErrorCode <> 45' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Present -ne $false } |
+    Sort-Object -Property PNPClass, Name |
+    Select-Object -First $maxDeviceProblems |
+    ForEach-Object {
+        [ordered]@{
+            class = Get-Text $_.PNPClass
+            name = Get-Coalesced (Get-Text $_.Name) (Get-Text $_.PNPDeviceID)
+            status = Get-Text $_.Status
+            problem_code = [int]$_.ConfigManagerErrorCode
+            problem = $deviceProblemCodes[[int]$_.ConfigManagerErrorCode]
+        }
+    })
+
 # Network adapters
 $networkAdapters = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object {
+    $adapter = $_
+    $ipInterface = Get-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1
+    $defaultRoute = Get-NetRoute -InterfaceIndex $adapter.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object -Property RouteMetric | Select-Object -First 1
     [ordered]@{
-        name = Get-Text $_.Name
-        description = Get-Text $_.InterfaceDescription
-        mac_address = Get-Text $_.MacAddress
-        link_speed = Get-Text $_.LinkSpeed
-        status = Get-Text $_.Status
-        driver_version = Get-Text $_.DriverVersionString
-        driver_date = Get-Text $_.DriverDate
-        driver_provider = Get-Text $_.DriverProvider
+        name = Get-Text $adapter.Name
+        description = Get-Text $adapter.InterfaceDescription
+        mac_address = Get-Text $adapter.MacAddress
+        link_speed = Get-Text $adapter.LinkSpeed
+        status = Get-Text $adapter.Status
+        driver_version = Get-Text $adapter.DriverVersionString
+        driver_date = Get-Text $adapter.DriverDate
+        driver_provider = Get-Text $adapter.DriverProvider
+        ipv4_addresses = @(Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { [string]$_.AddressState -eq 'Preferred' } |
+            ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)" })
+        default_gateway = Get-Text $defaultRoute.NextHop
+        dns_servers = @((Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses |
+            ForEach-Object { Get-Text $_ } |
+            Where-Object { $_ })
+        is_dhcp = $(if ($null -eq $ipInterface) { $null } else { [string]$ipInterface.Dhcp -eq 'Enabled' })
     }
 })
 
@@ -305,6 +349,10 @@ if ($networkAdapters.Count -eq 0) {
             driver_version = $null
             driver_date = $null
             driver_provider = Get-Text $_.Manufacturer
+            ipv4_addresses = $null
+            default_gateway = $null
+            dns_servers = $null
+            is_dhcp = $null
         }
     })
 }
@@ -606,6 +654,36 @@ $scheduledTasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
         }
     })
 
+# Listening TCP ports and who owns them
+$processNames = @{}
+Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $processNames[[int]$_.Id] = $_.ProcessName }
+
+$listeningPorts = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+    Sort-Object -Property LocalPort, LocalAddress, OwningProcess -Unique |
+    Select-Object -First $maxListeningPorts |
+    ForEach-Object {
+        [ordered]@{
+            address = Get-Text $_.LocalAddress
+            port = [int]$_.LocalPort
+            process_id = [int]$_.OwningProcess
+            process_name = Get-Text $processNames[[int]$_.OwningProcess]
+        }
+    })
+
+# Recent Critical and Error events from the System log, newest first.
+# Get-WinEvent raises an error when nothing matches, which is silenced here.
+$recentErrorFilter = @{ LogName = 'System'; Level = @(1, 2); StartTime = (Get-Date).AddDays(-$recentErrorDays) }
+$recentErrors = @(Get-WinEvent -FilterHashtable $recentErrorFilter -MaxEvents $maxRecentErrors -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        [ordered]@{
+            time = Format-Date $_.TimeCreated
+            provider = Get-Text $_.ProviderName
+            event_id = $_.Id
+            level = Get-Label $eventLevels $_.Level
+            message = Get-FirstLine $_.Message $maxErrorMessageLength
+        }
+    })
+
 $inventory = [ordered]@{
     system = $system
     cpu = $cpu
@@ -617,6 +695,7 @@ $inventory = [ordered]@{
     printers = $printers
     usb_devices = $usbDevices
     input_devices = $inputDevices
+    device_problems = $deviceProblems
     network_adapters = $networkAdapters
     battery = $battery
     windows = $windows
@@ -628,6 +707,8 @@ $inventory = [ordered]@{
     startup = $startup
     services_non_microsoft = $services
     scheduled_tasks_non_microsoft = $scheduledTasks
+    listening_ports = $listeningPorts
+    recent_errors = $recentErrors
     collected_at = (Get-Date).ToString('o')
 }
 

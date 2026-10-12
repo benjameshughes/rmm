@@ -3,6 +3,10 @@
 <x-dashboard.section title="Hardware" :description="$hardware->memorySummary()">
     <div class="space-y-6">
         <div class="space-y-2">
+            <flux:heading size="sm">Device problems</flux:heading>
+            <x-inventory.checks :checks="$hardware->deviceProblems()" empty="Not reported. Run the inventory again to check." />
+        </div>
+        <div class="space-y-2">
             <flux:heading size="sm">Memory</flux:heading>
             <x-inventory.table :table="$hardware->memoryModules()" name="memory" />
         </div>
