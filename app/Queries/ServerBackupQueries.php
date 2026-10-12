@@ -49,7 +49,7 @@ final class ServerBackupQueries
 
         return $jobs->mapWithKeys(function (ServerBackupJob $job) use ($buckets, $startsAt, $bucketSeconds): array {
             $rows = collect($buckets->get($job->id, []))->map(fn (object $bucket): array => [
-                'time' => $startsAt->copy()->addSeconds((int) $bucket->bucket * $bucketSeconds)->utc()->format('Y-m-d\TH:i:s\Z'),
+                'time' => $startsAt->copy()->addSeconds((int) $bucket->bucket * $bucketSeconds)->toChartTime(),
                 'size' => $bucket->size === null ? null : (float) $bucket->size,
                 'added' => $bucket->added === null ? null : (float) $bucket->added,
             ]);
