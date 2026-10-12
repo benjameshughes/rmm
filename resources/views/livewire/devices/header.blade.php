@@ -1,73 +1,75 @@
-<div class="flex flex-wrap items-start justify-between gap-4">
-    <div class="min-w-0 space-y-2">
-        <div class="flex flex-wrap items-center gap-3">
-            <flux:heading size="xl" level="1" class="truncate">{{ $device->hostname }}</flux:heading>
-            <x-device.status-badge :label="$statusLabel" :color="$statusColor" size="lg" />
-            <x-device.monitor-only-badge :device="$device" />
-            <x-device.virtual-printer-badge :device="$device" />
-            <x-device.printer-badge :label="$printerProblem" />
-        </div>
+<div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0 space-y-2">
+            <div class="flex flex-wrap items-center gap-3">
+                <flux:heading size="xl" level="1" class="truncate">{{ $device->hostname }}</flux:heading>
+                <x-device.status-badge :label="$statusLabel" :color="$statusColor" size="lg" />
+                <x-device.monitor-only-badge :device="$device" />
+                <x-device.virtual-printer-badge :device="$device" />
+                <x-device.printer-badge :label="$printerProblem" />
+            </div>
 
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
-            <span>{{ $device->lastSeenForHumans() }}</span>
-            @if($device->last_ip)
-                <span class="font-mono">{{ $device->last_ip }}</span>
-            @endif
-            @if($operatingSystem)
-                <span>{{ $operatingSystem }}</span>
-            @endif
-            @if($device->agent_version)
-                <span>Agent {{ $device->agent_version }}</span>
-            @endif
-            <x-device.agent-update-badge :device="$device" :latest-version="$latestAgentVersion" />
-        </div>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-2">
-        @can('wake', $device)
-            @if($device->isWakeable)
-                <flux:button wire:click="wake" icon="sun">Wake</flux:button>
-            @endif
-        @endcan
-
-        @can('runAdHocCommand', $device)
-            <flux:button.group>
-                @if($adHocCommand)
-                    <x-device.commands.busy :command="$adHocCommand" variant="primary" size="base" label="Running command..." data-run-command-busy />
-                @else
-                    <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary" data-run-command>Run Command</flux:button>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                <span>{{ $device->lastSeenForHumans() }}</span>
+                @if($device->last_ip)
+                    <span class="font-mono">{{ $device->last_ip }}</span>
                 @endif
+                @if($operatingSystem)
+                    <span>{{ $operatingSystem }}</span>
+                @endif
+                @if($device->agent_version)
+                    <span>Agent {{ $device->agent_version }}</span>
+                @endif
+                <x-device.agent-update-badge :device="$device" :latest-version="$latestAgentVersion" />
+            </div>
+        </div>
 
-                @can('deletePaths', $device)
-                    <flux:dropdown position="bottom" align="end">
-                        <flux:button icon="chevron-down" variant="primary" aria-label="More commands" />
+        <div class="flex flex-wrap items-center gap-2">
+            @can('wake', $device)
+                @if($device->isWakeable)
+                    <flux:button wire:click="wake" icon="sun">Wake</flux:button>
+                @endif
+            @endcan
 
-                        <flux:menu>
-                            <flux:menu.item wire:click="$dispatch('delete-path')" icon="trash" variant="danger" data-delete-path-entry>Delete path...</flux:menu.item>
-                        </flux:menu>
-                    </flux:dropdown>
-                @endcan
-            </flux:button.group>
-        @endcan
+            @can('runAdHocCommand', $device)
+                <flux:button.group>
+                    @if($adHocCommand)
+                        <x-device.commands.busy :command="$adHocCommand" variant="primary" size="base" label="Running command..." data-run-command-busy />
+                    @else
+                        <flux:button wire:click="$set('showCommandModal', true)" icon="command-line" variant="primary" data-run-command>Run Command</flux:button>
+                    @endif
 
-        @can('runCommands', $device)
-            <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">Run Script</flux:button>
+                    @can('deletePaths', $device)
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button icon="chevron-down" variant="primary" aria-label="More commands" />
 
-            <flux:dropdown position="bottom" align="end">
-                <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
+                            <flux:menu>
+                                <flux:menu.item wire:click="$dispatch('delete-path')" icon="trash" variant="danger" data-delete-path-entry>Delete path...</flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
+                    @endcan
+                </flux:button.group>
+            @endcan
 
-                <flux:menu>
-                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Restart device', message: {{ Js::from('Are you sure you want to restart '.$device->hostname.'?') }}, confirm: 'Restart', action: () => $wire.restart() })" icon="arrow-path">Restart</flux:menu.item>
-                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Power off device', message: {{ Js::from('Are you sure you want to power off '.$device->hostname.'?') }}, confirm: 'Power off', danger: true, action: () => $wire.powerOff() })" icon="power" variant="danger">Power Off</flux:menu.item>
-                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Log off user', message: {{ Js::from('Log the signed-in user off '.$device->hostname.'? Unsaved work is lost.') }}, confirm: 'Log off', action: () => $wire.logOff() })" icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
+            @can('runCommands', $device)
+                <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">Run Script</flux:button>
 
-                    <flux:menu.separator />
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
 
-                    <flux:menu.item wire:click="checkForUpdates" icon="arrow-down-tray">Check for Updates</flux:menu.item>
-                    <flux:menu.item wire:click="updateAgent" icon="arrow-up-circle">Update Agent</flux:menu.item>
-                </flux:menu>
-            </flux:dropdown>
-        @endcan
+                    <flux:menu>
+                        <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Restart device', message: {{ Js::from('Are you sure you want to restart '.$device->hostname.'?') }}, confirm: 'Restart', action: () => $wire.restart() })" icon="arrow-path">Restart</flux:menu.item>
+                        <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Power off device', message: {{ Js::from('Are you sure you want to power off '.$device->hostname.'?') }}, confirm: 'Power off', danger: true, action: () => $wire.powerOff() })" icon="power" variant="danger">Power Off</flux:menu.item>
+                        <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Log off user', message: {{ Js::from('Log the signed-in user off '.$device->hostname.'? Unsaved work is lost.') }}, confirm: 'Log off', action: () => $wire.logOff() })" icon="arrow-right-start-on-rectangle">Log Off</flux:menu.item>
+
+                        <flux:menu.separator />
+
+                        <flux:menu.item wire:click="checkForUpdates" icon="arrow-down-tray">Check for Updates</flux:menu.item>
+                        <flux:menu.item wire:click="updateAgent" icon="arrow-up-circle">Update Agent</flux:menu.item>
+                    </flux:menu>
+                </flux:dropdown>
+            @endcan
+        </div>
     </div>
 
     <flux:modal wire:model="showScriptModal" class="md:w-96">
