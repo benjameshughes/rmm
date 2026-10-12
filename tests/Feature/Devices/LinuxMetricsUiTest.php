@@ -152,7 +152,7 @@ describe('metrics tab', function (): void {
             ]);
 
         expect(app(DeviceMetricQueries::class)->diskThroughput($device, MetricRange::OneDay)->sole())->toBe([
-            'time' => '2026-10-03T11:50:00Z',
+            'time' => '2026-10-03T12:50:00Z',
             'read' => 120.0,
             'write' => 50.0,
         ]);

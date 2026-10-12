@@ -27,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         Carbon::macro('inDisplayTimezone', fn (): Carbon => $this->copy()->setTimezone(config('app.display_timezone')));
+
+        /**
+         * Flux charts always label times as UTC, so the display timezone's wall clock is sent dressed up as UTC.
+         */
+        Carbon::macro('toChartTime', fn (): string => $this->inDisplayTimezone()->format('Y-m-d\TH:i:s\Z'));
     }
 
     /**

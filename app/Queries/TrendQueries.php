@@ -82,7 +82,7 @@ final class TrendQueries
 
         return collect(range(0, $bucketCount - 1))
             ->map(fn (int $bucket): array => [
-                'time' => $window->currentStartsAt->copy()->addSeconds($bucket * $window->period->bucketSeconds())->utc()->format('Y-m-d\TH:i:s\Z'),
+                'time' => $window->currentStartsAt->copy()->addSeconds($bucket * $window->period->bucketSeconds())->toChartTime(),
                 'ram' => $this->rounded($buckets->get($bucket + $bucketCount)?->ram),
                 'previousRam' => $this->rounded($buckets->get($bucket)?->ram),
                 'cpu' => $this->rounded($buckets->get($bucket + $bucketCount)?->cpu),

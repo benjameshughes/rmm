@@ -213,9 +213,9 @@ it('overlays the previous period on the latest in buckets sized by the period', 
     $series = app(App\Queries\TrendQueries::class)->fleetSeries(TrendWindow::endingAt(TrendPeriod::Day, now()), [$device->id]);
 
     expect($series)->toHaveCount(96)
-        ->and($series->first())->toBe(['time' => '2026-10-06T12:00:00Z', 'ram' => null, 'previousRam' => null, 'cpu' => null, 'previousCpu' => null])
-        ->and($series->firstWhere('time', '2026-10-07T11:00:00Z'))->toMatchArray(['ram' => 30.5, 'previousRam' => 45.0])
-        ->and($series->last()['time'])->toBe('2026-10-07T11:45:00Z');
+        ->and($series->first())->toBe(['time' => '2026-10-06T13:00:00Z', 'ram' => null, 'previousRam' => null, 'cpu' => null, 'previousCpu' => null])
+        ->and($series->firstWhere('time', '2026-10-07T12:00:00Z'))->toMatchArray(['ram' => 30.5, 'previousRam' => 45.0])
+        ->and($series->last()['time'])->toBe('2026-10-07T12:45:00Z');
 });
 
 it('caches the comparison briefly', function (): void {

@@ -36,9 +36,9 @@ it('averages reports into buckets sized by the range and leaves empty buckets ou
 
     expect($rows->pluck('cpu', 'time')->all())->toBe($expected);
 })->with([
-    'last hour in minutes' => [MetricRange::OneHour, [['11:51:10', 10.0], ['11:51:50', 30.0], ['11:58:00', 50.0], ['10:30:00', 99.0]], ['2026-10-03T11:51:00Z' => 20.0, '2026-10-03T11:58:00Z' => 50.0]],
-    'last day in ten minutes' => [MetricRange::OneDay, [['11:51:00', 10.0], ['11:58:00', 30.0], ['11:31:00', 50.0], ['2026-10-02 11:00:00', 99.0]], ['2026-10-03T11:30:00Z' => 50.0, '2026-10-03T11:50:00Z' => 20.0]],
-    'last week in hours' => [MetricRange::OneWeek, [['2026-09-30 08:05:00', 10.0], ['2026-09-30 08:55:00', 20.0], ['2026-09-20 08:00:00', 99.0]], ['2026-09-30T08:00:00Z' => 15.0]],
+    'last hour in minutes' => [MetricRange::OneHour, [['11:51:10', 10.0], ['11:51:50', 30.0], ['11:58:00', 50.0], ['10:30:00', 99.0]], ['2026-10-03T12:51:00Z' => 20.0, '2026-10-03T12:58:00Z' => 50.0]],
+    'last day in ten minutes' => [MetricRange::OneDay, [['11:51:00', 10.0], ['11:58:00', 30.0], ['11:31:00', 50.0], ['2026-10-02 11:00:00', 99.0]], ['2026-10-03T12:30:00Z' => 50.0, '2026-10-03T12:50:00Z' => 20.0]],
+    'last week in hours' => [MetricRange::OneWeek, [['2026-09-30 08:05:00', 10.0], ['2026-09-30 08:55:00', 20.0], ['2026-09-20 08:00:00', 99.0]], ['2026-09-30T09:00:00Z' => 15.0]],
 ]);
 
 it('only charts the device asked for', function (): void {
@@ -71,7 +71,7 @@ it('sums network throughput across adapters and averages it per report', functio
     ]);
 
     expect(app(DeviceMetricQueries::class)->network($this->device, MetricRange::OneDay)->sole())->toBe([
-        'time' => '2026-10-03T11:50:00Z',
+        'time' => '2026-10-03T12:50:00Z',
         'received' => 200.0,
         'sent' => 20.0,
     ]);
@@ -108,7 +108,7 @@ it('reads bucket sizes from config', function (): void {
     reportAt('11:55:00', ['cpu' => 30.0]);
 
     expect(app(DeviceMetricQueries::class)->performance($this->device, MetricRange::OneDay)->pluck('cpu', 'time')->all())
-        ->toBe(['2026-10-03T11:00:00Z' => 20.0]);
+        ->toBe(['2026-10-03T12:00:00Z' => 20.0]);
 });
 
 describe('metrics tab', function (): void {
@@ -141,8 +141,8 @@ describe('metrics tab', function (): void {
             ->assertSee('Not enough reports in this range to draw a chart yet.')
             ->set('range', '1h')
             ->assertSee('Last hour')
-            ->assertSeeHtml('2026-10-03T11:51:00Z')
-            ->assertSeeHtml('2026-10-03T11:58:00Z');
+            ->assertSeeHtml('2026-10-03T12:51:00Z')
+            ->assertSeeHtml('2026-10-03T12:58:00Z');
     });
 
     it('falls back to the default range for a hand-edited query string', function (): void {

@@ -2,7 +2,7 @@
 
 <flux:table.row {{ $attributes }} data-backup-run="{{ $backup->status->value }}">
     <flux:table.cell>
-        <span class="text-sm text-zinc-800 dark:text-white" title="{{ $backup->finished_at->format('j M Y, H:i:s') }}">{{ $backup->finished_at->diffForHumans() }}</span>
+        <span class="text-sm text-zinc-800 dark:text-white" title="{{ $backup->finished_at->inDisplayTimezone()->format('j M Y, H:i:s') }}">{{ $backup->finished_at->diffForHumans() }}</span>
     </flux:table.cell>
     <flux:table.cell>
         <div class="flex flex-col items-start gap-1">

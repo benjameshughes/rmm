@@ -112,7 +112,7 @@ final class DeviceMetricQueries
 
     private function bucketTime(Carbon $startsAt, MetricRange $range, int $bucket): string
     {
-        return $startsAt->copy()->addSeconds($bucket * $range->bucketSeconds())->utc()->format('Y-m-d\TH:i:s\Z');
+        return $startsAt->copy()->addSeconds($bucket * $range->bucketSeconds())->toChartTime();
     }
 
     private function rounded(mixed $value): ?float
