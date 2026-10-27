@@ -7,7 +7,7 @@
     </flux:card>
 
     <flux:card class="space-y-4">
-        <flux:heading size="sm">Signed in now</flux:heading>
+        <flux:heading size="sm">Signed in at last inventory</flux:heading>
         <x-inventory.table :table="$users->loggedOn()" name="logged-on" empty="Nobody is signed in." />
     </flux:card>
 
