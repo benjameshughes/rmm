@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Actions\Inventory\StoreLinuxSecurityReport;
 use App\Actions\ServerBackup\StoreServerBackups;
 use App\DTOs\NetdataAppUsage;
 use App\DTOs\NetdataCpuMetric;
@@ -31,11 +32,14 @@ final class StoreDeviceMetrics
     public function __construct(
         private readonly RecordMetricSamples $recordMetricSamples,
         private readonly StoreServerBackups $storeServerBackups,
+        private readonly StoreLinuxSecurityReport $storeLinuxSecurityReport,
     ) {}
 
     /**
      * A server's backup status files ride along as `backups`; agents that
-     * predate them, or servers without the folder, leave the key out.
+     * predate them, or servers without the folder, leave the key out. A
+     * Linux agent's security report rides along as `linux_security` every
+     * few hours and is stored as an inventory snapshot.
      */
     public function __invoke(Device $device, array $input, ?string $ip = null): DeviceMetric
     {
@@ -45,6 +49,10 @@ final class StoreDeviceMetrics
 
         if (array_key_exists('backups', $input)) {
             ($this->storeServerBackups)($device, $input['backups']);
+        }
+
+        if (is_array($input['linux_security'] ?? null)) {
+            ($this->storeLinuxSecurityReport)($device, $input['linux_security']);
         }
 
         return $metric;
@@ -192,11 +200,11 @@ final class StoreDeviceMetrics
 
     /**
      * Every useful field is extracted into columns, so the raw request is only kept while debugging the agent.
-     * Backup status files are left out: they carry hundreds of snapshots and are stored on their own.
+     * Backup status files and the security report are left out: they are stored on their own.
      */
     private function rawPayload(array $input): ?array
     {
-        return config('devices.metrics.store_raw_payload') ? Arr::except($input, 'backups') : null;
+        return config('devices.metrics.store_raw_payload') ? Arr::except($input, ['backups', 'linux_security']) : null;
     }
 
     private function parseCpuMetric(mixed $input): ?float

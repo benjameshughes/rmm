@@ -292,6 +292,10 @@ pub struct RawMetricsPayload {
     /// Backup status files (Linux only; omitted without a status directory)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backups: Option<Vec<crate::backups::BackupStatus>>,
+    /// Updates, SSH, firewall, failed logins and listening ports (Linux
+    /// only; sent once per security report interval, omitted otherwise)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linux_security: Option<crate::linux_security::LinuxSecurity>,
 }
 
 // ============================================================================
@@ -358,6 +362,9 @@ pub struct MetricsCollector {
     /// Linux health checks (keeps the apt result between submissions).
     #[cfg(not(windows))]
     health: tokio::sync::Mutex<crate::linux_health::HealthCollector>,
+    /// When the last Linux security report was delivered.
+    #[cfg(not(windows))]
+    security: tokio::sync::Mutex<crate::linux_security::ReportSchedule>,
 }
 
 impl MetricsCollector {
@@ -383,6 +390,8 @@ impl MetricsCollector {
             mac_addresses,
             #[cfg(not(windows))]
             health: tokio::sync::Mutex::new(Default::default()),
+            #[cfg(not(windows))]
+            security: tokio::sync::Mutex::new(Default::default()),
         })
     }
 
@@ -529,6 +538,7 @@ impl MetricsCollector {
             netdata_net_speed,
             linux_health: None,
             backups: None,
+            linux_security: None,
         }
     }
 
@@ -591,14 +601,44 @@ impl MetricsCollector {
         None
     }
 
+    /// The Linux security report, when one is due (Linux only).
+    #[cfg(not(windows))]
+    async fn collect_linux_security(&self) -> Option<crate::linux_security::LinuxSecurity> {
+        let interval = Duration::from_secs(self.config.security_report_interval);
+        if !cfg!(target_os = "linux") || !self.security.lock().await.is_due(Instant::now(), interval) {
+            return None;
+        }
+
+        Some(crate::linux_security::collect(Duration::from_secs(self.config.health_command_timeout)).await)
+    }
+
+    #[cfg(windows)]
+    async fn collect_linux_security(&self) -> Option<crate::linux_security::LinuxSecurity> {
+        None
+    }
+
+    /// Only a delivered report restarts the interval, so a failed one goes
+    /// out again with the next metrics.
+    #[cfg(not(windows))]
+    async fn mark_security_report_sent(&self) {
+        self.security.lock().await.mark_sent(Instant::now());
+    }
+
+    #[cfg(windows)]
+    async fn mark_security_report_sent(&self) {}
+
     /// Collect and submit metrics in one operation
     pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
         let mut metrics = self.collect_metrics().await;
         metrics.linux_health = self.collect_linux_health().await;
         metrics.backups = crate::backups::collect().await;
+        metrics.linux_security = self.collect_linux_security().await;
         let outcome = self.submit_metrics(&metrics, api_key).await;
 
         if outcome == RequestOutcome::Success {
+            if metrics.linux_security.is_some() {
+                self.mark_security_report_sent().await;
+            }
             if metrics.netdata_cpu.is_some() || metrics.netdata_ram.is_some() {
                 info!("Metrics submitted (raw Netdata data)");
             } else {
@@ -782,6 +822,7 @@ mod tests {
             netdata_net_speed: None,
             linux_health: None,
             backups: None,
+            linux_security: None,
         }
     }
 

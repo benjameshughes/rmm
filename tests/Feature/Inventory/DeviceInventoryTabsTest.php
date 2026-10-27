@@ -270,7 +270,9 @@ it('shows the not supported note on monitor-only and linux devices and never que
     inventoried($device);
 
     Livewire::actingAs($this->user)->test(Security::class, ['device' => $device])
-        ->assertSee('only collected from Windows devices that accept commands');
+        ->assertDontSee('only collected from Windows devices that accept commands')
+        ->assertSee('No security report yet')
+        ->assertDontSee('C: (system)');
 
     Livewire::actingAs($this->user)->test(Details::class, ['device' => $device])
         ->assertDontSeeHtml('data-system-inventory-control')

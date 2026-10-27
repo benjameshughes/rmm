@@ -32,10 +32,13 @@ final class Security extends Component
     public function render(): View
     {
         $hasSystemInventory = $this->device->hasSystemInventory();
+        $hasLinuxSecurityReport = $this->device->hasLinuxSecurityReport();
 
         return view('livewire.devices.security', [
             'hasSystemInventory' => $hasSystemInventory,
+            'hasLinuxSecurityReport' => $hasLinuxSecurityReport,
             'security' => $hasSystemInventory ? $this->device->latestInventory?->snapshot()->security() : null,
+            'linuxSecurity' => $hasLinuxSecurityReport ? $this->device->latestInventory?->snapshot()->linuxSecurity() : null,
         ])->title(DeviceTab::Security->pageTitle($this->device));
     }
 }

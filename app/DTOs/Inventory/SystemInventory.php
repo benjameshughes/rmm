@@ -26,6 +26,16 @@ final class SystemInventory
         return new InventorySecurity($this->section('security'));
     }
 
+    /**
+     * Null unless this snapshot is a Linux agent's security report.
+     */
+    public function linuxSecurity(): ?LinuxSecurity
+    {
+        $section = $this->data['linux_security'] ?? null;
+
+        return is_array($section) ? new LinuxSecurity($section) : null;
+    }
+
     public function users(): InventoryUsers
     {
         return new InventoryUsers($this->section('users'));

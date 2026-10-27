@@ -75,6 +75,10 @@ pub const DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS: u64 = 300;
 /// Least time between apt update simulations (Linux agent)
 pub const DEFAULT_APT_CHECK_INTERVAL_SECS: u64 = 3600;
 
+/// Least time between Linux security reports (pending updates, SSH, firewall,
+/// failed logins, listening ports)
+pub const DEFAULT_SECURITY_REPORT_INTERVAL_SECS: u64 = 4 * 3600;
+
 /// Longest a read-only health query command (systemctl, apt-get -s) may run
 pub const DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS: u64 = 30;
 
@@ -220,6 +224,8 @@ pub struct Config {
     pub apt_check_interval: u64,
     /// Timeout in seconds for read-only health query commands
     pub health_command_timeout: u64,
+    /// Seconds between Linux security reports
+    pub security_report_interval: u64,
     /// Milliseconds of spooler silence before a printer change is reported
     pub printer_quiet_ms: u64,
     /// Most milliseconds a burst of spooler signals can delay a report
@@ -283,6 +289,7 @@ impl Default for Config {
             boot_notice_max_uptime: DEFAULT_BOOT_NOTICE_MAX_UPTIME_SECS,
             apt_check_interval: DEFAULT_APT_CHECK_INTERVAL_SECS,
             health_command_timeout: DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS,
+            security_report_interval: DEFAULT_SECURITY_REPORT_INTERVAL_SECS,
             printer_quiet_ms: DEFAULT_PRINTER_QUIET_MS,
             printer_max_delay_ms: DEFAULT_PRINTER_MAX_DELAY_MS,
             printer_wait_slice_ms: DEFAULT_PRINTER_WAIT_SLICE_MS,

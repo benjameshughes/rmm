@@ -586,6 +586,14 @@ final class Device extends Model
         return $this->platform() === ScriptPlatform::Windows && ! $this->isMonitorOnly;
     }
 
+    /**
+     * The Linux agent sends its own security report, monitor only or not.
+     */
+    public function hasLinuxSecurityReport(): bool
+    {
+        return $this->platform() === ScriptPlatform::Linux;
+    }
+
     public function systemInventoryCollectedForHumans(): ?string
     {
         return $this->system_inventoried_at === null ? null : 'Collected '.$this->system_inventoried_at->diffForHumans().'.';

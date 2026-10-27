@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Builder;
 final class HardwareQueries
 {
     /**
-     * One row per approved device with a system inventory, its latest inventory loaded.
+     * One row per approved Windows device with a system inventory, its latest inventory loaded.
+     * Linux security reports are inventories too, but carry no hardware.
      * Ordered by the chosen column with empty values last, then by hostname and id.
      *
      * @return Builder<Device>
@@ -21,6 +22,7 @@ final class HardwareQueries
     public function fleet(string $search, HardwareSort $sort, string $direction): Builder
     {
         $devices = $this->onFleet()
+            ->runsWindows()
             ->has('latestInventory')
             ->when($search !== '', fn (Builder $query): Builder => $this->matching($query, $search))
             ->with(['latestInventory', 'group', 'tags'])

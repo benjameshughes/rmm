@@ -64,6 +64,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Linux Security
+    |--------------------------------------------------------------------------
+    |
+    | The Linux agent sends a security report every few hours. Any pending
+    | security update shows red; other pending updates show amber from the
+    | warning count. Unattended-upgrades that has not run for the stale days
+    | shows amber. Failed SSH logins over the last 24 hours show amber, then
+    | red. Root login with a key only shows amber, with a password red.
+    |
+    */
+
+    'linux_pending_updates_warning' => 10,
+    'linux_unattended_upgrades_stale_days' => 3,
+    'linux_failed_logins_warning' => 50,
+    'linux_failed_logins_critical' => 500,
+
+    /*
+    |--------------------------------------------------------------------------
     | Pages
     |--------------------------------------------------------------------------
     */

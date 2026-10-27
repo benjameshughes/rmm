@@ -12,6 +12,7 @@ mod disk_usage;
 mod enrollment;
 mod keep_awake;
 mod linux_health;
+mod linux_security;
 mod linux_service;
 mod metrics;
 mod power;
