@@ -46,6 +46,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Recent System Errors
+    |--------------------------------------------------------------------------
+    |
+    | The script reads Critical and Error events from the System log for this
+    | many days before it runs, keeping at most this many. These mirror the
+    | script's own limits so the System tab can describe the window. Messages
+    | longer than the preview length collapse until clicked.
+    |
+    */
+
+    'recent_error_days' => 3,
+    'recent_error_limit' => 25,
+    'error_message_preview_length' => 120,
+
+    /*
+    |--------------------------------------------------------------------------
     | Pages
     |--------------------------------------------------------------------------
     */

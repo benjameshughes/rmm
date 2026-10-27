@@ -1,20 +1,15 @@
 @props(['security'])
 
-<div class="grid gap-6 md:grid-cols-2">
-    <flux:card>
-        <flux:heading size="sm" class="mb-4">Security</flux:heading>
-        <x-inventory.checks :checks="$security->checks()" />
-    </flux:card>
+<x-dashboard.section id="security" class="scroll-mt-6" title="Security">
+    <x-inventory.checks :checks="$security->checks()" />
 
-    <div class="space-y-6">
-        <flux:card>
-            <flux:heading size="sm" class="mb-4">BitLocker</flux:heading>
-            <x-inventory.checks :checks="$security->bitlocker()" empty="BitLocker is not available on this edition of Windows." />
-        </flux:card>
+    <flux:separator />
 
-        <flux:card>
-            <flux:heading size="sm" class="mb-4">Firewall</flux:heading>
-            <x-inventory.checks :checks="$security->firewall()" />
-        </flux:card>
-    </div>
-</div>
+    <flux:heading size="sm">BitLocker</flux:heading>
+    <x-inventory.checks :checks="$security->bitlocker()" empty="BitLocker is not available on this edition of Windows." />
+
+    <flux:separator />
+
+    <flux:heading size="sm">Firewall</flux:heading>
+    <x-inventory.checks :checks="$security->firewall()" />
+</x-dashboard.section>

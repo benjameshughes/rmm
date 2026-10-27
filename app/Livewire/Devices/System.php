@@ -50,6 +50,7 @@ final class System extends Component
     {
         $hasSystemInventory = $this->device->hasSystemInventory();
         $inventory = $hasSystemInventory ? $this->device->latestInventory?->snapshot() : null;
+        $software = $inventory?->software();
 
         return view('livewire.devices.system', [
             'hasSystemInventory' => $hasSystemInventory,
@@ -57,7 +58,10 @@ final class System extends Component
             'security' => $inventory?->security(),
             'users' => $inventory?->users(),
             'hardware' => $inventory?->hardware(),
-            'software' => $inventory?->software(),
+            'software' => $software,
+            'systemErrors' => $software?->systemErrors(),
+            'systemErrorsStatus' => $software?->systemErrorsCheck(),
+            'systemErrorsPeriod' => 'Last '.config('inventory.recent_error_days').' days',
             'collected' => $this->device->systemInventoryCollectedForHumans(),
             'inventoryCommand' => $hasSystemInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('inventory.system_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::System->pageTitle($this->device));

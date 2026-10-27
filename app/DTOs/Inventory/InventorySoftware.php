@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs\Inventory;
 
+use Illuminate\Support\Collection;
+
 /**
  * Updates, the software environment, what third parties added (drivers,
  * startup items, services and scheduled tasks), listening ports and recent
@@ -26,6 +28,11 @@ final class InventorySoftware
     public function pendingRebootReasons(): array
     {
         return $this->strings('updates.pending_reboot.reasons');
+    }
+
+    public function pendingRebootReasonsForHumans(): ?string
+    {
+        return $this->joined(', ', ...$this->pendingRebootReasons());
     }
 
     public function isRebootPending(): bool
@@ -113,14 +120,57 @@ final class InventorySoftware
         ]);
     }
 
-    public function recentErrors(): InventoryTable
+    /**
+     * Critical and Error events from the System log, newest first. Empty when there were none or the inventory predates the check.
+     *
+     * @return Collection<int, InventoryEvent>
+     */
+    public function systemErrors(): Collection
     {
-        return $this->table('recent_errors', [
-            'Time' => fn (array $event): ?string => $this->dateTime($event['time'] ?? null),
-            'Level' => fn (array $event): ?string => $this->text($event['level'] ?? null),
-            'Source' => fn (array $event): ?string => $this->text($event['provider'] ?? null),
-            'Event ID' => fn (array $event): ?string => $this->text($event['event_id'] ?? null),
-            'Message' => fn (array $event): ?string => $this->text($event['message'] ?? null),
-        ]);
+        return $this->rows('recent_errors')->map(fn (array $event): InventoryEvent => new InventoryEvent(
+            $this->dateTime($event['time'] ?? null),
+            $this->carbon($event['time'] ?? null)?->diffForHumans(),
+            $this->text($event['level'] ?? null) ?? 'Error',
+            $this->text($event['provider'] ?? null),
+            $this->text($event['event_id'] ?? null),
+            $this->text($event['message'] ?? null),
+        ));
+    }
+
+    /**
+     * The headline for the system errors tile: red with any Critical event, amber with only errors,
+     * green when the log was clean, zinc when the inventory predates the check. A full list says "25+",
+     * since the script stops counting there.
+     */
+    public function systemErrorsCheck(): InventoryCheck
+    {
+        if (! is_array($this->data['recent_errors'] ?? null)) {
+            return new InventoryCheck('System errors', 'Not reported', 'zinc');
+        }
+
+        $errors = $this->systemErrors();
+        $limit = config('inventory.recent_error_limit');
+        $count = $errors->count() >= $limit ? "{$limit}+" : (string) $errors->count();
+
+        return match (true) {
+            $errors->isEmpty() => new InventoryCheck('System errors', 'None', 'green'),
+            $errors->contains(fn (InventoryEvent $event): bool => $event->isCritical()) => new InventoryCheck('System errors', $count, 'red'),
+            default => new InventoryCheck('System errors', $count, 'amber'),
+        };
+    }
+
+    /**
+     * What the System errors list covers, for its description.
+     */
+    public function systemErrorsWindow(): string
+    {
+        return 'Critical and Error events from the Windows System log in the '.config('inventory.recent_error_days').' days before the inventory ran, newest first.';
+    }
+
+    public function restartCheck(): InventoryCheck
+    {
+        return $this->isRebootPending()
+            ? new InventoryCheck('Restart', 'Pending', 'amber')
+            : new InventoryCheck('Restart', 'Not needed', 'green');
     }
 }

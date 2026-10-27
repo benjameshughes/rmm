@@ -24,14 +24,33 @@
 
         <flux:error name="script" />
 
-        <flux:card>
-            <flux:heading size="sm" class="mb-4">Overview</flux:heading>
-            <x-inventory.facts :facts="$inventory->overview()" />
-        </flux:card>
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4" data-system-status>
+            <x-inventory.status-tile :check="$systemErrorsStatus" href="#system-errors" :detail="$systemErrorsPeriod" />
+            <x-inventory.status-tile :check="$hardware->deviceProblemsCheck()" href="#device-problems" />
+            <x-inventory.status-tile :check="$security->postureCheck()" href="#security" />
+            <x-inventory.status-tile :check="$software->restartCheck()" href="#updates" :detail="$software->pendingRebootReasonsForHumans()" />
+        </div>
 
-        <x-inventory.security :security="$security" />
+        <x-inventory.system-errors :events="$systemErrors" :status="$systemErrorsStatus" :window="$software->systemErrorsWindow()" />
+
+        <div class="grid gap-6 lg:grid-cols-2">
+            <x-inventory.device-problems :hardware="$hardware" />
+            <x-inventory.security :security="$security" />
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-2">
+            <flux:card>
+                <flux:heading size="sm" class="mb-4">This PC</flux:heading>
+                <x-inventory.facts :facts="$inventory->overview()" />
+            </flux:card>
+            <div id="updates" class="scroll-mt-6 space-y-6">
+                <x-inventory.updates :software="$software" />
+                <x-inventory.software :software="$software" />
+            </div>
+        </div>
+
         <x-inventory.users :users="$users" />
         <x-inventory.hardware :hardware="$hardware" />
-        <x-inventory.software :software="$software" />
+        <x-inventory.third-party :software="$software" />
     @endif
 </x-device.shell>

@@ -41,7 +41,7 @@ it('shows the latest inventory from the fixture', function (): void {
         ->assertSeeInOrder(['Secure Boot', 'On'])
         ->assertSee('OFFICE-PC\itadmin')
         ->assertSee('CN0V1RXJ-FCC00-2BJ-3T1L')
-        ->assertSee('Restart pending')
+        ->assertSeeInOrder(['Restart', 'Pending'])
         ->assertSee('KB5043076')
         ->assertSeeInOrder(['Drivers (2)', 'Realtek Audio'])
         ->assertSee('Dell TechHub')
@@ -126,7 +126,72 @@ it('lists the listening ports and the recent system errors in London time', func
 
     Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
         ->assertSeeInOrder(['Listening ports (1)', '445', '0.0.0.0', 'System', '4'])
-        ->assertSeeInOrder(['Recent system errors (1)', '5 Oct 2026, 09:02', 'Error', 'Service Control Manager', '7031', 'The Dell TechHub service terminated unexpectedly.']);
+        ->assertSeeHtml('data-system-errors')
+        ->assertSeeInOrder(['System errors', 'Error', '5 Oct 2026, 09:02', 'Service Control Manager', 'Event 7031', 'The Dell TechHub service terminated unexpectedly.']);
+});
+
+it('puts what needs attention above the spec, with the system errors in the open', function (): void {
+    inventoried($this->device);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeHtml('data-system-status')
+        ->assertSeeInOrder(['System errors', 'Device problems', 'Security', 'Restart', 'The system has rebooted without cleanly shutting down first.', 'Realtek USB Audio', 'Secure Boot', 'This PC', 'Service tag', 'Local administrators', 'Drivers (2)']);
+});
+
+it('colours the system errors tile by the worst event and caps the count at the script limit', function (array $errors, string $value, string $color): void {
+    inventoried($this->device, ['data' => ['recent_errors' => $errors]]);
+
+    $check = $this->device->fresh()->latestInventory->snapshot()->software()->systemErrorsCheck();
+
+    expect([$check->value, $check->color])->toBe([$value, $color]);
+})->with([
+    'none' => [[], 'None', 'green'],
+    'errors only' => [[['level' => 'Error'], ['level' => 'Error']], '2', 'amber'],
+    'a critical' => [[['level' => 'Error'], ['level' => 'Critical']], '2', 'red'],
+    'at the limit' => [array_fill(0, 25, ['level' => 'Error']), '25+', 'amber'],
+]);
+
+it('says the System log is clean when there are no errors', function (): void {
+    inventoried($this->device, ['data' => ['recent_errors' => []]]);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeHtml('data-system-errors-clear')
+        ->assertSee('No errors. The System log is clean.');
+});
+
+it('clamps long error messages until clicked and leaves short ones alone', function (): void {
+    inventoried($this->device, ['data' => ['recent_errors' => [
+        ['level' => 'Error', 'message' => str_repeat('Long message. ', 20)],
+        ['level' => 'Error', 'message' => 'Short.'],
+    ]]]);
+
+    $events = $this->device->fresh()->latestInventory->snapshot()->software()->systemErrors();
+
+    expect($events->map->hasLongMessage()->all())->toBe([true, false]);
+
+    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+        ->assertSeeHtml('line-clamp-1')
+        ->assertSee('Show more');
+});
+
+it('summarises device problems and security for the status tiles', function (): void {
+    inventoried($this->device);
+    $snapshot = $this->device->fresh()->latestInventory->snapshot();
+
+    expect([$snapshot->hardware()->deviceProblemsCheck()->value, $snapshot->hardware()->deviceProblemsCheck()->color])->toBe(['2', 'red']);
+
+    inventoried($this->device, ['collected_at' => now(), 'data' => ['device_problems' => [], 'security' => [
+        'bitlocker' => [['drive' => 'C:', 'is_system_drive' => true, 'protection_status' => 'On']],
+        'secure_boot' => true,
+        'tpm' => ['is_present' => true, 'is_enabled' => true, 'is_activated' => true],
+        'defender' => ['is_real_time_enabled' => true, 'signature_updated_at' => now()->subDays(4)->toIso8601String()],
+        'uac' => ['is_enabled' => true, 'consent_prompt_admin' => 5],
+        'firewall' => [['name' => 'Domain', 'is_enabled' => true]],
+    ]]]);
+    $snapshot = $this->device->fresh()->latestInventory->snapshot();
+
+    expect($snapshot->hardware()->deviceProblemsCheck()->value)->toBe('None')
+        ->and([$snapshot->security()->postureCheck()->value, $snapshot->security()->postureCheck()->color])->toBe(['1 to check', 'amber']);
 });
 
 it('copes with an inventory where most sections are missing', function (): void {
@@ -140,7 +205,7 @@ it('copes with an inventory where most sections are missing', function (): void 
         ->assertSee('Not reported. Run the inventory again to check.')
         ->assertDontSee('No problems')
         ->assertSee('Listening ports (0)')
-        ->assertSee('Recent system errors (0)');
+        ->assertSeeInOrder(['System errors', 'Not reported']);
 });
 
 it('explains the missing inventory and runs it on request', function (): void {

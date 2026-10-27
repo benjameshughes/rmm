@@ -65,6 +65,20 @@ final class InventorySecurity
     }
 
     /**
+     * The headline for the security tile: how many settings, BitLocker volumes and firewall profiles are amber or red.
+     */
+    public function postureCheck(): InventoryCheck
+    {
+        $concerns = $this->checks()->concat($this->bitlocker())->concat($this->firewall())
+            ->filter(fn (InventoryCheck $check): bool => $check->needsAttention());
+
+        return match (true) {
+            $concerns->isEmpty() => new InventoryCheck('Security', 'All good', 'green'),
+            default => new InventoryCheck('Security', $concerns->count().' to check', $concerns->contains('color', 'red') ? 'red' : 'amber'),
+        };
+    }
+
+    /**
      * @return Collection<int, InventoryCheck>
      */
     public function bitlocker(): Collection

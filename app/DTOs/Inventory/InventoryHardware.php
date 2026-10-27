@@ -197,6 +197,20 @@ final class InventoryHardware
     }
 
     /**
+     * The headline for the device problems tile: how many devices are not working, coloured like the worst of them.
+     */
+    public function deviceProblemsCheck(): InventoryCheck
+    {
+        $problems = $this->deviceProblems()->filter(fn (InventoryCheck $check): bool => $check->needsAttention());
+
+        return match (true) {
+            $this->deviceProblems()->isEmpty() => new InventoryCheck('Device problems', 'Not reported', 'zinc'),
+            $problems->isEmpty() => new InventoryCheck('Device problems', 'None', 'green'),
+            default => new InventoryCheck('Device problems', (string) $problems->count(), $problems->contains('color', 'red') ? 'red' : 'amber'),
+        };
+    }
+
+    /**
      * @return array<string, string>
      */
     public function battery(): array
