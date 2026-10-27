@@ -41,46 +41,62 @@ it('draws CPU and RAM as two separate compact charts', function (): void {
         ->and(substr_count($html, 'aspect-[3/1]'))->toBe(0);
 });
 
-it('shows the latest system inventory at a glance with a security strip', function (): void {
+it('leads with what is wrong with the PC: errors, device problems, security and restart', function (): void {
     DeviceInventory::factory()->create(['device_id' => $this->device->id]);
 
     Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
-        ->assertSeeHtml('data-system-glance')
-        ->assertSee('Collected 2 hours ago.')
-        ->assertSeeInOrder(['Model', 'Dell Inc. Latitude 5440'])
-        ->assertSeeInOrder(['Service tag', '7HQ2KZ3'])
-        ->assertSee('13th Gen Intel(R) Core(TM) i5-1345U')
-        ->assertSeeInOrder(['Windows', '23H2 · 22631.4317'])
-        ->assertSeeInOrder(['Domain', 'Workgroup WORKGROUP'])
-        ->assertSeeInOrder(['Signed in', 'OFFICE-PC\sarah'])
-        ->assertSee('BitLocker · On')
-        ->assertSee('Secure Boot · On')
-        ->assertSee('Defender · On')
-        ->assertSee('Firewall · Public off')
-        ->assertSeeHtml('href="'.route('devices.system', $this->device).'"');
+        ->assertSeeHtml('data-windows-health')
+        ->assertSee('System inventory · Collected 2 hours ago.')
+        ->assertSeeInOrder(['System errors', '2', 'Device problems', '2', 'Security', 'to check', 'Restart', 'Pending'])
+        ->assertSeeInOrder(['The Dell TechHub service terminated unexpectedly.', 'Realtek USB Audio · MEDIA'])
+        ->assertSeeHtml('href="'.route('devices.security', $this->device).'"')
+        ->assertSeeHtml('href="'.route('devices.apps', $this->device).'#updates"')
+        ->assertDontSee('Service tag');
 });
 
-it('hides the inventory panel when there is no inventory to show', function (): void {
+it('shows the first few system errors and keeps the rest behind Show more', function (): void {
+    DeviceInventory::factory()->create(['device_id' => $this->device->id, 'data' => [
+        'recent_errors' => collect(range(1, 7))->map(fn (int $n): array => ['level' => 'Error', 'provider' => 'disk', 'message' => "Bad block {$n}."])->all(),
+    ]]);
+
     Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
-        ->assertDontSeeHtml('data-system-glance')
-        ->assertDontSee('Service tag');
+        ->assertSeeHtml('data-system-errors-more')
+        ->assertSee('Show 2 more')
+        ->assertSee('Bad block 7.');
+});
+
+it('hides the device problems card when every device works', function (): void {
+    DeviceInventory::factory()->create(['device_id' => $this->device->id, 'data' => ['device_problems' => [], 'recent_errors' => []]]);
+
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+        ->assertSeeHtml('data-system-errors-clear')
+        ->assertDontSee('Devices Windows says are not working');
+});
+
+it('shows only Run now until there is an inventory, and nothing on linux', function (): void {
+    $this->device->forceFill(['system_inventoried_at' => null])->save();
+
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+        ->assertSeeHtml('data-system-inventory-control')
+        ->assertSee('Not collected yet.')
+        ->assertDontSeeHtml('data-system-status');
 
     $linux = Device::factory()->active()->linux()->create();
     DeviceInventory::factory()->create(['device_id' => $linux->id]);
 
     Livewire::actingAs($this->user)->test(Overview::class, ['device' => $linux])
-        ->assertDontSeeHtml('data-system-glance');
+        ->assertDontSeeHtml('data-windows-health');
 });
 
-it('shows the panel live once an inventory syncs', function (): void {
+it('shows the health tiles live once an inventory syncs', function (): void {
     $overview = Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
-        ->assertDontSeeHtml('data-system-glance');
+        ->assertDontSeeHtml('data-system-status');
 
     DeviceInventory::factory()->create(['device_id' => $this->device->id]);
 
     $overview->dispatch("echo-private:devices.{$this->device->id},SystemInventorySynced", ['deviceId' => $this->device->id])
-        ->assertSeeHtml('data-system-glance')
-        ->assertSee('7HQ2KZ3');
+        ->assertSeeHtml('data-system-status')
+        ->assertSee('The Dell TechHub service terminated unexpectedly.');
 });
 
 it('shows a full page file as a red usage bar', function (): void {

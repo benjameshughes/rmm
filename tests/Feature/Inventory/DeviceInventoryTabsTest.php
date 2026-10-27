@@ -3,7 +3,11 @@
 declare(strict_types=1);
 
 use App\Actions\Script\SyncSystemScripts;
-use App\Livewire\Devices\System;
+use App\Livewire\Devices\Apps;
+use App\Livewire\Devices\Details;
+use App\Livewire\Devices\Overview;
+use App\Livewire\Devices\Security;
+use App\Livewire\Devices\SystemInventory;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\DeviceInventory;
@@ -26,27 +30,35 @@ function inventoried(Device $device, array $attributes = []): DeviceInventory
     return DeviceInventory::factory()->create(['device_id' => $device->id, 'collected_at' => now()->subHours(2), ...$attributes]);
 }
 
-it('shows the latest inventory from the fixture', function (): void {
+it('spreads the latest inventory across the tabs it belongs on', function (): void {
     inventoried($this->device);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
-        ->assertSee('Collected 2 hours ago.')
+    Livewire::actingAs($this->user)->test(Details::class, ['device' => $this->device])
+        ->assertSee('System inventory · Collected 2 hours ago.')
         ->assertSee('Run now')
-        ->assertSeeInOrder(['Service tag', '7HQ2KZ3'])
+        ->assertSeeInOrder(['This PC', 'Service tag', '7HQ2KZ3'])
         ->assertSeeInOrder(['RAM', '16.0 GB'])
         ->assertSee('Latitude 5440')
         ->assertSee('Microsoft Windows 11 Pro 23H2')
         ->assertSee('22631.4317')
-        ->assertSeeInOrder(['C: (system)', 'On · Fully encrypted'])
-        ->assertSeeInOrder(['Secure Boot', 'On'])
         ->assertSee('OFFICE-PC\itadmin')
         ->assertSee('CN0V1RXJ-FCC00-2BJ-3T1L')
-        ->assertSeeInOrder(['Restart', 'Pending'])
-        ->assertSee('KB5043076')
+        ->assertDontSee('System Information');
+
+    Livewire::actingAs($this->user)->test(Security::class, ['device' => $this->device])
+        ->assertSeeInOrder(['C: (system)', 'On · Fully encrypted'])
+        ->assertSeeInOrder(['Secure Boot', 'On'])
+        ->assertDontSee('7HQ2KZ3');
+
+    Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Installed updates', 'KB5043076'])
         ->assertSeeInOrder(['Drivers (2)', 'Realtek Audio'])
         ->assertSee('Dell TechHub')
-        ->assertSee('GoogleUpdateTaskMachineCore')
-        ->assertDontSeeHtml('data-system-empty');
+        ->assertSee('GoogleUpdateTaskMachineCore');
+
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Restart', 'Pending'])
+        ->assertDontSee('KB5043076');
 });
 
 it('colours security settings by how safe they are', function (): void {
@@ -77,7 +89,7 @@ it('colours security settings by how safe they are', function (): void {
 it('shows each adapter with its address, gateway and DNS servers', function (): void {
     inventoried($this->device);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Details::class, ['device' => $this->device])
         ->assertSeeInOrder(['Up · 1 Gbps', '192.168.10.57/24 · DHCP', '192.168.10.1', '192.168.10.1, 1.1.1.1'])
         ->assertSeeInOrder(['Intel(R) Iris(R) Xe Graphics', '1920x1080', 'OK']);
 });
@@ -100,7 +112,7 @@ it('shows static addressing and leaves the network settings blank for an adapter
 it('makes devices Windows says are not working stand out, amber when only disabled', function (): void {
     inventoried($this->device);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeInOrder(['Device problems', 'Realtek USB Audio · MEDIA', 'Cannot start · Code 10 · Error']);
 
     expect($this->device->fresh()->latestInventory->snapshot()->hardware()->deviceProblems()->mapWithKeys(fn ($check) => [$check->value => $check->color])->all())->toBe([
@@ -112,8 +124,8 @@ it('makes devices Windows says are not working stand out, amber when only disabl
 it('says so plainly when no device has a problem', function (): void {
     inventoried($this->device, ['data' => ['device_problems' => []]]);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
-        ->assertSeeInOrder(['Device problems', 'Present devices', 'No problems']);
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Device problems', 'None']);
 
     expect($this->device->fresh()->latestInventory->snapshot()->hardware()->deviceProblems()->sole()->color)->toBe('green');
 });
@@ -124,18 +136,20 @@ it('lists the listening ports and the recent system errors in London time', func
         'recent_errors' => [['time' => '2026-10-05T08:02:11.0000000Z', 'provider' => 'Service Control Manager', 'event_id' => 7031, 'level' => 'Error', 'message' => 'The Dell TechHub service terminated unexpectedly.']],
     ]]);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
-        ->assertSeeInOrder(['Listening ports (1)', '445', '0.0.0.0', 'System', '4'])
+    Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device])
+        ->assertSeeInOrder(['Listening ports (1)', '445', '0.0.0.0', 'System', '4']);
+
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeHtml('data-system-errors')
         ->assertSeeInOrder(['System errors', 'Error', '5 Oct 2026, 09:02', 'Service Control Manager', 'Event 7031', 'The Dell TechHub service terminated unexpectedly.']);
 });
 
-it('puts what needs attention above the spec, with the system errors in the open', function (): void {
+it('puts what needs attention on the Overview, tiles first, then the errors and the broken devices', function (): void {
     inventoried($this->device);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeHtml('data-system-status')
-        ->assertSeeInOrder(['System errors', 'Device problems', 'Security', 'Restart', 'The system has rebooted without cleanly shutting down first.', 'Realtek USB Audio', 'Secure Boot', 'This PC', 'Service tag', 'Local administrators', 'Drivers (2)']);
+        ->assertSeeInOrder(['System errors', 'Device problems', 'Security', 'Restart', 'The system has rebooted without cleanly shutting down first.', 'Realtek USB Audio']);
 });
 
 it('colours the system errors tile by the worst event and caps the count at the script limit', function (array $errors, string $value, string $color): void {
@@ -154,7 +168,7 @@ it('colours the system errors tile by the worst event and caps the count at the 
 it('says the System log is clean when there are no errors', function (): void {
     inventoried($this->device, ['data' => ['recent_errors' => []]]);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeHtml('data-system-errors-clear')
         ->assertSee('No errors. The System log is clean.');
 });
@@ -169,7 +183,7 @@ it('clamps long error messages until clicked and leaves short ones alone', funct
 
     expect($events->map->hasLongMessage()->all())->toBe([true, false]);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
         ->assertSeeHtml('line-clamp-1')
         ->assertSee('Show more');
 });
@@ -197,22 +211,30 @@ it('summarises device problems and security for the status tiles', function (): 
 it('copes with an inventory where most sections are missing', function (): void {
     inventoried($this->device, ['data' => ['windows' => ['caption' => 'Microsoft Windows 10 Pro'], 'security' => ['bitlocker' => 'garbage']]]);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(Details::class, ['device' => $this->device])
         ->assertSee('Microsoft Windows 10 Pro')
-        ->assertSee('BitLocker is not available on this edition of Windows.')
         ->assertSee('The Administrators group could not be read.')
-        ->assertSee('No battery.')
-        ->assertSee('Not reported. Run the inventory again to check.')
-        ->assertDontSee('No problems')
-        ->assertSee('Listening ports (0)')
-        ->assertSeeInOrder(['System errors', 'Not reported']);
+        ->assertSee('No battery.');
+
+    Livewire::actingAs($this->user)->test(Security::class, ['device' => $this->device])
+        ->assertSee('BitLocker is not available on this edition of Windows.');
+
+    Livewire::actingAs($this->user)->test(Apps::class, ['device' => $this->device])
+        ->assertSee('Listening ports (0)');
+
+    Livewire::actingAs($this->user)->test(Overview::class, ['device' => $this->device])
+        ->assertSeeInOrder(['System errors', 'Not reported', 'Device problems', 'Not reported'])
+        ->assertSee('Not reported. Run the inventory again to check.');
 });
 
 it('explains the missing inventory and runs it on request', function (): void {
     $this->device->forceFill(['system_inventoried_at' => null])->save();
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
-        ->assertSeeHtml('data-system-empty')
+    Livewire::actingAs($this->user)->test(Security::class, ['device' => $this->device])
+        ->assertSeeHtml('data-system-empty');
+
+    Livewire::actingAs($this->user)->test(SystemInventory::class, ['device' => $this->device])
+        ->assertSee('Not collected yet.')
         ->assertSee('Run now')
         ->call('refreshInventory')
         ->assertDispatched('command-queued')
@@ -224,7 +246,7 @@ it('explains the missing inventory and runs it on request', function (): void {
 
 it('does not queue a second inventory while one is waiting', function (): void {
     inventoried($this->device);
-    $system = Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device]);
+    $system = Livewire::actingAs($this->user)->test(SystemInventory::class, ['device' => $this->device]);
 
     $system->call('refreshInventory');
     $system->call('refreshInventory')->assertSee('Queued...');
@@ -236,7 +258,7 @@ it('hides Run now from users who may not run commands and refuses them', functio
     inventoried($this->device);
     Gate::before(fn (User $user, string $ability): ?bool => $ability === 'runCommands' ? false : null);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    Livewire::actingAs($this->user)->test(SystemInventory::class, ['device' => $this->device])
         ->assertDontSeeHtml('wire:click="refreshInventory"')
         ->call('refreshInventory')->assertForbidden();
 
@@ -247,17 +269,22 @@ it('shows the not supported note on monitor-only and linux devices and never que
     $device = Device::factory()->active()->{$state}()->create();
     inventoried($device);
 
-    Livewire::actingAs($this->user)->test(System::class, ['device' => $device])
-        ->assertSee('only collected from Windows devices that accept commands')
-        ->assertDontSee('7HQ2KZ3')
+    Livewire::actingAs($this->user)->test(Security::class, ['device' => $device])
+        ->assertSee('only collected from Windows devices that accept commands');
+
+    Livewire::actingAs($this->user)->test(Details::class, ['device' => $device])
+        ->assertDontSeeHtml('data-system-inventory-control')
+        ->assertDontSee('7HQ2KZ3');
+
+    Livewire::actingAs($this->user)->test(SystemInventory::class, ['device' => $device])
         ->call('refreshInventory');
 
     expect(DeviceCommand::query()->count())->toBe(0);
 })->with(['monitorOnly', 'linux']);
 
 it('refreshes when a new inventory lands', function (): void {
-    $system = Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
-        ->assertSeeHtml('data-system-empty');
+    $system = Livewire::actingAs($this->user)->test(Details::class, ['device' => $this->device])
+        ->assertDontSee('7HQ2KZ3');
 
     inventoried($this->device);
 
@@ -267,7 +294,7 @@ it('refreshes when a new inventory lands', function (): void {
 
 it('ties the Run now button to the inventory command, from queued to running and back', function (): void {
     inventoried($this->device);
-    $system = Livewire::actingAs($this->user)->test(System::class, ['device' => $this->device])
+    $system = Livewire::actingAs($this->user)->test(SystemInventory::class, ['device' => $this->device])
         ->assertDontSeeHtml('data-run-button-busy');
 
     $system->call('refreshInventory')->assertSee('Queued...');

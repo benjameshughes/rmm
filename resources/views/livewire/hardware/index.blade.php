@@ -42,7 +42,7 @@
                     @foreach($rows as $row)
                         <flux:table.row :key="'hardware-'.$row->device->id">
                             <flux:table.cell class="max-w-56">
-                                <x-device.list.identity :device="$row->device" :href="route('devices.system', $row->device)" />
+                                <x-device.list.identity :device="$row->device" :href="route('devices.details', $row->device)" />
                             </flux:table.cell>
                             <flux:table.cell>
                                 <flux:text size="sm">{{ $row->model ?? '—' }}</flux:text>

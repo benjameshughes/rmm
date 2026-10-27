@@ -1,46 +1,20 @@
 @props(['hardware'])
 
-<x-dashboard.section title="Hardware" :description="$hardware->memorySummary()">
-    <div class="space-y-6">
-        <div class="space-y-2">
-            <flux:heading size="sm">Memory</flux:heading>
-            <x-inventory.table :table="$hardware->memoryModules()" name="memory" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Disks</flux:heading>
-            <x-inventory.table :table="$hardware->disks()" name="disks" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Volumes</flux:heading>
-            <x-inventory.table :table="$hardware->volumes()" name="volumes" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Graphics</flux:heading>
-            <x-inventory.table :table="$hardware->gpus()" name="gpus" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Monitors</flux:heading>
-            <x-inventory.table :table="$hardware->monitors()" name="monitors" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Printers</flux:heading>
-            <x-inventory.table :table="$hardware->printers()" name="printers" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Network adapters</flux:heading>
-            <x-inventory.table :table="$hardware->networkAdapters()" name="network-adapters" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">USB devices</flux:heading>
-            <x-inventory.table :table="$hardware->usbDevices()" name="usb-devices" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Keyboards and mice</flux:heading>
-            <x-inventory.table :table="$hardware->inputDevices()" name="input-devices" />
-        </div>
-        <div class="space-y-2">
-            <flux:heading size="sm">Battery</flux:heading>
-            <x-inventory.facts :facts="$hardware->battery()" empty="No battery." />
-        </div>
+<x-dashboard.section title="Hardware" :description="$hardware->memorySummary()" data-hardware>
+    <flux:accordion transition>
+        <x-inventory.collapsible :table="$hardware->memoryModules()" heading="Memory" name="memory" />
+        <x-inventory.collapsible :table="$hardware->disks()" heading="Disks" name="disks" />
+        <x-inventory.collapsible :table="$hardware->volumes()" heading="Volumes" name="volumes" />
+        <x-inventory.collapsible :table="$hardware->gpus()" heading="Graphics" name="gpus" />
+        <x-inventory.collapsible :table="$hardware->monitors()" heading="Monitors" name="monitors" />
+        <x-inventory.collapsible :table="$hardware->printers()" heading="Printers" name="printers" />
+        <x-inventory.collapsible :table="$hardware->networkAdapters()" heading="Network adapters" name="network-adapters" />
+        <x-inventory.collapsible :table="$hardware->usbDevices()" heading="USB devices" name="usb-devices" />
+        <x-inventory.collapsible :table="$hardware->inputDevices()" heading="Keyboards and mice" name="input-devices" />
+    </flux:accordion>
+
+    <div class="space-y-2">
+        <flux:heading size="sm">Battery</flux:heading>
+        <x-inventory.facts :facts="$hardware->battery()" empty="No battery." />
     </div>
 </x-dashboard.section>

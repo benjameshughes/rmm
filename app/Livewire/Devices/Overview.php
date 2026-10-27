@@ -62,8 +62,8 @@ final class Overview extends Component
             'charts' => [MetricChart::cpu($performance), MetricChart::memory($performance)],
             'chartRange' => $trendRange->label(),
             'chartTimeFormat' => $trendRange->timeFormat(),
-            'inventory' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot() : null,
-            'inventoryCollected' => $this->device->systemInventoryCollectedForHumans(),
+            'hasSystemInventory' => $this->device->hasSystemInventory(),
+            'health' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot()->health() : null,
             'recentCommands' => $this->device->commands()->with(['script', 'device'])->latest('queued_at')->limit(config('devices.metrics.recent_commands'))->get(),
             'openAlerts' => $this->device->unresolvedAlerts()->with('alertRule')->latest('triggered_at')->get(),
         ])->title(DeviceTab::Overview->pageTitle($this->device));

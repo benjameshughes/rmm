@@ -3,13 +3,16 @@
 declare(strict_types=1);
 
 use App\Actions\Device\AnnounceDevicesGoneOffline;
+use App\Enums\CommandStatus;
 use App\Enums\DevicePowerState;
 use App\Enums\DeviceStatus;
 use App\Events\DeviceUpdated;
 use App\Livewire\Devices\Index;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\DeviceGroup;
 use App\Models\DeviceMetric;
+use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -273,13 +276,13 @@ it('keeps the query count flat as the fleet grows, whichever column is sorted', 
 
 describe('what each device is doing', function (): void {
     it('shows each row\'s queued or running command, whoever queued it, and clears it live', function (): void {
-        App\Models\Script::factory()->create(['name' => 'Flush DNS']);
+        Script::factory()->create(['name' => 'Flush DNS']);
         $device = Device::factory()->active()->windows()->create(['last_seen' => now()]);
         $idle = Device::factory()->active()->windows()->create(['last_seen' => now()]);
-        $command = App\Models\DeviceCommand::factory()->create([
+        $command = DeviceCommand::factory()->create([
             'device_id' => $device->id,
-            'script_id' => App\Models\Script::query()->where('name', 'Flush DNS')->value('id'),
-            'status' => App\Enums\CommandStatus::Pending,
+            'script_id' => Script::query()->where('name', 'Flush DNS')->value('id'),
+            'status' => CommandStatus::Pending,
             'queued_by' => User::factory()->create()->id,
         ]);
 
@@ -311,11 +314,11 @@ describe('what each device is doing', function (): void {
         };
 
         Device::factory()->active()->windows()->count(2)->create()
-            ->each(fn (Device $device) => App\Models\DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => App\Enums\CommandStatus::Pending]));
+            ->each(fn (Device $device) => DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => CommandStatus::Pending]));
         $few = $queriesFor();
 
         Device::factory()->active()->windows()->count(6)->create()
-            ->each(fn (Device $device) => App\Models\DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => App\Enums\CommandStatus::Pending]));
+            ->each(fn (Device $device) => DeviceCommand::factory()->create(['device_id' => $device->id, 'status' => CommandStatus::Pending]));
 
         expect($queriesFor())->toBe($few);
     });
@@ -328,4 +331,4 @@ it('mounts the command detail flyout on every page, once', function (string $rou
     $html = $this->actingAs(User::factory()->create())->get($url)->assertSuccessful()->getContent();
 
     expect(substr_count($html, '&quot;name&quot;:&quot;commands.detail&quot;'))->toBe(1);
-})->with(['devices.index', 'software.index', 'devices.apps', 'devices.system', 'devices.show']);
+})->with(['devices.index', 'software.index', 'devices.apps', 'devices.security', 'devices.details', 'devices.show']);

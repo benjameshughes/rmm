@@ -18,8 +18,8 @@ use App\Livewire\Devices\Metrics as DeviceMetrics;
 use App\Livewire\Devices\Overview as DeviceOverview;
 use App\Livewire\Devices\Pending as DevicesPending;
 use App\Livewire\Devices\Printers as DevicePrinters;
+use App\Livewire\Devices\Security as DeviceSecurity;
 use App\Livewire\Devices\Storage as DeviceStorage;
-use App\Livewire\Devices\System as DeviceSystem;
 use App\Livewire\Hardware\Index as HardwareIndex;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Create as ScriptsCreate;
@@ -34,6 +34,8 @@ use App\Livewire\Software\Index as SoftwareIndex;
 use App\Livewire\Software\Show as SoftwareShow;
 use App\Livewire\Tags\Index as TagsIndex;
 use App\Livewire\Trends\Index as TrendsIndex;
+use App\Models\Device;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -73,7 +75,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('metrics', DeviceMetrics::class)->name('metrics');
         Route::get('commands', DeviceCommands::class)->name('commands');
         Route::get('apps', DeviceApps::class)->name('apps');
-        Route::get('system', DeviceSystem::class)->name('system');
+        Route::get('security', DeviceSecurity::class)->name('security');
+        Route::get('system', fn (Device $device): RedirectResponse => to_route('devices.show', $device));
         Route::get('storage', DeviceStorage::class)->name('storage');
         Route::get('printers', DevicePrinters::class)->name('printers');
         Route::get('backups', DeviceBackups::class)->name('backups');

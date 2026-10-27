@@ -49,14 +49,15 @@ final class Apps extends Component
     {
         $this->authorize('view', $device);
 
-        $this->device = $device->load('latestMetric.appMetrics');
+        $this->device = $device->load(['latestMetric.appMetrics', 'latestInventory']);
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
     #[On('echo-private:devices.{device.id},SoftwareInventorySynced')]
+    #[On('echo-private:devices.{device.id},SystemInventorySynced')]
     public function refreshDevice(): void
     {
-        $this->device->refresh()->load('latestMetric.appMetrics');
+        $this->device->refresh()->load(['latestMetric.appMetrics', 'latestInventory']);
     }
 
     #[On('echo-private:devices.{device.id},CommandUpdated')]
@@ -156,6 +157,8 @@ final class Apps extends Component
             'lastChecked' => $this->device->software_inventoried_at === null ? null : 'Last checked '.$this->device->software_inventoried_at->diffForHumans().' by winget.',
             'software' => $hasSoftwareInventory ? $software->forDevice($this->device, $this->filters())->paginate(config('software.device_per_page')) : null,
             'packageCommands' => $hasSoftwareInventory ? $software->packageCommandsOnDevice($this->device) : collect(),
+            'hasSystemInventory' => $this->device->hasSystemInventory(),
+            'windowsSoftware' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot()->software() : null,
             'inventoryCommand' => $hasSoftwareInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('software.inventory_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::Apps->pageTitle($this->device));
     }

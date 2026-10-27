@@ -16,7 +16,8 @@ use App\Livewire\Devices\Index;
 use App\Livewire\Devices\Metrics;
 use App\Livewire\Devices\Overview;
 use App\Livewire\Devices\Pending;
-use App\Livewire\Devices\System;
+use App\Livewire\Devices\Security;
+use App\Livewire\Devices\SystemInventory;
 use App\Livewire\Scripts\Show as ScriptsShow;
 use App\Models\Alert;
 use App\Models\Device;
@@ -73,7 +74,8 @@ it('gates viewing a device through the policy', function (string $component): vo
     'metrics' => [Metrics::class],
     'commands' => [Commands::class],
     'apps' => [Apps::class],
-    'system' => [System::class],
+    'security' => [Security::class],
+    'system inventory control' => [SystemInventory::class],
     'details' => [Details::class],
 ]);
 

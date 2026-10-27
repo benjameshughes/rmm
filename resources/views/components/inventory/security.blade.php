@@ -1,15 +1,17 @@
 @props(['security'])
 
-<x-dashboard.section id="security" class="scroll-mt-6" title="Security">
-    <x-inventory.checks :checks="$security->checks()" />
+<div {{ $attributes->class('grid items-start gap-6 lg:grid-cols-2') }} data-security>
+    <x-dashboard.section title="Protection" description="Secure Boot, TPM, Defender, UAC and virtualisation-based security.">
+        <x-inventory.checks :checks="$security->checks()" />
+    </x-dashboard.section>
 
-    <flux:separator />
+    <div class="space-y-6">
+        <x-dashboard.section title="BitLocker">
+            <x-inventory.checks :checks="$security->bitlocker()" empty="BitLocker is not available on this edition of Windows." />
+        </x-dashboard.section>
 
-    <flux:heading size="sm">BitLocker</flux:heading>
-    <x-inventory.checks :checks="$security->bitlocker()" empty="BitLocker is not available on this edition of Windows." />
-
-    <flux:separator />
-
-    <flux:heading size="sm">Firewall</flux:heading>
-    <x-inventory.checks :checks="$security->firewall()" />
-</x-dashboard.section>
+        <x-dashboard.section title="Firewall">
+            <x-inventory.checks :checks="$security->firewall()" />
+        </x-dashboard.section>
+    </div>
+</div>

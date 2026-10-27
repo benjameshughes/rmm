@@ -32,7 +32,7 @@ it('lists each inventoried device with its model, service tag, CPU, RAM, disk, W
 
     Livewire::actingAs($this->user)->test(Index::class)
         ->assertSee('SALES-LAPTOP')
-        ->assertSeeHtml('href="'.route('devices.system', $device).'"')
+        ->assertSeeHtml('href="'.route('devices.details', $device).'"')
         ->assertSee('Dell Inc. Latitude 5440')
         ->assertSee('7HQ2KZ3')
         ->assertSee('13th Gen Intel(R) Core(TM) i5-1345U')

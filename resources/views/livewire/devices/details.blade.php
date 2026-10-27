@@ -1,4 +1,8 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Details">
+    @if($hasSystemInventory)
+        <livewire:devices.system-inventory :device="$device" :key="'system-inventory-'.$device->id" />
+    @endif
+
     <div class="grid gap-6 md:grid-cols-2">
         <flux:card>
             <flux:heading size="sm" class="mb-4">Device Details</flux:heading>
@@ -54,43 +58,50 @@
             </dl>
         </flux:card>
 
-        <flux:card>
-            <flux:heading size="sm" class="mb-4">System Information</flux:heading>
-            <dl class="space-y-3 text-sm">
-                <div class="flex justify-between gap-4">
-                    <dt class="text-zinc-500 dark:text-zinc-400">Operating System</dt>
-                    <dd class="font-medium">{{ $operatingSystem ?? '—' }}</dd>
-                </div>
-                @if($device->os_version)
-                    <flux:separator variant="subtle" />
+        @if($inventory)
+            <flux:card>
+                <flux:heading size="sm" class="mb-4">This PC</flux:heading>
+                <x-inventory.facts :facts="$inventory->overview()" />
+            </flux:card>
+        @else
+            <flux:card>
+                <flux:heading size="sm" class="mb-4">System Information</flux:heading>
+                <dl class="space-y-3 text-sm">
                     <div class="flex justify-between gap-4">
-                        <dt class="text-zinc-500 dark:text-zinc-400">OS Version</dt>
-                        <dd class="font-medium">{{ $device->os_version }}</dd>
+                        <dt class="text-zinc-500 dark:text-zinc-400">Operating System</dt>
+                        <dd class="font-medium">{{ $operatingSystem ?? '—' }}</dd>
                     </div>
-                @endif
-                @if($device->cpu_model)
-                    <flux:separator variant="subtle" />
-                    <div class="flex justify-between gap-4">
-                        <dt class="shrink-0 text-zinc-500 dark:text-zinc-400">CPU</dt>
-                        <dd class="text-right font-medium">{{ $device->cpu_model }}</dd>
-                    </div>
-                @endif
-                @if($device->cpu_cores)
-                    <flux:separator variant="subtle" />
-                    <div class="flex justify-between gap-4">
-                        <dt class="text-zinc-500 dark:text-zinc-400">CPU Cores</dt>
-                        <dd class="font-medium">{{ $device->cpu_cores }}</dd>
-                    </div>
-                @endif
-                @if($totalRam)
-                    <flux:separator variant="subtle" />
-                    <div class="flex justify-between gap-4">
-                        <dt class="text-zinc-500 dark:text-zinc-400">Total RAM</dt>
-                        <dd class="font-medium">{{ $totalRam }}</dd>
-                    </div>
-                @endif
-            </dl>
-        </flux:card>
+                    @if($device->os_version)
+                        <flux:separator variant="subtle" />
+                        <div class="flex justify-between gap-4">
+                            <dt class="text-zinc-500 dark:text-zinc-400">OS Version</dt>
+                            <dd class="font-medium">{{ $device->os_version }}</dd>
+                        </div>
+                    @endif
+                    @if($device->cpu_model)
+                        <flux:separator variant="subtle" />
+                        <div class="flex justify-between gap-4">
+                            <dt class="shrink-0 text-zinc-500 dark:text-zinc-400">CPU</dt>
+                            <dd class="text-right font-medium">{{ $device->cpu_model }}</dd>
+                        </div>
+                    @endif
+                    @if($device->cpu_cores)
+                        <flux:separator variant="subtle" />
+                        <div class="flex justify-between gap-4">
+                            <dt class="text-zinc-500 dark:text-zinc-400">CPU Cores</dt>
+                            <dd class="font-medium">{{ $device->cpu_cores }}</dd>
+                        </div>
+                    @endif
+                    @if($totalRam)
+                        <flux:separator variant="subtle" />
+                        <div class="flex justify-between gap-4">
+                            <dt class="text-zinc-500 dark:text-zinc-400">Total RAM</dt>
+                            <dd class="font-medium">{{ $totalRam }}</dd>
+                        </div>
+                    @endif
+                </dl>
+            </flux:card>
+        @endif
     </div>
 
     <div class="grid gap-6 md:grid-cols-2">
@@ -113,6 +124,11 @@
             </flux:pillbox>
         </flux:card>
     </div>
+
+    @if($inventory)
+        <x-inventory.hardware :hardware="$inventory->hardware()" />
+        <x-inventory.users :users="$inventory->users()" />
+    @endif
 
     <x-device.network-adapters :adapters="$device->latestMetric?->networkMetrics" :cumulative="$cumulativeNetworkCounters" />
 </x-device.shell>

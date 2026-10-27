@@ -3,6 +3,10 @@
 
     <x-device.overview.open-alerts :alerts="$openAlerts" />
 
+    @if($hasSystemInventory)
+        <x-inventory.health :device="$device" :health="$health" />
+    @endif
+
     <div class="grid gap-6 lg:grid-cols-2" data-overview-charts>
         @foreach($charts as $chart)
             <flux:card wire:key="overview-chart-{{ $loop->index }}">
@@ -12,7 +16,6 @@
     </div>
 
     <div class="grid items-start gap-6 lg:grid-cols-2">
-        <x-device.overview.system-glance :device="$device" :inventory="$inventory" :collected="$inventoryCollected" />
         <x-device.linux-health :metric="$metric" />
 
         <div class="space-y-6">

@@ -28,14 +28,15 @@ final class Details extends Component
     {
         $this->authorize('view', $device);
 
-        $this->device = $device->load(['latestMetric.networkMetrics', 'group', 'tags']);
+        $this->device = $device->load(['latestMetric.networkMetrics', 'latestInventory', 'group', 'tags']);
         $this->syncSelectionsFromDevice();
     }
 
     #[On('echo-private:devices.{device.id},DeviceUpdated')]
+    #[On('echo-private:devices.{device.id},SystemInventorySynced')]
     public function refreshDevice(): void
     {
-        $this->device->refresh()->load('latestMetric.networkMetrics');
+        $this->device->refresh()->load(['latestMetric.networkMetrics', 'latestInventory']);
         $this->syncSelectionsFromDevice();
     }
 
@@ -75,6 +76,8 @@ final class Details extends Component
     public function render(): View
     {
         return view('livewire.devices.details', [
+            'hasSystemInventory' => $this->device->hasSystemInventory(),
+            'inventory' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot() : null,
             'apiKeyState' => $this->device->apiKeyState(),
             'apiKeyStateDetail' => $this->device->apiKeyStateDetail(),
             'operatingSystem' => $this->device->operatingSystem(),

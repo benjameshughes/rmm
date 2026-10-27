@@ -116,4 +116,14 @@
             <flux:text>This device has not reported app usage yet. Windows agents 0.6.0 and Linux agents 0.7.1 and newer send the busiest apps with each report.</flux:text>
         </flux:card>
     @endif
+
+    @if($hasSystemInventory)
+        <livewire:devices.system-inventory :device="$device" :key="'system-inventory-'.$device->id" />
+
+        @if($windowsSoftware)
+            <x-inventory.software :software="$windowsSoftware" />
+        @else
+            <x-inventory.empty />
+        @endif
+    @endif
 </x-device.shell>
