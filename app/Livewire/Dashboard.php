@@ -8,10 +8,14 @@ use App\Actions\Dashboard\BuildAttentionChips;
 use App\Actions\Dashboard\BuildFleetGrid;
 use App\Actions\Dashboard\BuildHeroMeters;
 use App\DTOs\Dashboard\AttentionRow;
+use App\DTOs\Dashboard\BusiestRow;
 use App\DTOs\Dashboard\HeroFigures;
 use App\DTOs\Dashboard\Ring;
 use App\DTOs\Dashboard\RingSegment;
 use App\DTOs\DeviceAttention;
+use App\Enums\ChartInk;
+use App\Enums\LoadLevel;
+use App\Enums\SignalColor;
 use App\Models\Device;
 use App\Queries\AgentVersionQueries;
 use App\Queries\DashboardChartQueries;
@@ -73,7 +77,14 @@ final class Dashboard extends Component
         $offlineDevices = $dashboard->offlineDevices($fleet);
         $agentRing = $dashboard->agentRing($fleet, $latestAgentVersion);
         $diskRing = $dashboard->diskRing($fleet);
-        $toRow = fn (DeviceAttention $attention): AttentionRow => new AttentionRow(attention: $attention, chips: $buildChips($attention, $latestAgentVersion));
+        $toRow = fn (DeviceAttention $attention): AttentionRow => new AttentionRow(
+            attention: $attention,
+            device: $attention->device,
+            severity: $attention->severity(),
+            statusLabel: $attention->device->statusLabel(),
+            lastSeen: $attention->device->lastSeenForHumans(),
+            chips: $buildChips($attention, $latestAgentVersion),
+        );
 
         return view('livewire.dashboard', [
             'updatedAt' => now()->inDisplayTimezone()->format('H:i'),
@@ -88,9 +99,9 @@ final class Dashboard extends Component
                 alertTrend: $charts->alertTrend(),
             ),
             'onlineRing' => new Ring(collect([
-                new RingSegment(label: 'Online', value: $summary['online'], strokeClass: 'stroke-green-500'),
-                new RingSegment(label: 'Offline', value: $summary['offline'], strokeClass: 'stroke-red-500'),
-                new RingSegment(label: 'Other', value: $summary['total'] - $summary['online'] - $summary['offline'], strokeClass: 'stroke-zinc-200 dark:stroke-zinc-700'),
+                new RingSegment(label: 'Online', value: $summary['online'], ink: ChartInk::Online),
+                new RingSegment(label: 'Offline', value: $summary['offline'], ink: ChartInk::Critical),
+                new RingSegment(label: 'Other', value: $summary['total'] - $summary['online'] - $summary['offline'], ink: ChartInk::Faint),
             ])),
             'offlineNames' => $offlineDevices->take(config('dashboard.offline_names')),
             'hiddenOfflineCount' => max(0, $offlineDevices->count() - config('dashboard.offline_names')),
@@ -101,18 +112,29 @@ final class Dashboard extends Component
             'fleetGrid' => $buildGrid($fleet, $needsAttention),
             'fleetLoad' => $charts->fleetLoad($fleet->modelKeys()),
             'agentRing' => $agentRing,
-            'agentsBehind' => $agentRing->problemTotal(),
+            'agentsCurrent' => $agentRing->segments->first()->value,
+            'agentsBehindLabel' => "{$agentRing->problemTotal()} behind",
             'diskRing' => $diskRing,
             'disksOverWarning' => $diskRing->problemTotal(),
+            'disksOverWarningClass' => SignalColor::Amber->figureClass($diskRing->problemTotal()),
             'needsAttention' => $needsAttention->values(),
             'attentionRows' => $needsAttention->take(config('dashboard.attention_rows'))->map($toRow)->values(),
             'hiddenAttentionCount' => max(0, $needsAttention->count() - config('dashboard.attention_rows')),
             'worthKnowing' => $worthKnowing->values(),
             'worthKnowingRows' => $worthKnowing->take(config('dashboard.worth_knowing_rows'))->map($toRow)->values(),
             'fullestDisks' => $dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),
-            'diskCount' => $fleet->count(),
+            'diskLinkLabel' => "All {$fleet->count()} disks",
+            'disksLabel' => 'Disks >'.config('devices.disk.warning_percent').'%',
+            'disksRingCaption' => 'over '.config('devices.disk.warning_percent').'%',
             'busiest' => $busiest,
-            'busiestRows' => $busiest->map(fn (Device $device): array => ['device' => $device, 'sparkline' => $sparklines->get($device->id)])->values(),
+            'busiestRows' => $busiest->map(fn (Device $device): BusiestRow => new BusiestRow(
+                device: $device,
+                sparkline: $sparklines->get($device->id),
+                cpu: $device->latestMetric->cpuRoundedForHumans(),
+                cpuLevel: LoadLevel::fromPercent($device->latestMetric->cpu),
+                ram: $device->latestMetric->ramRoundedForHumans(),
+                ramLevel: LoadLevel::fromPercent($device->latestMetric->ram),
+            ))->values(),
         ]);
     }
 }

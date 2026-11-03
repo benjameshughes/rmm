@@ -20,6 +20,11 @@ final readonly class FleetGroup
         public int $offline,
     ) {}
 
+    public function count(): int
+    {
+        return $this->squares->count();
+    }
+
     public function label(): string
     {
         return $this->offline > 0

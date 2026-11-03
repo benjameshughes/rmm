@@ -15,7 +15,7 @@ use Illuminate\Support\Collection;
 /**
  * Everything wrong with one device, for the dashboard's "Needs attention" list.
  */
-final class DeviceAttention
+final readonly class DeviceAttention
 {
     /**
      * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $disks  Disks at or over the warning threshold, fullest first
@@ -25,17 +25,17 @@ final class DeviceAttention
      * @param  Collection<int, PrinterAttention>  $printerProblems  Printing problems on a plainly online PC, worst first
      */
     public function __construct(
-        public readonly Device $device,
-        public readonly Collection $disks,
-        public readonly Collection $alerts,
-        public readonly bool $isOfflineUnexpectedly,
-        public readonly bool $isAgentBehind,
-        public readonly Collection $failedUnits = new Collection,
-        public readonly Collection $inodeDisks = new Collection,
-        public readonly bool $isRebootRequired = false,
-        public readonly Collection $printerProblems = new Collection,
-        public readonly ?BackupState $backupState = null,
-        public readonly bool $isVirtualPrinterDown = false,
+        public Device $device,
+        public Collection $disks,
+        public Collection $alerts,
+        public bool $isOfflineUnexpectedly,
+        public bool $isAgentBehind,
+        public Collection $failedUnits = new Collection,
+        public Collection $inodeDisks = new Collection,
+        public bool $isRebootRequired = false,
+        public Collection $printerProblems = new Collection,
+        public ?BackupState $backupState = null,
+        public bool $isVirtualPrinterDown = false,
     ) {}
 
     public function hasBackupProblem(): bool

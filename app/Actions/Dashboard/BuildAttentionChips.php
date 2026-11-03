@@ -9,6 +9,7 @@ use App\DTOs\DeviceAttention;
 use App\DTOs\Printers\PrinterAttention;
 use App\Enums\AlertMetric;
 use App\Enums\AlertSeverity;
+use App\Enums\SignalColor;
 use App\Models\Alert;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -30,48 +31,48 @@ final class BuildAttentionChips
         return collect()
             ->when($attention->isOfflineUnexpectedly, fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: 'quiet '.($device->last_seen?->diffForHumans(syntax: CarbonInterface::DIFF_ABSOLUTE, short: true) ?? ''),
-                color: 'red',
+                signal: SignalColor::Red,
                 detail: 'Went quiet without announcing a shutdown · '.$device->lastSeenForHumans(),
             )))
             ->merge($attention->disks->map(fn (array $disk): AttentionChip => new AttentionChip(
                 label: "{$disk['name']} {$disk['usedRoundedForHumans']}",
-                color: $disk['usedPercent'] >= config('devices.disk.critical_percent') ? 'red' : 'amber',
+                signal: $disk['usedPercent'] >= config('devices.disk.critical_percent') ? SignalColor::Red : SignalColor::Amber,
                 detail: $disk['freeForHumans'],
             )))
             ->merge($attention->inodeDisks->map(fn (array $disk): AttentionChip => new AttentionChip(
                 label: "{$disk['name']} inodes ".number_format($disk['inodePercent']).'%',
-                color: $disk['inodePercent'] >= config('devices.disk.inode_critical_percent') ? 'red' : 'amber',
+                signal: $disk['inodePercent'] >= config('devices.disk.inode_critical_percent') ? SignalColor::Red : SignalColor::Amber,
                 detail: $disk['inodeForHumans'],
             )))
             ->when($attention->failedUnits->isNotEmpty(), fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: $attention->failedUnits->count().' '.Str::plural('unit', $attention->failedUnits->count()),
-                color: 'red',
+                signal: SignalColor::Red,
                 detail: $attention->failedUnits->implode(', ').' failed',
             )))
             ->when($attention->printerProblems->isNotEmpty(), fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: $attention->printerProblems->count().' '.Str::plural('printer', $attention->printerProblems->count()),
-                color: 'red',
+                signal: SignalColor::Red,
                 detail: $attention->printerProblems->map(fn (PrinterAttention $problem): string => trim(($problem->printerName ?? '').': '.$problem->problem, ': '))->implode("\n"),
             )))
             ->when($attention->isVirtualPrinterDown, fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: 'printer down',
-                color: 'amber',
+                signal: SignalColor::Amber,
                 detail: config('devices.watched_apps.virtual_printer.label').' · '.$device->virtualPrinterLabel(),
             )))
             ->when($attention->hasBackupProblem(), fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: 'backup '.Str::lower($attention->backupState->label()),
-                color: $attention->backupState->color(),
+                signal: SignalColor::fromFluxColor($attention->backupState->color()),
                 detail: $device->backupProblem(),
             )))
             ->merge($this->alertChips($attention))
             ->when($attention->isAgentBehind, fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: "agent {$device->agent_version} → {$latestAgentVersion}",
-                color: 'amber',
+                signal: SignalColor::Amber,
                 detail: 'Update available',
             )))
             ->when($attention->isRebootRequired, fn (Collection $chips): Collection => $chips->push(new AttentionChip(
                 label: 'reboot',
-                color: 'sky',
+                signal: SignalColor::Sky,
                 detail: 'Reboot required',
             )))
             ->values();
@@ -98,7 +99,7 @@ final class BuildAttentionChips
             ->groupBy(fn (Alert $alert): string => $alert->metric->value)
             ->map(fn (Collection $alerts): AttentionChip => new AttentionChip(
                 label: ($alerts->count() > 1 ? $alerts->count().' ' : '').Str::plural($alerts->first()->metric->chipLabel(), $alerts->count()),
-                color: $alerts->contains(fn (Alert $alert): bool => $alert->severity === AlertSeverity::Critical) ? AlertSeverity::Critical->color() : AlertSeverity::Warning->color(),
+                signal: SignalColor::fromFluxColor(($alerts->contains(fn (Alert $alert): bool => $alert->severity === AlertSeverity::Critical) ? AlertSeverity::Critical : AlertSeverity::Warning)->color()),
                 detail: $alerts->map(fn (Alert $alert): string => "{$alert->valueLabel()} · since {$alert->triggered_at->diffForHumans()}")->implode("\n"),
             ))
             ->values();

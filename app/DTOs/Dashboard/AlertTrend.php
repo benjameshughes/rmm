@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs\Dashboard;
 
+use App\Enums\TrendDirection;
+
 /**
  * Alerts raised in the latest window and the one before it, for the hero tile's delta.
  */
@@ -29,10 +31,14 @@ final readonly class AlertTrend
     }
 
     /**
-     * More alerts than yesterday is the only change worth colouring.
+     * More alerts than yesterday is worse, fewer is better.
      */
-    public function deltaClass(): string
+    public function direction(): TrendDirection
     {
-        return $this->delta() > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400';
+        return match (true) {
+            $this->delta() > 0 => TrendDirection::Worse,
+            $this->delta() < 0 => TrendDirection::Improved,
+            default => TrendDirection::Steady,
+        };
     }
 }

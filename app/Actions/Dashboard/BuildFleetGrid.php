@@ -8,6 +8,7 @@ use App\DTOs\Dashboard\FleetGroup;
 use App\DTOs\Dashboard\FleetSquare;
 use App\DTOs\DeviceAttention;
 use App\Enums\ScriptPlatform;
+use App\Enums\SignalColor;
 use App\Models\Device;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -46,6 +47,8 @@ final class BuildFleetGrid
             name: $name,
             squares: $devices->map(fn (Device $device): FleetSquare => new FleetSquare(
                 device: $device,
+                signal: $this->signal($device, needsAttention: $attentionIds->has($device->id)),
+                isMonitorOnly: $device->isMonitorOnly,
                 statusLabel: $device->statusLabel().($device->isMonitorOnly ? ' · monitor only' : ''),
                 needsAttention: $attentionIds->has($device->id),
                 cpu: $device->latestMetric?->cpuRoundedForHumans(),
@@ -53,8 +56,25 @@ final class BuildFleetGrid
                 worstDisk: $this->worstDisk($device),
                 lastSeen: $device->lastSeenForHumans(),
             ))->values(),
-            offline: $devices->filter(fn (Device $device): bool => ! $device->isOnline && ! $device->isPoweringOff)->count(),
+            offline: $devices->filter($this->isOffline(...))->count(),
         );
+    }
+
+    /**
+     * Offline beats attention, and attention beats the device's own status colour.
+     */
+    private function signal(Device $device, bool $needsAttention): SignalColor
+    {
+        return match (true) {
+            $this->isOffline($device) => SignalColor::Red,
+            $needsAttention => SignalColor::Amber,
+            default => SignalColor::fromFluxColor($device->statusColor()),
+        };
+    }
+
+    private function isOffline(Device $device): bool
+    {
+        return ! $device->isOnline && ! $device->isPoweringOff;
     }
 
     private function worstDisk(Device $device): ?string

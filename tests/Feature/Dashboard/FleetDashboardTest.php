@@ -229,7 +229,7 @@ it('sums up the problems in the hero tiles, red only when not zero', function ()
         ->assertViewHas('hero', fn ($hero): bool => $hero->offline === 1
             && $hero->fullDisks === 1
             && $hero->failedUnits === 0
-            && $hero->problemClass($hero->offline) !== $hero->problemClass($hero->failedUnits));
+            && $hero->offlineClass() !== $hero->failedUnitsClass());
 });
 
 describe('live refresh', function (): void {

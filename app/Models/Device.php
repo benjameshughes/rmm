@@ -496,20 +496,6 @@ final class Device extends Model
         return $this->last_seen?->inDisplayTimezone()->format('j M Y, H:i');
     }
 
-    /**
-     * The status colour as a small dot, for dense lists where a badge is too wide.
-     */
-    public function statusDotClass(): string
-    {
-        return match ($this->statusColor()) {
-            'green' => 'bg-green-500',
-            'red' => 'bg-red-500',
-            'amber' => 'bg-amber-500',
-            'sky' => 'bg-sky-500',
-            default => 'bg-zinc-400',
-        };
-    }
-
     public function lastSeenForHumans(): string
     {
         return $this->last_seen === null ? 'Never seen' : 'Seen '.$this->last_seen->diffForHumans();

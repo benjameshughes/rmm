@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Dashboard;
 
 use App\DTOs\DeviceAttention;
+use App\Enums\ChartInk;
 use App\Enums\ScriptPlatform;
 use App\Models\Device;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -12,14 +13,14 @@ use Illuminate\Support\Collection;
 
 /**
  * The segmented meters under the Disks and Failed units hero figures: one segment per device,
- * problems first, capped at dashboard.hero_segments. Each segment is just its colour class.
+ * problems first, capped at dashboard.hero_segments. Each segment is its ink.
  */
 final class BuildHeroMeters
 {
     /**
      * @param  EloquentCollection<int, Device>  $fleet
      * @param  Collection<int, DeviceAttention>  $attention
-     * @return array{disks: Collection<int, string>, units: Collection<int, string>}
+     * @return array{disks: Collection<int, ChartInk>, units: Collection<int, ChartInk>}
      */
     public function __invoke(EloquentCollection $fleet, Collection $attention): array
     {
@@ -28,36 +29,31 @@ final class BuildHeroMeters
         return [
             'disks' => $this->meter($fleet->toBase()
                 ->filter(fn (Device $device): bool => $device->fullestDisk() !== null)
-                ->map(fn (Device $device): string => $this->diskClass($byDevice->get($device->id)))),
+                ->map(fn (Device $device): ChartInk => $this->diskInk($byDevice->get($device->id)))),
             'units' => $this->meter($fleet->toBase()
                 ->filter(fn (Device $device): bool => $device->platform() === ScriptPlatform::Linux)
-                ->map(fn (Device $device): string => ($byDevice->get($device->id)?->failedUnits->isNotEmpty() ?? false) ? 'bg-red-500' : $this->calm())),
+                ->map(fn (Device $device): ChartInk => ($byDevice->get($device->id)?->failedUnits->isNotEmpty() ?? false) ? ChartInk::Critical : ChartInk::Faint)),
         ];
     }
 
     /**
-     * @param  Collection<int, string>  $classes
-     * @return Collection<int, string>
+     * @param  Collection<int, ChartInk>  $inks
+     * @return Collection<int, ChartInk>
      */
-    private function meter(Collection $classes): Collection
+    private function meter(Collection $inks): Collection
     {
-        return $classes
-            ->sortBy(fn (string $class): int => $class === $this->calm() ? 1 : 0)
+        return $inks
+            ->sortBy(fn (ChartInk $ink): int => $ink->isProblem() ? 0 : 1)
             ->take(config('dashboard.hero_segments'))
             ->values();
     }
 
-    private function diskClass(?DeviceAttention $attention): string
+    private function diskInk(?DeviceAttention $attention): ChartInk
     {
         return match (true) {
-            $attention === null || $attention->disks->isEmpty() => $this->calm(),
-            $attention->worstDiskPercent() >= config('devices.disk.critical_percent') => 'bg-red-500',
-            default => 'bg-amber-500',
+            $attention === null || $attention->disks->isEmpty() => ChartInk::Faint,
+            $attention->worstDiskPercent() >= config('devices.disk.critical_percent') => ChartInk::Critical,
+            default => ChartInk::Warning,
         };
-    }
-
-    private function calm(): string
-    {
-        return 'bg-zinc-200 dark:bg-zinc-700';
     }
 }

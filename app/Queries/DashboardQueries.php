@@ -8,6 +8,7 @@ use App\DTOs\Dashboard\Ring;
 use App\DTOs\Dashboard\RingSegment;
 use App\DTOs\DeviceAttention;
 use App\DTOs\Printers\PrinterAttention;
+use App\Enums\ChartInk;
 use App\Enums\DeviceStatus;
 use App\Enums\VirtualPrinterState;
 use App\Models\Alert;
@@ -190,9 +191,9 @@ final class DashboardQueries
         $behind = $fleet->filter(fn (Device $device): bool => $device->isAgentOutdated($latestAgentVersion))->count();
 
         return new Ring(collect([
-            new RingSegment(label: 'Current', value: $fleet->count() - $unknown - $behind, strokeClass: 'stroke-zinc-800 dark:stroke-zinc-100'),
-            new RingSegment(label: 'Behind', value: $behind, strokeClass: 'stroke-amber-500', isProblem: true),
-            new RingSegment(label: 'Unknown', value: $unknown, strokeClass: 'stroke-zinc-200 dark:stroke-zinc-700'),
+            new RingSegment(label: 'Current', value: $fleet->count() - $unknown - $behind, ink: ChartInk::Ink),
+            new RingSegment(label: 'Behind', value: $behind, ink: ChartInk::Warning),
+            new RingSegment(label: 'Unknown', value: $unknown, ink: ChartInk::Faint),
         ]));
     }
 
@@ -207,7 +208,7 @@ final class DashboardQueries
         $warning = config('devices.disk.warning_percent');
         $critical = config('devices.disk.critical_percent');
         $edges = collect([0, ...config('dashboard.disk_bands'), $warning, $critical, PHP_INT_MAX]);
-        $calmStrokes = ['stroke-zinc-200 dark:stroke-zinc-700', 'stroke-zinc-300 dark:stroke-zinc-600', 'stroke-zinc-400 dark:stroke-zinc-500'];
+        $calmBands = ChartInk::calmBands();
         $percents = $fleet->toBase()
             ->map(fn (Device $device): ?float => $device->fullestDisk()['usedPercent'] ?? null)
             ->filter(fn (?float $percent): bool => $percent !== null);
@@ -215,12 +216,11 @@ final class DashboardQueries
         return new Ring($edges->sliding(2)->values()->map(fn (Collection $pair, int $index): RingSegment => new RingSegment(
             label: $pair->last() === PHP_INT_MAX ? "{$pair->first()}%+" : "{$pair->first()}–{$pair->last()}%",
             value: $percents->filter(fn (float $percent): bool => $percent >= $pair->first() && $percent < $pair->last())->count(),
-            strokeClass: match (true) {
-                $pair->first() >= $critical => 'stroke-red-500',
-                $pair->first() >= $warning => 'stroke-amber-500',
-                default => $calmStrokes[min($index, count($calmStrokes) - 1)],
+            ink: match (true) {
+                $pair->first() >= $critical => ChartInk::Critical,
+                $pair->first() >= $warning => ChartInk::Warning,
+                default => $calmBands[min($index, count($calmBands) - 1)],
             },
-            isProblem: $pair->first() >= $warning,
         )));
     }
 

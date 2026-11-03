@@ -1,13 +1,13 @@
 @props(['groups'])
 
-<div {{ $attributes->class('flex flex-wrap gap-x-12 gap-y-3') }} data-fleet-grid>
+<div {{ $attributes->class('flex flex-wrap gap-x-16 gap-y-6 py-4') }} data-fleet-grid>
     @foreach($groups as $group)
-        <div class="flex min-w-0 items-start gap-3" wire:key="fleet-grid-{{ $group->name }}">
-            <span class="w-20 shrink-0 pt-0.5 text-xs text-zinc-500" data-fleet-group-label>{{ $group->label() }}</span>
-            <div class="flex max-w-2xl flex-wrap gap-1">
+        <div class="flex min-w-64 basis-0 flex-col gap-3" style="flex-grow: {{ $group->count() }}" wire:key="fleet-grid-{{ $group->name }}">
+            <span class="text-xs text-zinc-500" data-fleet-group-label>{{ $group->label() }}</span>
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,1fr))] gap-y-2">
                 @foreach($group->squares as $square)
                     <flux:tooltip wire:key="fleet-square-{{ $square->device->id }}">
-                        <a href="{{ route('devices.show', $square->device) }}" wire:navigate class="block size-5 {{ $square->classes() }} hover:outline hover:outline-1 hover:outline-zinc-900 dark:hover:outline-white" data-fleet-square aria-label="{{ $square->device->hostname }}"></a>
+                        <a href="{{ route('devices.show', $square->device) }}" wire:navigate @class(['block size-5 justify-self-center', $square->signal->squareClass(), 'rounded-full' => $square->isMonitorOnly, 'rounded-[3px]' => ! $square->isMonitorOnly]) data-fleet-square data-fleet-signal="{{ $square->signal->value }}" aria-label="{{ $square->device->hostname }}"></a>
                         <flux:tooltip.content class="text-start">
                             <p class="font-semibold">{{ $square->device->hostname }}</p>
                             <p>{{ $square->statusLabel }}</p>

@@ -27,7 +27,7 @@ final readonly class Ring
      */
     public function problemTotal(): int
     {
-        return $this->segments->filter(fn (RingSegment $segment): bool => $segment->isProblem)->sum(fn (RingSegment $segment): int => $segment->value);
+        return $this->segments->filter(fn (RingSegment $segment): bool => $segment->ink->isProblem())->sum(fn (RingSegment $segment): int => $segment->value);
     }
 
     /**

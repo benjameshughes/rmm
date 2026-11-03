@@ -31,4 +31,15 @@ enum TrendDirection: string
             default => 'zinc',
         };
     }
+
+    /**
+     * Small delta text: only a turn for the worse is coloured.
+     */
+    public function textClass(): string
+    {
+        return match ($this) {
+            self::Worse => 'text-red-600 dark:text-red-400',
+            default => 'text-zinc-400 dark:text-zinc-500',
+        };
+    }
 }

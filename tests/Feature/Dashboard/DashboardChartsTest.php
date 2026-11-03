@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Enums\AlertSeverity;
+use App\Enums\ChartInk;
+use App\Enums\SignalColor;
 use App\Livewire\Dashboard;
 use App\Models\Alert;
 use App\Models\Device;
@@ -77,7 +79,7 @@ it('draws the hero ring, fleet grid, alert bars and busiest sparklines', functio
         ->assertSeeHtml('data-fleet-square')
         ->assertSeeHtml('data-alerts-chart')
         ->assertViewHas('hero', fn ($hero): bool => $hero->total === 1 && $hero->online === 1 && $hero->alertTrend->latest === 1)
-        ->assertViewHas('busiestRows', fn ($rows): bool => $rows->first()['sparkline']->count() === 48);
+        ->assertViewHas('busiestRows', fn ($rows): bool => $rows->first()->sparkline->count() === 48);
 });
 
 it('averages fleet cpu and ram per half hour in one query', function (): void {
@@ -115,8 +117,8 @@ it('rings each device by its fullest disk, grey under the warning line, amber th
     $ring = app(DashboardQueries::class)->diskRing(app(DashboardQueries::class)->fleet());
 
     expect($ring->segments->map(fn ($segment): array => [$segment->label, $segment->value])->all())->toBe([['0–50%', 1], ['50–80%', 1], ['80–90%', 1], ['90%+', 1]])
-        ->and($ring->segments[2]->strokeClass)->toBe('stroke-amber-500')
-        ->and($ring->segments[3]->strokeClass)->toBe('stroke-red-500')
+        ->and($ring->segments[2]->ink)->toBe(ChartInk::Warning)
+        ->and($ring->segments[3]->ink)->toBe(ChartInk::Critical)
         ->and($ring->problemTotal())->toBe(2);
 });
 
@@ -147,7 +149,7 @@ it('builds the hero meters with problems first and caps them', function (): void
     collect([10.0, 20.0, 95.0])->each(fn (float $used): Device => Device::factory()->active()->create(['last_seen' => now(), 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 100.0 - $used]]]));
 
     Livewire::actingAs(User::factory()->create())->test(Dashboard::class)
-        ->assertViewHas('heroMeters', fn (array $meters): bool => $meters['disks']->all() === ['bg-red-500', 'bg-zinc-200 dark:bg-zinc-700']);
+        ->assertViewHas('heroMeters', fn (array $meters): bool => $meters['disks']->all() === [ChartInk::Critical, ChartInk::Faint]);
 });
 
 it('labels each fleet grid group with its count and offline devices, and explains each square in a tooltip', function (): void {
@@ -160,4 +162,25 @@ it('labels each fleet grid group with its count and offline devices, and explain
         ->assertDontSeeHtml('data-fleet-legend')
         ->assertSeeHtml('data-flux-tooltip')
         ->assertSee('Seen 1 hour ago');
+});
+
+it('colours a fleet square red when offline, amber when it needs attention, and green when online and fine', function (): void {
+    $this->device->delete();
+    Device::factory()->active()->windows()->create(['hostname' => 'FINE', 'last_seen' => now(), 'agent_version' => null]);
+    Device::factory()->active()->windows()->create(['hostname' => 'FULL', 'last_seen' => now(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 3.0]]]);
+    Device::factory()->active()->windows()->create(['hostname' => 'GONE', 'last_seen' => now()->subHour(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 3.0]]]);
+
+    Livewire::actingAs(User::factory()->create())->test(Dashboard::class)
+        ->assertViewHas('fleetGrid', fn ($groups): bool => $groups->first()->squares->mapWithKeys(fn ($square): array => [$square->device->hostname => $square->signal->value])->all() === [
+            'FINE' => SignalColor::Green->value,
+            'FULL' => SignalColor::Amber->value,
+            'GONE' => SignalColor::Red->value,
+        ])
+        ->assertDontSeeHtml('outline-amber-500');
+});
+
+it('fades zero problem figures and colours the rest by their signal', function (): void {
+    expect(SignalColor::Red->figureClass(0))->toBe('text-zinc-300 dark:text-zinc-600')
+        ->and(SignalColor::Red->figureClass(2))->toBe(SignalColor::Red->textClass())
+        ->and(SignalColor::fromFluxColor('blue'))->toBe(SignalColor::Zinc);
 });

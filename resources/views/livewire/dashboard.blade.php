@@ -13,7 +13,7 @@
             <span class="pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Online</span>
         </a>
 
-        <x-dashboard.hero-tile label="Offline" :value="$hero->offline" :value-class="$hero->problemClass($hero->offline)" :href="route('devices.index', ['statusFilter' => 'offline'])" data-hero-offline>
+        <x-dashboard.hero-tile label="Offline" :value="$hero->offline" :value-class="$hero->offlineClass()" :href="route('devices.index', ['statusFilter' => 'offline'])" data-hero-offline>
             <x-slot:aside>
                 @foreach($offlineNames as $device)
                     <a href="{{ route('devices.show', $device) }}" wire:navigate class="text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white" wire:key="offline-{{ $device->id }}">{{ $device->hostname }}</a>@unless($loop->last), @endunless
@@ -24,7 +24,7 @@
             </x-slot:aside>
         </x-dashboard.hero-tile>
 
-        <x-dashboard.hero-tile label="Open alerts" :value="$hero->openAlerts" :value-class="$hero->problemClass($hero->openAlerts)" :href="route('alerts.index')" data-hero-alerts>
+        <x-dashboard.hero-tile label="Open alerts" :value="$hero->openAlerts" :value-class="$hero->openAlertsClass()" :href="route('alerts.index')" data-hero-alerts>
             <x-slot:chart>
                 <flux:chart :value="$alertMiniBars" class="h-8 w-full">
                     <flux:chart.svg gutter="0">
@@ -36,17 +36,17 @@
                 </flux:chart>
             </x-slot:chart>
             <x-slot:aside>
-                <span class="{{ $hero->alertTrend->deltaClass() }}">{{ $hero->alertTrend->deltaLabel() }}</span>
+                <span class="{{ $hero->alertTrend->direction()->textClass() }}">{{ $hero->alertTrend->deltaLabel() }}</span>
             </x-slot:aside>
         </x-dashboard.hero-tile>
 
-        <x-dashboard.hero-tile :label="'Disks >'.config('devices.disk.warning_percent').'%'" :value="$hero->fullDisks" :value-class="$hero->problemClass($hero->fullDisks, signal: 'amber')" :href="route('devices.index')">
+        <x-dashboard.hero-tile :label="$disksLabel" :value="$hero->fullDisks" :value-class="$hero->fullDisksClass()" :href="route('devices.index')">
             <x-slot:chart>
                 <x-dashboard.meter :segments="$heroMeters['disks']" />
             </x-slot:chart>
         </x-dashboard.hero-tile>
 
-        <x-dashboard.hero-tile label="Failed units" :value="$hero->failedUnits" :value-class="$hero->problemClass($hero->failedUnits)" :href="route('devices.index')">
+        <x-dashboard.hero-tile label="Failed units" :value="$hero->failedUnits" :value-class="$hero->failedUnitsClass()" :href="route('devices.index')">
             <x-slot:chart>
                 <x-dashboard.meter :segments="$heroMeters['units']" />
             </x-slot:chart>
@@ -66,7 +66,7 @@
                 </div>
             @else
                 @foreach($attentionRows as $row)
-                    <x-dashboard.attention-line :row="$row" wire:key="attention-{{ $row->attention->device->id }}" />
+                    <x-dashboard.attention-line :row="$row" wire:key="attention-{{ $row->device->id }}" />
                 @endforeach
                 @if($hiddenAttentionCount > 0)
                     <a href="{{ route('devices.index') }}" wire:navigate class="mt-1 inline-block text-xs text-zinc-400 hover:text-zinc-800 dark:hover:text-white" data-attention-more>+{{ $hiddenAttentionCount }} more &rarr;</a>
@@ -77,7 +77,7 @@
                 <div class="mt-4" data-worth-knowing>
                     <p class="text-xs text-zinc-500">Worth knowing</p>
                     @foreach($worthKnowingRows as $row)
-                        <x-dashboard.attention-line :row="$row" muted wire:key="worth-knowing-{{ $row->attention->device->id }}" />
+                        <x-dashboard.attention-line :row="$row" muted wire:key="worth-knowing-{{ $row->device->id }}" />
                     @endforeach
                 </div>
             @endif
@@ -142,14 +142,14 @@
         </div>
 
         <div class="min-w-0 space-y-8 lg:col-span-3">
-            <x-dashboard.panel title="Disks" :href="route('devices.index')" :link-label="'All '.$diskCount.' disks'" data-disk-ring>
+            <x-dashboard.panel title="Disks" :href="route('devices.index')" :link-label="$diskLinkLabel" data-disk-ring>
                 <div class="flex items-center gap-4">
                     <flux:tooltip :content="$diskRing->tooltip()">
                         <div class="relative size-30 shrink-0">
                             <x-dashboard.ring :ring="$diskRing" class="size-30" />
                             <span class="absolute inset-0 flex flex-col items-center justify-center">
-                                <span class="text-2xl font-semibold leading-none tabular-nums {{ $hero->problemClass($disksOverWarning, signal: 'amber') }}">{{ $disksOverWarning }}</span>
-                                <span class="text-xs text-zinc-400">over {{ config('devices.disk.warning_percent') }}%</span>
+                                <span class="text-2xl font-semibold leading-none tabular-nums {{ $disksOverWarningClass }}">{{ $disksOverWarning }}</span>
+                                <span class="text-xs text-zinc-400">{{ $disksRingCaption }}</span>
                             </span>
                         </div>
                     </flux:tooltip>
@@ -163,12 +163,12 @@
                 </div>
             </x-dashboard.panel>
 
-            <x-dashboard.panel title="Agents" :href="route('devices.index', ['statusFilter' => 'outdated'])" :link-label="$agentsBehind.' behind'" data-agent-ring>
+            <x-dashboard.panel title="Agents" :href="route('devices.index', ['statusFilter' => 'outdated'])" :link-label="$agentsBehindLabel" data-agent-ring>
                 <flux:tooltip :content="$agentRing->tooltip()">
                     <div class="relative size-30">
                         <x-dashboard.ring :ring="$agentRing" class="size-30" />
                         <span class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-2xl font-semibold leading-none tabular-nums text-zinc-900 dark:text-white">{{ $agentRing->segments->first()->value }}<span class="text-sm font-normal text-zinc-400">/{{ $agentRing->total() }}</span></span>
+                            <span class="text-2xl font-semibold leading-none tabular-nums text-zinc-900 dark:text-white">{{ $agentsCurrent }}<span class="text-sm font-normal text-zinc-400">/{{ $agentRing->total() }}</span></span>
                             <span class="text-xs text-zinc-400">current</span>
                         </span>
                     </div>
@@ -180,7 +180,7 @@
                     <span>Device</span><span>CPU 24h</span><span class="text-right">CPU</span><span class="text-right">RAM</span>
                 </div>
                 @forelse($busiestRows as $row)
-                    <x-dashboard.busy-line :device="$row['device']" :sparkline="$row['sparkline']" wire:key="busy-{{ $row['device']->id }}" />
+                    <x-dashboard.busy-line :row="$row" wire:key="busy-{{ $row->device->id }}" />
                 @empty
                     <p class="text-xs text-zinc-400">No device is online right now.</p>
                 @endforelse

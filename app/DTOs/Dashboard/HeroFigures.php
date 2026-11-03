@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs\Dashboard;
 
+use App\Enums\SignalColor;
+
 /**
  * The big numbers across the top of the dashboard.
  */
@@ -19,23 +21,23 @@ final readonly class HeroFigures
         public AlertTrend $alertTrend,
     ) {}
 
-    /**
-     * Share of the fleet online, for the ring.
-     */
-    public function onlinePercent(): float
+    public function offlineClass(): string
     {
-        return $this->total === 0 ? 0.0 : round($this->online / $this->total * 100, 1);
+        return SignalColor::Red->figureClass($this->offline);
     }
 
-    /**
-     * A zero problem figure fades back; anything else takes its signal colour.
-     */
-    public function problemClass(int $value, string $signal = 'red'): string
+    public function openAlertsClass(): string
     {
-        return match (true) {
-            $value === 0 => 'text-zinc-300 dark:text-zinc-600',
-            $signal === 'amber' => 'text-amber-600 dark:text-amber-400',
-            default => 'text-red-600 dark:text-red-400',
-        };
+        return SignalColor::Red->figureClass($this->openAlerts);
+    }
+
+    public function fullDisksClass(): string
+    {
+        return SignalColor::Amber->figureClass($this->fullDisks);
+    }
+
+    public function failedUnitsClass(): string
+    {
+        return SignalColor::Red->figureClass($this->failedUnits);
     }
 }
