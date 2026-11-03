@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\DTOs\Printers\PrinterAttention;
 use App\Enums\AlertSeverity;
 use App\Enums\AttentionLevel;
+use App\Enums\BackupState;
 use App\Models\Alert;
 use App\Models\Device;
 use Illuminate\Support\Collection;
@@ -20,6 +22,7 @@ final class DeviceAttention
      * @param  Collection<int, Alert>  $alerts  Open alerts, newest first
      * @param  Collection<int, string>  $failedUnits  systemd units in a failed state
      * @param  Collection<int, array{name: string, mountPoint: ?string, availableGb: ?float, totalGb: ?float, usedPercent: ?float, usedForHumans: ?string, freeForHumans: ?string, barColor: string, usedRoundedForHumans: ?string, usedTextColor: string, inodePercent: ?float, inodeForHumans: ?string, inodeColor: string}>  $inodeDisks  Disks with inode usage at or over the inode warning threshold, fullest first
+     * @param  Collection<int, PrinterAttention>  $printerProblems  Printing problems on a plainly online PC, worst first
      */
     public function __construct(
         public readonly Device $device,
@@ -30,7 +33,15 @@ final class DeviceAttention
         public readonly Collection $failedUnits = new Collection,
         public readonly Collection $inodeDisks = new Collection,
         public readonly bool $isRebootRequired = false,
+        public readonly Collection $printerProblems = new Collection,
+        public readonly ?BackupState $backupState = null,
+        public readonly bool $isVirtualPrinterDown = false,
     ) {}
+
+    public function hasBackupProblem(): bool
+    {
+        return (bool) $this->backupState?->needsAttention();
+    }
 
     public function needsAttention(): bool
     {
@@ -40,7 +51,10 @@ final class DeviceAttention
             || $this->isAgentBehind
             || $this->failedUnits->isNotEmpty()
             || $this->inodeDisks->isNotEmpty()
-            || $this->isRebootRequired;
+            || $this->isRebootRequired
+            || $this->isVirtualPrinterDown
+            || $this->printerProblems->isNotEmpty()
+            || $this->hasBackupProblem();
     }
 
     /**
@@ -58,7 +72,10 @@ final class DeviceAttention
             || $this->inodeDisks->isNotEmpty()
             || $this->alerts->isNotEmpty()
             || $this->isOfflineUnexpectedly
-            || $this->isAgentBehind;
+            || $this->isAgentBehind
+            || $this->isVirtualPrinterDown
+            || $this->printerProblems->isNotEmpty()
+            || $this->hasBackupProblem();
 
         return match (true) {
             $isCritical => AttentionLevel::Critical,

@@ -245,7 +245,7 @@ describe('dashboard', function (): void {
 
         $severity === null
             ? $dashboard->assertSee('All clear')
-            : $dashboard->assertSeeHtml('data-attention-severity="'.$severity.'"')->assertSeeHtml('data-attention-inodes')->assertSee(number_format($inodes, 1).'% of inodes used');
+            : $dashboard->assertSeeHtml('data-attention-severity="'.$severity.'"')->assertSee('/var inodes '.number_format($inodes).'%')->assertSee(number_format($inodes, 1).'% of inodes used');
     })->with([
         'under warning' => [79.0, null],
         'at warning' => [80.0, 'warning'],

@@ -37,6 +37,18 @@ enum AttentionLevel: string
         };
     }
 
+    /**
+     * The small square that leads a dashboard attention row.
+     */
+    public function squareClass(): string
+    {
+        return match ($this) {
+            self::Critical => 'bg-red-500',
+            self::Warning => 'bg-amber-500',
+            self::Info => 'bg-zinc-400 dark:bg-zinc-500',
+        };
+    }
+
     public function icon(): string
     {
         return match ($this) {

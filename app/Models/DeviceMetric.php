@@ -346,6 +346,16 @@ final class DeviceMetric extends Model
         };
     }
 
+    /**
+     * The "now" figure on the dashboard's busiest list: grey until it passes the load warning line.
+     */
+    public function loadTextClass(?float $percent): string
+    {
+        return $percent > config('devices.load.warning_percent')
+            ? 'text-amber-600 dark:text-amber-400'
+            : 'text-zinc-800 dark:text-zinc-100';
+    }
+
     private function loadBarColor(?float $percent): string
     {
         return match (true) {

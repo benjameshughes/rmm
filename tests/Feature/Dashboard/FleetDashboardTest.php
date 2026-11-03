@@ -48,7 +48,9 @@ it('replaces the starter kit placeholder with the fleet dashboard', function ():
         ->assertSuccessful()
         ->assertSeeLivewire(Dashboard::class)
         ->assertSee('Needs attention')
-        ->assertSee('Disk space across the fleet')
+        ->assertSee('Busiest now')
+        ->assertSeeHtml('data-updated-at')
+        ->assertDontSeeHtml('data-stats-strip')
         ->assertDontSeeHtml('placeholder-pattern');
 });
 
@@ -128,7 +130,7 @@ it('lists open alerts, devices that went quiet and old agents', function (): voi
         ->assertViewHas('needsAttention', fn ($attention): bool => $attention->map(fn (DeviceAttention $item): string => $item->device->hostname)->sort()->values()->all() === ['ALERTING', 'OLD-AGENT', 'QUIET-PC'])
         ->assertSee('since 5 minutes ago')
         ->assertSee('Went quiet without announcing a shutdown')
-        ->assertSee('Update available 0.6.5');
+        ->assertSee('agent 0.6.5 → 0.7.0');
 });
 
 it('puts the worst devices first', function (): void {
@@ -172,7 +174,6 @@ it('sums up the fleet with managed and monitor-only counts and links through to 
             && $summary['managed'] === 2
             && $summary['monitorOnly'] === 2)
         ->assertSeeHtml('href="'.route('devices.index', ['statusFilter' => 'online']).'"')
-        ->assertSeeHtml('href="'.route('devices.index', ['statusFilter' => 'powering-off']).'"')
         ->assertSeeHtml('href="'.route('devices.index', ['statusFilter' => 'offline']).'"');
 });
 
@@ -185,7 +186,7 @@ it('lists every device\'s fullest disk, fullest first, up to the configured numb
 
     Livewire::actingAs($this->user)->test(Dashboard::class)
         ->assertViewHas('fullestDisks', fn ($rows): bool => $rows->map(fn (array $row): string => $row['device']->hostname.' '.$row['disk']['name'])->all() === ['D-92 /', 'D-60 /', 'D-40 C:'])
-        ->assertSee('All 4 devices')
+        ->assertSee('All 4')
         ->assertSeeHtml('href="'.route('devices.index').'"');
 });
 
@@ -200,34 +201,35 @@ it('shows the busiest online devices by CPU or RAM', function (): void {
         ->assertViewHas('busiest', fn ($devices): bool => $devices->pluck('hostname')->all() === ['CPU-BOUND', 'RAM-BOUND']);
 });
 
-it('shows the latest alerts with their status and links to the alerts page', function (): void {
-    config(['dashboard.recent_alerts' => 2]);
-    $device = healthyDevice(['hostname' => 'NOISY']);
-    Alert::factory()->resolved()->create(['device_id' => $device->id, 'triggered_at' => now()->subHours(3)]);
-    Alert::factory()->resolved()->create(['device_id' => $device->id, 'triggered_at' => now()->subHour()]);
-    Alert::factory()->acknowledged()->create(['device_id' => $device->id, 'triggered_at' => now()]);
+it('leaves recent alerts and audit activity to their own pages', function (): void {
+    Alert::factory()->resolved()->create(['device_id' => healthyDevice(['hostname' => 'NOISY'])->id]);
+    AuditLog::factory()->create(['properties' => ['label' => 'HIDDEN-ACTIVITY']]);
 
     Livewire::actingAs($this->user)->test(Dashboard::class)
-        ->assertViewHas('recentAlerts', fn ($alerts): bool => $alerts->count() === 2 && $alerts->first()->triggered_at->isToday())
-        ->assertSee('Acknowledged')
-        ->assertSee('Resolved')
-        ->assertSeeHtml('href="'.route('alerts.index').'"');
+        ->assertDontSee('Recent alerts')
+        ->assertDontSee('Recent activity')
+        ->assertDontSee('HIDDEN-ACTIVITY');
 });
 
-it('shows recent activity only to users the audit policy allows', function (): void {
-    AuditLog::factory()->create(['properties' => ['label' => 'VISIBLE-ACTIVITY']]);
+it('caps the attention list and links on to the rest', function (): void {
+    config(['dashboard.attention_rows' => 2]);
+    collect(range(1, 5))->each(fn (int $number): Device => healthyDevice(['hostname' => "FULL-{$number}", 'disks' => diskAt(95.0)]));
 
     Livewire::actingAs($this->user)->test(Dashboard::class)
-        ->assertSee('Recent activity')
-        ->assertSee('VISIBLE-ACTIVITY')
-        ->assertSeeHtml('href="'.route('audit.index').'"');
+        ->assertViewHas('attentionRows', fn ($rows): bool => $rows->count() === 2)
+        ->assertViewHas('hiddenAttentionCount', 3)
+        ->assertSee('+3 more');
+});
 
-    Gate::before(fn (User $user, string $ability, array $arguments): ?bool => $ability === 'viewAny' && ($arguments[0] ?? null) === AuditLog::class ? false : null);
+it('sums up the problems in the hero tiles, red only when not zero', function (): void {
+    healthyDevice(['hostname' => 'FULL', 'disks' => diskAt(95.0)]);
+    healthyDevice(['hostname' => 'GONE', 'last_seen' => now()->subHour()]);
 
     Livewire::actingAs($this->user)->test(Dashboard::class)
-        ->assertDontSee('Recent activity')
-        ->assertDontSee('VISIBLE-ACTIVITY')
-        ->assertViewHas('recentActivity', fn ($activity): bool => $activity->isEmpty());
+        ->assertViewHas('hero', fn ($hero): bool => $hero->offline === 1
+            && $hero->fullDisks === 1
+            && $hero->failedUnits === 0
+            && $hero->problemClass($hero->offline) !== $hero->problemClass($hero->failedUnits));
 });
 
 describe('live refresh', function (): void {
@@ -285,15 +287,6 @@ describe('live refresh', function (): void {
             ->assertSeeHtml('--flux-progress-percentage: 93%')
             ->assertSeeHtml('var(--color-red-600)')
             ->assertDontSeeHtml('wire:key="usage-bar-82"');
-    });
-
-    it('refreshes recent activity from the audit channel', function (): void {
-        $dashboard = Livewire::actingAs($this->user)->test(Dashboard::class)->assertDontSee('FRESH-ACTIVITY');
-
-        $auditLog = AuditLog::factory()->create(['properties' => ['label' => 'FRESH-ACTIVITY']]);
-
-        $dashboard->dispatch('echo-private:audit,AuditLogged', ['auditLogId' => $auditLog->id])
-            ->assertSee('FRESH-ACTIVITY');
     });
 });
 

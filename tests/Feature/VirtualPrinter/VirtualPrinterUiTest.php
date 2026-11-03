@@ -24,15 +24,16 @@ beforeEach(function (): void {
     $this->actingAs(User::factory()->create());
 });
 
-it('shows a pill per online print station, down ones first', function (): void {
+it('puts a down print station on the attention list, and leaves ready ones off it', function (): void {
     printStation('LABEL-A');
+
+    Livewire::test(Dashboard::class)->assertDontSee('printer down');
+
     printStation('LABEL-B', ['virtual_printer_seen_at' => now()->subDay(), 'virtual_printer_missing_since' => now()->subHours(14)]);
 
     Livewire::test(Dashboard::class)
-        ->assertSeeHtml('data-label-printing')
-        ->assertSeeInOrder(['Label printing', 'LABEL-B', 'Down for 14h', 'LABEL-A', 'Ready'])
-        ->assertSeeHtml('data-print-station="down"')
-        ->assertSeeHtml('data-print-station="ready"');
+        ->assertSeeInOrder(['LABEL-B', 'Down for 14h', 'printer down'])
+        ->assertViewHas('needsAttention', fn ($attention): bool => $attention->filter(fn ($item): bool => $item->isVirtualPrinterDown)->map(fn ($item): string => $item->device->hostname)->values()->all() === ['LABEL-B']);
 });
 
 it('leaves out pcs that are not print stations or not plainly online', function (): void {
@@ -42,19 +43,18 @@ it('leaves out pcs that are not print stations or not plainly online', function 
     printStation('LABEL-BOOTING', ['power_state' => 'powering_on', 'power_state_changed_at' => now()]);
 
     Livewire::test(Dashboard::class)
-        ->assertDontSeeHtml('data-label-printing')
-        ->assertDontSeeHtml('data-print-station');
+        ->assertDontSee('printer down');
 });
 
-it('flips a pill live when the device update arrives over reverb', function (): void {
+it('shows the warning live when the device update arrives over reverb', function (): void {
     $device = printStation('LABEL-A');
-    $component = Livewire::test(Dashboard::class)->assertSeeHtml('data-print-station="ready"');
+    $component = Livewire::test(Dashboard::class)->assertDontSee('printer down');
 
     $this->travel(config('dashboard.heartbeat_refresh_seconds'))->seconds();
     $device->forceFill(['last_seen' => now(), 'virtual_printer_missing_since' => now()->subMinutes(3)])->save();
 
     $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'isStateChange' => true])
-        ->assertSeeHtml('data-print-station="down"')
+        ->assertSee('printer down')
         ->assertSee('Down for 3m');
 });
 

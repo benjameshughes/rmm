@@ -49,6 +49,30 @@ enum AlertMetric: string
         };
     }
 
+    /**
+     * The short noun for a dashboard chip, pluralised by the caller.
+     */
+    public function chipLabel(): string
+    {
+        return match ($this) {
+            self::Cpu => 'CPU',
+            self::Ram => 'RAM',
+            self::Disk => 'disk',
+            self::CpuQueue => 'CPU queue',
+            self::DiskBusy => 'disk busy',
+            self::PageFile => 'page file',
+            self::Offline => 'offline',
+            self::AgentOutdated => 'agent',
+            self::ScriptFailed => 'script',
+            self::VirtualPrinterDown => 'label printer',
+            self::PrinterProblem => 'printer',
+            self::SpoolerDown => 'spooler',
+            self::BackupOverdue => 'backup',
+            self::NetdataRepairFailed => 'netdata',
+            self::ServerBackupProblem => 'server backup',
+        };
+    }
+
     public function unit(): string
     {
         return match ($this) {

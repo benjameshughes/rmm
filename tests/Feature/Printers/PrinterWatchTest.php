@@ -136,7 +136,7 @@ it('shows no printer badge on an offline PC', function (): void {
     Livewire::test(Index::class)->assertDontSeeHtml('data-printer-problem-badge');
 });
 
-it('lists printer problems across the fleet on the dashboard, worst first', function (): void {
+it('folds printer problems into the dashboard attention list as a chip per pc', function (): void {
     $flooded = watchedPc('PACKING-PC');
     DevicePrinter::factory()->for($flooded)->create(['name' => 'Warehouse', 'snapshot' => ['name' => 'Warehouse', 'status' => 0, 'jobs_count' => 104, 'jobs' => []], 'problem_since' => now()->subMinutes(30)]);
     $broken = watchedPc('OFFICE-PC');
@@ -147,14 +147,18 @@ it('lists printer problems across the fleet on the dashboard, worst first', func
     DevicePrinter::factory()->for(watchedPc('FINE-PC'))->create(['name' => 'Xerox3335']);
 
     Livewire::test(Dashboard::class)
-        ->assertSeeHtml('data-printer-problems')
-        ->assertSeeInOrder(['Printers', 'SPOOLER-PC', 'Print spooler not running', 'OFFICE-PC', 'Epson ET9C934EE3ADF7', 'Offline', 'PACKING-PC', 'Warehouse', '104 jobs queued'])
-        ->assertDontSeeHtml(route('devices.printers', $offline))
-        ->assertDontSee('Xerox3335');
+        ->assertSee('SPOOLER-PC')
+        ->assertSee('Print spooler not running')
+        ->assertSee('Epson ET9C934EE3ADF7: Offline')
+        ->assertSee('Warehouse: 104 jobs queued')
+        ->assertSee('1 printer')
+        ->assertDontSee('Xerox3335')
+        ->assertViewHas('needsAttention', fn ($attention): bool => ($attention->firstWhere('device.hostname', 'FINE-PC')?->printerProblems->isEmpty() ?? true)
+            && ($attention->firstWhere('device.hostname', 'GONE-PC')?->printerProblems->isEmpty() ?? true));
 });
 
-it('hides the dashboard printers card when nothing is wrong', function (): void {
+it('keeps a pc with healthy printers off the dashboard attention list', function (): void {
     DevicePrinter::factory()->for(watchedPc('FINE-PC'))->create(['name' => 'Xerox3335']);
 
-    Livewire::test(Dashboard::class)->assertDontSeeHtml('data-printer-problems');
+    Livewire::test(Dashboard::class)->assertViewHas('needsAttention', fn ($attention): bool => $attention->every(fn ($item): bool => $item->printerProblems->isEmpty()));
 });

@@ -1,137 +1,190 @@
-@use('App\Enums\DeviceListFilter')
+<div class="space-y-8">
+    <header class="flex h-8 items-baseline justify-between gap-4">
+        <flux:heading size="lg" level="1">Dashboard</flux:heading>
+        <span class="text-xs text-zinc-400" data-updated-at>Updated {{ $updatedAt }}</span>
+    </header>
 
-<div class="space-y-6">
-    <div>
-        <flux:heading size="xl" level="1">Dashboard</flux:heading>
-        <flux:text class="mt-1">{{ $summary['total'] }} {{ Str::plural('device', $summary['total']) }}, updated live.</flux:text>
+    <div class="grid grid-cols-2 items-end gap-x-8 gap-y-6 md:grid-cols-3 xl:grid-cols-5" data-hero>
+        <a href="{{ route('devices.index', ['statusFilter' => 'online']) }}" wire:navigate class="flex items-end gap-4" data-hero-online>
+            <div class="relative size-22 shrink-0">
+                <x-dashboard.ring :ring="$onlineRing" class="size-22" />
+                <span class="absolute inset-0 flex items-center justify-center text-2xl font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $hero->online }}<span class="text-sm font-normal text-zinc-400">/{{ $hero->total }}</span></span>
+            </div>
+            <span class="pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Online</span>
+        </a>
+
+        <x-dashboard.hero-tile label="Offline" :value="$hero->offline" :value-class="$hero->problemClass($hero->offline)" :href="route('devices.index', ['statusFilter' => 'offline'])" data-hero-offline>
+            <x-slot:aside>
+                @foreach($offlineNames as $device)
+                    <a href="{{ route('devices.show', $device) }}" wire:navigate class="text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white" wire:key="offline-{{ $device->id }}">{{ $device->hostname }}</a>@unless($loop->last), @endunless
+                @endforeach
+                @if($hiddenOfflineCount > 0)
+                    <span>+{{ $hiddenOfflineCount }} more</span>
+                @endif
+            </x-slot:aside>
+        </x-dashboard.hero-tile>
+
+        <x-dashboard.hero-tile label="Open alerts" :value="$hero->openAlerts" :value-class="$hero->problemClass($hero->openAlerts)" :href="route('alerts.index')" data-hero-alerts>
+            <x-slot:chart>
+                <flux:chart :value="$alertMiniBars" class="h-8 w-full">
+                    <flux:chart.svg gutter="0">
+                        <flux:chart.stack>
+                            <flux:chart.bar field="calm" class="text-zinc-300 dark:text-zinc-600" />
+                            <flux:chart.bar field="hot" class="text-red-500" />
+                        </flux:chart.stack>
+                    </flux:chart.svg>
+                </flux:chart>
+            </x-slot:chart>
+            <x-slot:aside>
+                <span class="{{ $hero->alertTrend->deltaClass() }}">{{ $hero->alertTrend->deltaLabel() }}</span>
+            </x-slot:aside>
+        </x-dashboard.hero-tile>
+
+        <x-dashboard.hero-tile :label="'Disks >'.config('devices.disk.warning_percent').'%'" :value="$hero->fullDisks" :value-class="$hero->problemClass($hero->fullDisks, signal: 'amber')" :href="route('devices.index')">
+            <x-slot:chart>
+                <x-dashboard.meter :segments="$heroMeters['disks']" />
+            </x-slot:chart>
+        </x-dashboard.hero-tile>
+
+        <x-dashboard.hero-tile label="Failed units" :value="$hero->failedUnits" :value-class="$hero->problemClass($hero->failedUnits)" :href="route('devices.index')">
+            <x-slot:chart>
+                <x-dashboard.meter :segments="$heroMeters['units']" />
+            </x-slot:chart>
+        </x-dashboard.hero-tile>
     </div>
 
-    @if($printStations->isNotEmpty())
-        <x-dashboard.section title="Label printing" :description="config('devices.watched_apps.virtual_printer.label').' on each print station that is online.'" data-label-printing>
-            <div class="flex flex-wrap gap-2">
-                @foreach($printStations as $station)
-                    <x-dashboard.print-station :device="$station['device']" :state="$station['state']" wire:key="print-station-{{ $station['device']->id }}" />
-                @endforeach
-            </div>
-        </x-dashboard.section>
-    @endif
+    <x-dashboard.fleet-grid :groups="$fleetGrid" />
 
-    @if($printerProblems->isNotEmpty())
-        <x-dashboard.section title="Printers" description="Printing problems on PCs that are online, worst first." data-printer-problems>
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                @foreach($printerProblems as $attention)
-                    <x-dashboard.printer-problem :attention="$attention" wire:key="printer-problem-{{ $attention->key() }}" />
-                @endforeach
-            </div>
-        </x-dashboard.section>
-    @endif
+    <div class="grid grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-12">
+        <section class="min-w-0 bg-zinc-50 p-4 lg:col-span-5 dark:bg-white/[0.03]" data-needs-attention>
+            <h2 class="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Needs attention <span class="ms-1 font-normal tabular-nums text-zinc-400">{{ $needsAttention->count() }}</span></h2>
 
-    @if($backupProblems->isNotEmpty())
-        <x-dashboard.section title="Backups" description="PCs whose last backup failed or whose last good one is overdue." data-backup-problems>
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                @foreach($backupProblems as $row)
-                    <x-dashboard.backup-problem :device="$row['device']" :state="$row['state']" :problem="$row['problem']" wire:key="backup-problem-{{ $row['device']->id }}" />
-                @endforeach
-            </div>
-        </x-dashboard.section>
-    @endif
-
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <x-device.list.summary-card label="Devices" :value="$summary['total']" icon="server" :href="route('devices.index')" />
-        <x-device.list.summary-card :label="DeviceListFilter::Online->label()" :value="$summary['online']" icon="signal" tone="text-green-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::Online->value])" />
-        <x-device.list.summary-card :label="DeviceListFilter::PoweringOff->label()" :value="$summary['poweringOff']" icon="moon" tone="text-amber-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::PoweringOff->value])" />
-        <x-device.list.summary-card :label="DeviceListFilter::Offline->label()" :value="$summary['offline']" icon="signal-slash" tone="text-red-500" :href="route('devices.index', ['statusFilter' => DeviceListFilter::Offline->value])" />
-        <x-device.list.summary-card label="Managed" :value="$summary['managed']" icon="command-line" :href="route('devices.index')" />
-        <x-device.list.summary-card label="Monitor only" :value="$summary['monitorOnly']" icon="eye" :href="route('devices.index')" />
-    </div>
-
-    <x-dashboard.section title="Needs attention" description="Full disks and inodes, failed services, open alerts, devices that went quiet and old agents, worst first.">
-        @if($needsAttention->isEmpty())
-            <div class="flex items-center gap-3 rounded-lg bg-green-50 px-4 py-6 dark:bg-green-500/10" data-all-clear>
-                <flux:icon name="check-circle" class="size-8 shrink-0 text-green-500" />
-                <div>
-                    <flux:heading>All clear</flux:heading>
-                    <flux:text size="sm">No full disks, failed services, open alerts, silent devices or old agents.</flux:text>
+            @if($attentionRows->isEmpty())
+                <div class="flex h-8 items-center gap-3 text-sm text-zinc-800 dark:text-zinc-100" data-all-clear>
+                    <span class="size-1.5 rounded-[1px] bg-green-500"></span>
+                    All clear. Nothing needs you.
                 </div>
-            </div>
-        @else
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                @foreach($needsAttention as $attention)
-                    <x-dashboard.attention-row :attention="$attention" :latest-version="$latestAgentVersion" wire:key="attention-{{ $attention->device->id }}" />
+            @else
+                @foreach($attentionRows as $row)
+                    <x-dashboard.attention-line :row="$row" wire:key="attention-{{ $row->attention->device->id }}" />
                 @endforeach
-            </div>
-        @endif
+                @if($hiddenAttentionCount > 0)
+                    <a href="{{ route('devices.index') }}" wire:navigate class="mt-1 inline-block text-xs text-zinc-400 hover:text-zinc-800 dark:hover:text-white" data-attention-more>+{{ $hiddenAttentionCount }} more &rarr;</a>
+                @endif
+            @endif
 
-        @if($worthKnowing->isNotEmpty())
-            <div class="space-y-1 border-t border-zinc-100 pt-3 dark:border-zinc-700/60" data-worth-knowing>
-                <flux:text size="sm" class="font-medium">Worth knowing</flux:text>
-                <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                    @foreach($worthKnowing as $attention)
-                        <x-dashboard.attention-row :attention="$attention" :latest-version="$latestAgentVersion" wire:key="worth-knowing-{{ $attention->device->id }}" />
+            @if($worthKnowingRows->isNotEmpty())
+                <div class="mt-4" data-worth-knowing>
+                    <p class="text-xs text-zinc-500">Worth knowing</p>
+                    @foreach($worthKnowingRows as $row)
+                        <x-dashboard.attention-line :row="$row" muted wire:key="worth-knowing-{{ $row->attention->device->id }}" />
                     @endforeach
                 </div>
-            </div>
-        @endif
-    </x-dashboard.section>
+            @endif
+        </section>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-        <x-dashboard.section title="Disk space across the fleet" description="Each device's fullest disk." :href="route('devices.index')" :link-label="'All '.$diskCount.' devices'">
-            @forelse($fullestDisks as $row)
-                <x-dashboard.disk-row :device="$row['device']" :disk="$row['disk']" wire:key="disk-{{ $row['device']->id }}" />
-            @empty
-                <flux:text>No device has reported its disks yet.</flux:text>
-            @endforelse
-        </x-dashboard.section>
-
-        <x-dashboard.section title="Busiest right now" description="Online devices by CPU or RAM, whichever is higher.">
-            <div class="space-y-3">
-                @forelse($busiest as $device)
-                    <div class="grid grid-cols-[minmax(0,10rem)_1fr] items-center gap-3" wire:key="busy-{{ $device->id }}">
-                        <a href="{{ route('devices.metrics', $device) }}" wire:navigate class="truncate text-sm font-medium text-zinc-800 hover:underline dark:text-white">{{ $device->hostname }}</a>
-                        <div class="space-y-1">
-                            <x-device.usage-meter label="CPU" :value="$device->latestMetric->cpuRoundedForHumans()" :percent="$device->latestMetric->cpu" :color="$device->latestMetric->cpuBarColor()" />
-                            <x-device.usage-meter label="RAM" :value="$device->latestMetric->ramRoundedForHumans()" :percent="$device->latestMetric->ram" :color="$device->latestMetric->ramBarColor()" />
-                        </div>
+        <div class="min-w-0 space-y-8 lg:col-span-4">
+            <x-dashboard.panel title="Alerts · 24h" :href="route('alerts.index')" link-label="All alerts" data-alerts-chart>
+                @if($isQuietDay)
+                    <div class="flex h-40 flex-col justify-end gap-2">
+                        <div class="h-px bg-zinc-200 dark:bg-zinc-700"></div>
+                        <span class="text-xs text-zinc-400">Quiet day.</span>
                     </div>
-                @empty
-                    <flux:text>No device is online right now.</flux:text>
-                @endforelse
-            </div>
-        </x-dashboard.section>
-    </div>
+                @else
+                    <flux:chart :value="$alertsPerBucket" class="h-40">
+                        <flux:chart.svg gutter="4 0 16 20">
+                            <flux:chart.stack width="70%">
+                                <flux:chart.bar field="warning" class="text-amber-400" />
+                                <flux:chart.bar field="critical" class="text-red-500" />
+                            </flux:chart.stack>
+                            <flux:chart.axis axis="x" field="time" :format="['hour' => '2-digit', 'hour12' => false]">
+                                <flux:chart.axis.tick class="text-zinc-400" />
+                            </flux:chart.axis>
+                            <flux:chart.axis axis="y">
+                                <flux:chart.axis.grid class="text-zinc-100 dark:text-zinc-800" />
+                                <flux:chart.axis.tick class="text-zinc-400" />
+                            </flux:chart.axis>
+                        </flux:chart.svg>
+                        <flux:chart.tooltip>
+                            <flux:chart.tooltip.heading field="time" :format="['hour' => '2-digit', 'minute' => '2-digit', 'hour12' => false]" />
+                            <flux:chart.tooltip.value field="critical" label="Critical" />
+                            <flux:chart.tooltip.value field="warning" label="Warning" />
+                        </flux:chart.tooltip>
+                    </flux:chart>
+                @endif
+            </x-dashboard.panel>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-        <x-dashboard.section title="Recent alerts" :href="route('alerts.index')">
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                @forelse($recentAlerts as $alert)
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" wire:key="recent-alert-{{ $alert->id }}">
-                        <flux:badge size="sm" :color="$alert->severity->color()">{{ $alert->severity->label() }}</flux:badge>
-                        <div class="min-w-0 flex-1">
-                            <flux:text size="sm" class="truncate font-medium text-zinc-800 dark:text-white">{{ $alert->device?->hostname ?? $alert->message }}</flux:text>
-                            <flux:text size="xs" class="truncate">{{ $alert->conditionLabel() }} &middot; {{ $alert->triggered_at->diffForHumans() }}</flux:text>
+            <x-dashboard.panel title="Fleet load · 24h" :href="route('trends.index')" link-label="Trends" data-fleet-load>
+                <x-slot:titleExtra>
+                    <span class="ms-2 text-xs font-normal"><span class="text-zinc-800 dark:text-zinc-100">CPU</span> <span class="text-zinc-400">·</span> <span class="text-zinc-400">RAM</span></span>
+                </x-slot:titleExtra>
+                <flux:chart :value="$fleetLoad" class="h-40">
+                    <flux:chart.svg gutter="4 0 16 28">
+                        <flux:chart.line field="threshold" class="text-amber-500" curve="none" stroke-width="1" stroke-dasharray="4 4" />
+                        <flux:chart.line field="ram" class="text-zinc-400" curve="none" stroke-width="1.5" />
+                        <flux:chart.line field="cpu" class="text-zinc-800 dark:text-zinc-100" curve="none" stroke-width="2" />
+                        <flux:chart.axis axis="x" field="time" :format="['hour' => '2-digit', 'hour12' => false]">
+                            <flux:chart.axis.tick class="text-zinc-400" />
+                        </flux:chart.axis>
+                        <flux:chart.axis axis="y" :format="['style' => 'unit', 'unit' => 'percent']">
+                            <flux:chart.axis.grid class="text-zinc-100 dark:text-zinc-800" />
+                            <flux:chart.axis.tick class="text-zinc-400" />
+                        </flux:chart.axis>
+                        <flux:chart.cursor />
+                    </flux:chart.svg>
+                    <flux:chart.tooltip>
+                        <flux:chart.tooltip.heading field="time" :format="['hour' => '2-digit', 'minute' => '2-digit', 'hour12' => false]" />
+                        <flux:chart.tooltip.value field="cpu" label="CPU" suffix="%" />
+                        <flux:chart.tooltip.value field="ram" label="RAM" suffix="%" />
+                    </flux:chart.tooltip>
+                </flux:chart>
+            </x-dashboard.panel>
+        </div>
+
+        <div class="min-w-0 space-y-8 lg:col-span-3">
+            <x-dashboard.panel title="Disks" :href="route('devices.index')" :link-label="'All '.$diskCount.' disks'" data-disk-ring>
+                <div class="flex items-center gap-4">
+                    <flux:tooltip :content="$diskRing->tooltip()">
+                        <div class="relative size-30 shrink-0">
+                            <x-dashboard.ring :ring="$diskRing" class="size-30" />
+                            <span class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-2xl font-semibold leading-none tabular-nums {{ $hero->problemClass($disksOverWarning, signal: 'amber') }}">{{ $disksOverWarning }}</span>
+                                <span class="text-xs text-zinc-400">over {{ config('devices.disk.warning_percent') }}%</span>
+                            </span>
                         </div>
-                        <flux:badge size="sm" :color="$alert->status->color()">{{ $alert->status->label() }}</flux:badge>
+                    </flux:tooltip>
+                    <div class="min-w-0 flex-1">
+                        @forelse($fullestDisks as $row)
+                            <x-dashboard.disk-row :device="$row['device']" :disk="$row['disk']" :meter-color="$row['meterColor']" wire:key="disk-{{ $row['device']->id }}" />
+                        @empty
+                            <p class="text-xs text-zinc-400">No device has reported its disks yet.</p>
+                        @endforelse
                     </div>
-                @empty
-                    <flux:text>No alerts yet.</flux:text>
-                @endforelse
-            </div>
-        </x-dashboard.section>
-
-        @can('viewAny', App\Models\AuditLog::class)
-            <x-dashboard.section title="Recent activity" :href="route('audit.index')">
-                <div class="divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                    @forelse($recentActivity as $auditLog)
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" wire:key="activity-{{ $auditLog->id }}">
-                            <flux:badge size="sm" :color="$auditLog->action->color()">{{ $auditLog->action->label() }}</flux:badge>
-                            <flux:text size="sm" class="min-w-0 flex-1 truncate">{{ $auditLog->summary() }}</flux:text>
-                            <flux:text size="xs">{{ $auditLog->created_at->diffForHumans() }}</flux:text>
-                        </div>
-                    @empty
-                        <flux:text>Nothing in the audit log yet.</flux:text>
-                    @endforelse
                 </div>
-            </x-dashboard.section>
-        @endcan
+            </x-dashboard.panel>
+
+            <x-dashboard.panel title="Agents" :href="route('devices.index', ['statusFilter' => 'outdated'])" :link-label="$agentsBehind.' behind'" data-agent-ring>
+                <flux:tooltip :content="$agentRing->tooltip()">
+                    <div class="relative size-30">
+                        <x-dashboard.ring :ring="$agentRing" class="size-30" />
+                        <span class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-2xl font-semibold leading-none tabular-nums text-zinc-900 dark:text-white">{{ $agentRing->segments->first()->value }}<span class="text-sm font-normal text-zinc-400">/{{ $agentRing->total() }}</span></span>
+                            <span class="text-xs text-zinc-400">current</span>
+                        </span>
+                    </div>
+                </flux:tooltip>
+            </x-dashboard.panel>
+
+            <x-dashboard.panel title="Busiest now">
+                <div class="grid grid-cols-[minmax(0,1fr)_4rem_2.5rem_2.5rem] gap-2 text-[11px] text-zinc-400">
+                    <span>Device</span><span>CPU 24h</span><span class="text-right">CPU</span><span class="text-right">RAM</span>
+                </div>
+                @forelse($busiestRows as $row)
+                    <x-dashboard.busy-line :device="$row['device']" :sparkline="$row['sparkline']" wire:key="busy-{{ $row['device']->id }}" />
+                @empty
+                    <p class="text-xs text-zinc-400">No device is online right now.</p>
+                @endforelse
+            </x-dashboard.panel>
+        </div>
     </div>
 </div>

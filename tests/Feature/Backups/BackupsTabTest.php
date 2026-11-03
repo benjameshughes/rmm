@@ -167,13 +167,14 @@ it('flags overdue, failed and partial PCs on the devices table only', function (
     expect($failed->backupState()->value)->toBe('failed');
 });
 
-it('lists only backup problems on the dashboard, and hides the card when there are none', function (): void {
+it('flags backup problems on the dashboard attention list, and drops them once a backup succeeds', function (): void {
     Livewire::actingAs($this->user)->test(Dashboard::class)
-        ->assertSee('data-backup-problems', false)
-        ->assertSee('ACCOUNTS-PC');
+        ->assertSee('ACCOUNTS-PC')
+        ->assertSeeHtml('backup overdue');
 
     $this->device->forceFill(['last_good_backup_at' => now(), 'last_backup_status' => BackupRunStatus::Succeeded])->save();
 
     Livewire::actingAs($this->user)->test(Dashboard::class)
-        ->assertDontSee('data-backup-problems', false);
+        ->assertDontSeeHtml('backup failed')
+        ->assertDontSeeHtml('backup overdue');
 });

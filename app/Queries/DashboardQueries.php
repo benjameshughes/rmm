@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Queries;
 
+use App\DTOs\Dashboard\Ring;
+use App\DTOs\Dashboard\RingSegment;
 use App\DTOs\DeviceAttention;
 use App\DTOs\Printers\PrinterAttention;
-use App\Enums\BackupState;
 use App\Enums\DeviceStatus;
 use App\Enums\VirtualPrinterState;
 use App\Models\Alert;
-use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\DevicePrinter;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -63,8 +63,10 @@ final class DashboardQueries
             ->get()
             ->groupBy('device_id');
 
+        $printerProblems = $this->printerProblems($fleet)->groupBy(fn (PrinterAttention $attention): int => $attention->device->id);
+
         return $fleet
-            ->map(fn (Device $device): DeviceAttention => $this->attentionFor($device, $openAlerts->get($device->id, collect()), $latestAgentVersion))
+            ->map(fn (Device $device): DeviceAttention => $this->attentionFor($device, $openAlerts->get($device->id, collect()), $latestAgentVersion, $printerProblems->get($device->id, collect())))
             ->filter(fn (DeviceAttention $attention): bool => $attention->needsAttention())
             ->sort(fn (DeviceAttention $first, DeviceAttention $second): int => $first->sortKey() <=> $second->sortKey())
             ->values();
@@ -72,8 +74,9 @@ final class DashboardQueries
 
     /**
      * @param  Collection<int, Alert>  $openAlerts
+     * @param  Collection<int, PrinterAttention>  $printerProblems
      */
-    private function attentionFor(Device $device, Collection $openAlerts, ?string $latestAgentVersion): DeviceAttention
+    private function attentionFor(Device $device, Collection $openAlerts, ?string $latestAgentVersion, Collection $printerProblems): DeviceAttention
     {
         $disks = $device->diskUsage();
 
@@ -92,22 +95,10 @@ final class DashboardQueries
                 ->sortByDesc('inodePercent')
                 ->values(),
             isRebootRequired: (bool) $device->latestMetric?->reboot_required,
+            printerProblems: $printerProblems->values(),
+            backupState: $device->backupState(),
+            isVirtualPrinterDown: $device->virtualPrinterState() === VirtualPrinterState::Down,
         );
-    }
-
-    /**
-     * Plainly online print stations and whether each can print labels, down ones first.
-     *
-     * @param  EloquentCollection<int, Device>  $fleet
-     * @return Collection<int, array{device: Device, state: VirtualPrinterState}>
-     */
-    public function printStations(EloquentCollection $fleet): Collection
-    {
-        return $fleet
-            ->map(fn (Device $device): array => ['device' => $device, 'state' => $device->virtualPrinterState()])
-            ->reject(fn (array $station): bool => $station['state'] === VirtualPrinterState::Unwatched)
-            ->sortBy(fn (array $station): int => $station['state'] === VirtualPrinterState::Down ? 0 : 1)
-            ->values();
     }
 
     /**
@@ -157,22 +148,6 @@ final class DashboardQueries
     }
 
     /**
-     * PCs with backup credentials whose last run failed or whose last good
-     * backup is overdue, failed first, then longest overdue.
-     *
-     * @param  EloquentCollection<int, Device>  $fleet
-     * @return Collection<int, array{device: Device, state: BackupState, problem: string}>
-     */
-    public function backupProblems(EloquentCollection $fleet): Collection
-    {
-        return $fleet->toBase()
-            ->map(fn (Device $device): array => ['device' => $device, 'state' => $device->backupState(), 'problem' => $device->backupProblem()])
-            ->filter(fn (array $row): bool => $row['state']->needsAttention())
-            ->sortBy(fn (array $row): array => [$row['state'] === BackupState::Failed ? 0 : 1, $row['device']->last_good_backup_at?->getTimestamp() ?? 0])
-            ->values();
-    }
-
-    /**
      * Each device's fullest disk, fullest first.
      *
      * @param  EloquentCollection<int, Device>  $fleet
@@ -182,6 +157,7 @@ final class DashboardQueries
     {
         return $fleet
             ->map(fn (Device $device): array => ['device' => $device, 'disk' => $device->fullestDisk()])
+            ->map(fn (array $row): array => [...$row, 'meterColor' => ($row['disk']['usedPercent'] ?? 0) >= config('devices.disk.warning_percent') ? $row['disk']['barColor'] : 'zinc'])
             ->filter(fn (array $row): bool => ($row['disk']['usedPercent'] ?? null) !== null)
             ->sortByDesc(fn (array $row): float => $row['disk']['usedPercent'])
             ->take($limit)
@@ -203,15 +179,62 @@ final class DashboardQueries
             ->values();
     }
 
-    /** @return EloquentCollection<int, Alert> */
-    public function recentAlerts(int $limit): EloquentCollection
+    /**
+     * The agent ring: devices on the latest agent, behind it, and not reporting a version.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     */
+    public function agentRing(EloquentCollection $fleet, ?string $latestAgentVersion): Ring
     {
-        return Alert::query()->with(['device', 'alertRule'])->latest('triggered_at')->latest('id')->limit($limit)->get();
+        $unknown = $fleet->filter(fn (Device $device): bool => $device->agent_version === null)->count();
+        $behind = $fleet->filter(fn (Device $device): bool => $device->isAgentOutdated($latestAgentVersion))->count();
+
+        return new Ring(collect([
+            new RingSegment(label: 'Current', value: $fleet->count() - $unknown - $behind, strokeClass: 'stroke-zinc-800 dark:stroke-zinc-100'),
+            new RingSegment(label: 'Behind', value: $behind, strokeClass: 'stroke-amber-500', isProblem: true),
+            new RingSegment(label: 'Unknown', value: $unknown, strokeClass: 'stroke-zinc-200 dark:stroke-zinc-700'),
+        ]));
     }
 
-    /** @return EloquentCollection<int, AuditLog> */
-    public function recentActivity(int $limit): EloquentCollection
+    /**
+     * The disks ring: every device's fullest disk counted into bands. Bands under the warning
+     * line are greys; at or over warning is amber, at or over critical is red.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     */
+    public function diskRing(EloquentCollection $fleet): Ring
     {
-        return AuditLog::query()->with('user')->latest('id')->limit($limit)->get();
+        $warning = config('devices.disk.warning_percent');
+        $critical = config('devices.disk.critical_percent');
+        $edges = collect([0, ...config('dashboard.disk_bands'), $warning, $critical, PHP_INT_MAX]);
+        $calmStrokes = ['stroke-zinc-200 dark:stroke-zinc-700', 'stroke-zinc-300 dark:stroke-zinc-600', 'stroke-zinc-400 dark:stroke-zinc-500'];
+        $percents = $fleet->toBase()
+            ->map(fn (Device $device): ?float => $device->fullestDisk()['usedPercent'] ?? null)
+            ->filter(fn (?float $percent): bool => $percent !== null);
+
+        return new Ring($edges->sliding(2)->values()->map(fn (Collection $pair, int $index): RingSegment => new RingSegment(
+            label: $pair->last() === PHP_INT_MAX ? "{$pair->first()}%+" : "{$pair->first()}–{$pair->last()}%",
+            value: $percents->filter(fn (float $percent): bool => $percent >= $pair->first() && $percent < $pair->last())->count(),
+            strokeClass: match (true) {
+                $pair->first() >= $critical => 'stroke-red-500',
+                $pair->first() >= $warning => 'stroke-amber-500',
+                default => $calmStrokes[min($index, count($calmStrokes) - 1)],
+            },
+            isProblem: $pair->first() >= $warning,
+        )));
+    }
+
+    /**
+     * Devices that went quiet without a shutdown, most recently seen first, for the Offline hero tile.
+     *
+     * @param  EloquentCollection<int, Device>  $fleet
+     * @return Collection<int, Device>
+     */
+    public function offlineDevices(EloquentCollection $fleet): Collection
+    {
+        return $fleet->toBase()
+            ->filter(fn (Device $device): bool => ! $device->isOnline && ! $device->isPoweringOff)
+            ->sortByDesc(fn (Device $device): int => $device->last_seen?->getTimestamp() ?? 0)
+            ->values();
     }
 }
