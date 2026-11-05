@@ -39,8 +39,6 @@ final class Index extends Component
 
     public string $fullName = '';
 
-    public string $password = '';
-
     public bool $isAdmin = false;
 
     public bool $isEnabled = true;
@@ -58,11 +56,6 @@ final class Index extends Component
 
     #[Locked]
     public ?int $editingId = null;
-
-    public bool $showResetPassword = false;
-
-    #[Locked]
-    public ?string $resetPassword = null;
 
     private StaffAccountQueries $staffAccounts;
 
@@ -89,7 +82,6 @@ final class Index extends Component
     {
         $this->authorize('create', StaffAccount::class);
         $this->resetForm();
-        $this->password = $this->newPassword();
         $this->showModal = true;
     }
 
@@ -107,19 +99,6 @@ final class Index extends Component
         $this->deviceGroupIds = $account->deviceGroups()->pluck('device_groups.id')->map(fn (int $id): string => (string) $id)->all();
         $this->tagIds = $account->tags()->pluck('tags.id')->map(fn (int $id): string => (string) $id)->all();
         $this->showModal = true;
-    }
-
-    public function generatePassword(): void
-    {
-        $this->password = $this->newPassword();
-    }
-
-    public function revealPassword(): void
-    {
-        $account = StaffAccount::findOrFail($this->editingId);
-        $this->authorize('reveal-staff-passwords');
-
-        $this->password = $account->password;
     }
 
     public function save(CreateStaffAccount $createAccount, UpdateStaffAccount $updateAccount): void
@@ -140,8 +119,8 @@ final class Index extends Component
         );
 
         $account === null
-            ? $createAccount($details, $this->password, auth()->user())
-            : $updateAccount($account, $details, auth()->user(), password: $this->password === '' ? null : $this->password);
+            ? $createAccount($details, auth()->user())
+            : $updateAccount($account, $details, auth()->user());
 
         $this->resetForm();
         Flux::toast(text: "{$details->username} is queued on its PCs.", heading: 'Staff account saved', variant: 'success');
@@ -159,10 +138,10 @@ final class Index extends Component
     public function resetAccountPassword(StaffAccount $account, ResetStaffPassword $resetPassword): void
     {
         $this->authorize('update', $account);
-        $this->authorize('reveal-staff-passwords');
 
-        $this->resetPassword = $resetPassword($account, auth()->user());
-        $this->showResetPassword = true;
+        $queued = $resetPassword($account, auth()->user());
+
+        Flux::toast(text: "{$account->username} must change it at next logon. Queued on {$queued} ".Str::plural('PC', $queued).'.', heading: 'Password reset to the temp password', variant: 'success');
     }
 
     public function disable(StaffAccount $account, DisableStaffAccount $disableAccount): void
@@ -193,14 +172,9 @@ final class Index extends Component
         Flux::toast(text: "{$minutes} idle minutes on {$queued} ".Str::plural('PC', $queued).'.', heading: 'Screen lock queued', variant: 'success');
     }
 
-    public function closeResetPassword(): void
-    {
-        $this->reset('resetPassword', 'showResetPassword');
-    }
-
     public function resetForm(): void
     {
-        $this->reset('username', 'fullName', 'password', 'isAdmin', 'isEnabled', 'deviceIds', 'deviceGroupIds', 'tagIds', 'editingId', 'showModal');
+        $this->reset('username', 'fullName', 'isAdmin', 'isEnabled', 'deviceIds', 'deviceGroupIds', 'tagIds', 'editingId', 'showModal');
         $this->resetErrorBag();
     }
 
@@ -242,11 +216,6 @@ final class Index extends Component
         ]);
     }
 
-    private function newPassword(): string
-    {
-        return Str::password(config('staff.generated_password_length'));
-    }
-
     /** @return array<string, array<int, mixed>> */
     private function rules(?StaffAccount $account): array
     {
@@ -255,7 +224,6 @@ final class Index extends Component
                 ? ['required', 'string', 'regex:'.config('staff.username_pattern'), Rule::unique('staff_accounts', 'username')]
                 : ['string'],
             'fullName' => ['required', 'string', 'max:'.config('staff.full_name_max_length')],
-            'password' => [$account === null ? 'required' : 'nullable', 'string', 'min:'.config('staff.password_min_length'), 'max:'.config('staff.password_max_length')],
             'isAdmin' => ['boolean'],
             'isEnabled' => ['boolean'],
             'deviceIds' => ['array'],
@@ -274,8 +242,6 @@ final class Index extends Component
             'username.regex' => 'Use up to 20 letters, digits, dots, dashes or underscores, starting with a letter or digit.',
             'username.unique' => 'There is already a staff account with that username.',
             'fullName.required' => 'Enter the person\'s full name.',
-            'password.required' => 'Enter or generate a password.',
-            'password.min' => 'The password must be at least :min characters.',
         ];
     }
 }

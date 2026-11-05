@@ -74,6 +74,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Restore Into A Profile
+    |--------------------------------------------------------------------------
+    |
+    | The folders of a backed-up profile that "into a staff account's profile"
+    | restores into the same folders of the account's profile on the restore
+    | PC, skipping any file already there. They reach backup-restore-profile
+    | as the RestoreProfileFolders secret, as JSON.
+    |
+    */
+
+    'restore_profile' => [
+        'folders' => ['Desktop', 'Documents', 'Pictures', 'Downloads', 'Music', 'Videos', 'Favorites'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Restic Release
     |--------------------------------------------------------------------------
     |

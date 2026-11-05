@@ -15,16 +15,19 @@ final readonly class CreateStaffAccount
         private SyncStaffAccount $syncStaffAccount,
     ) {}
 
-    public function __invoke(StaffAccountDetails $details, string $password, User $user): StaffAccount
+    /**
+     * @param  bool  $resetPassword  Whether a user already on the PCs gets the temp password too
+     */
+    public function __invoke(StaffAccountDetails $details, User $user, bool $resetPassword = true): StaffAccount
     {
-        return DB::transaction(function () use ($details, $password, $user): StaffAccount {
-            $account = StaffAccount::create([...$details->attributes(), 'password' => $password]);
+        return DB::transaction(function () use ($details, $user, $resetPassword): StaffAccount {
+            $account = StaffAccount::create($details->attributes());
 
             $account->devices()->sync($details->deviceIds);
             $account->deviceGroups()->sync($details->deviceGroupIds);
             $account->tags()->sync($details->tagIds);
 
-            ($this->syncStaffAccount)($account, $user);
+            ($this->syncStaffAccount)($account, $user, resetPassword: $resetPassword);
 
             return $account;
         });

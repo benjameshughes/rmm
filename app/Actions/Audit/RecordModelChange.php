@@ -90,7 +90,7 @@ final class RecordModelChange
             },
             $model instanceof StaffAccount => match ($event) {
                 'created' => AuditAction::StaffAccountCreated,
-                'updated' => $model->wasChanged('password') ? AuditAction::StaffAccountPasswordChanged : AuditAction::StaffAccountUpdated,
+                'updated' => AuditAction::StaffAccountUpdated,
                 'deleted' => AuditAction::StaffAccountDeleted,
             },
             default => null,

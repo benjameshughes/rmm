@@ -38,7 +38,7 @@ final class Users extends Component
     #[Locked]
     public ?int $adoptingId = null;
 
-    public string $password = '';
+    public bool $resetPassword = false;
 
     public bool $showAdopt = false;
 
@@ -73,13 +73,8 @@ final class Users extends Component
 
         $this->resetErrorBag();
         $this->adoptingId = $account->id;
-        $this->password = Str::password(config('staff.generated_password_length'));
+        $this->resetPassword = false;
         $this->showAdopt = true;
-    }
-
-    public function generatePassword(): void
-    {
-        $this->password = Str::password(config('staff.generated_password_length'));
     }
 
     public function adopt(AdoptLocalAccount $adoptAccount): void
@@ -88,25 +83,26 @@ final class Users extends Component
         $this->authorize('runCommands', $this->device);
         $this->authorize('create', StaffAccount::class);
 
-        $this->validate(
-            ['password' => ['required', 'string', 'min:'.config('staff.password_min_length'), 'max:'.config('staff.password_max_length')]],
-            ['password.required' => 'Enter or generate a password. The PC\'s current one cannot be read.', 'password.min' => 'The password must be at least :min characters.'],
-        );
+        $this->validate(['resetPassword' => ['boolean']]);
         validator(
             ['username' => $account->username],
             ['username' => [Rule::unique('staff_accounts', 'username')]],
             ['username.unique' => "There is already a staff account named {$account->username}. Add this PC to its targets on the Staff page."],
         )->validate();
 
-        $adoptAccount($account, $this->password, auth()->user());
+        $adoptAccount($account, auth()->user(), resetPassword: $this->resetPassword);
+
+        $text = $this->resetPassword
+            ? "{$account->username} is now a staff account. Its password is being reset to the temp password on {$this->device->hostname}, to be changed at next logon."
+            : "{$account->username} is now a staff account. Its password is unchanged.";
 
         $this->cancelAdopt();
-        Flux::toast(text: "{$account->username} is now a staff account. Its new password is queued on {$this->device->hostname}.", heading: 'Account adopted', variant: 'success');
+        Flux::toast(text: $text, heading: 'Account adopted', variant: 'success');
     }
 
     public function cancelAdopt(): void
     {
-        $this->reset('adoptingId', 'password', 'showAdopt');
+        $this->reset('adoptingId', 'resetPassword', 'showAdopt');
         $this->resetErrorBag();
     }
 

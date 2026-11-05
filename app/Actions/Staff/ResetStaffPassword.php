@@ -4,30 +4,29 @@ declare(strict_types=1);
 
 namespace App\Actions\Staff;
 
+use App\Actions\Audit\RecordAuditEvent;
+use App\Enums\AuditAction;
 use App\Models\StaffAccount;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
+/**
+ * Queues the temp password from config/staff.php on every PC the account
+ * targets, to be changed at the person's next logon.
+ */
 final readonly class ResetStaffPassword
 {
     public function __construct(
         private SyncStaffAccount $syncStaffAccount,
+        private RecordAuditEvent $recordAuditEvent,
     ) {}
 
     /**
-     * @param  string|null  $password  The new password, or null to generate one
-     * @return string The password now set, so it can be handed to the member of staff
+     * @return int How many PCs the reset was queued on
      */
-    public function __invoke(StaffAccount $account, User $user, ?string $password = null): string
+    public function __invoke(StaffAccount $account, User $user): int
     {
-        $password ??= Str::password(config('staff.generated_password_length'));
+        ($this->recordAuditEvent)(AuditAction::StaffAccountPasswordChanged, $account, actor: $user);
 
-        DB::transaction(function () use ($account, $user, $password): void {
-            $account->update(['password' => $password]);
-            ($this->syncStaffAccount)($account, $user);
-        });
-
-        return $password;
+        return ($this->syncStaffAccount)($account, $user, resetPassword: true);
     }
 }

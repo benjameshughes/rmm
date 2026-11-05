@@ -25,11 +25,14 @@ use InvalidArgumentException;
  * key is pending: once it is stamped as added, it is sent blank. The disk
  * usage scan gets the space-hog folders it must keep from config/disk_usage.php,
  * and the delete and restore scripts the protected paths from config/devices.php
- * as JSON, so the PC refuses them too. install-zebra gets the ZDesigner driver
+ * as JSON, so the PC refuses them too. backup-restore-profile gets the profile
+ * folders it restores from config/backup.php as JSON. install-zebra gets the ZDesigner driver
  * pin and match patterns from config/zebra.php and the Zebra template's
- * settings. sync-local-user gets the password of the staff account its
- * StaffAccountId parameter names, only while that account still exists under
- * the same username; anything else gets a blank, which the script refuses. Ad-hoc commands and user scripts never
+ * settings. sync-local-user gets the staff temp password from config/staff.php,
+ * which it sets only when its ResetPassword parameter says so or the user is
+ * new to the PC, and only while the staff account its StaffAccountId names
+ * still exists under the same username; anything else gets a blank, which
+ * the script refuses, so a deleted account is never recreated. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -50,6 +53,13 @@ final class ResolveCommandSecrets
         return collect($names)
             ->mapWithKeys(fn (string $name): array => [$name => $this->value($name, $source, $command)])
             ->all();
+    }
+
+    private function staffTempPassword(DeviceCommand $command): string
+    {
+        $account = StaffAccount::query()->find((int) ($command->parameters['StaffAccountId'] ?? 0));
+
+        return $account !== null && $account->username === ($command->parameters['Username'] ?? null) ? (string) config('staff.temp_password') : '';
     }
 
     private function credentialSource(DeviceCommand $command): ?Device
@@ -84,16 +94,10 @@ final class ResolveCommandSecrets
             'ZebraTemplateDriver' => (string) ZebraTemplate::current()?->driver_name,
             'ZebraTemplateMaxChars' => (string) config('zebra.template_max_chars'),
             'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
-            'StaffPassword' => $this->staffPassword($command),
+            'StaffTempPassword' => $this->staffTempPassword($command),
+            'RestoreProfileFolders' => json_encode(config('backup.restore_profile.folders'), JSON_THROW_ON_ERROR),
             'DeletePathProtected' => json_encode(config('devices.delete_path.protected'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),
         };
-    }
-
-    private function staffPassword(DeviceCommand $command): string
-    {
-        $account = StaffAccount::query()->find((int) ($command->parameters['StaffAccountId'] ?? 0));
-
-        return $account?->username === ($command->parameters['Username'] ?? null) ? (string) $account?->password : '';
     }
 }

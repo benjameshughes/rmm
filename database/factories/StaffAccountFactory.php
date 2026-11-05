@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\StaffAccount;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /** @extends Factory<StaffAccount> */
 class StaffAccountFactory extends Factory
@@ -16,7 +15,6 @@ class StaffAccountFactory extends Factory
         return [
             'username' => fake()->unique()->lexify('????????'),
             'full_name' => fake()->name(),
-            'password' => Str::password(16),
             'is_admin' => false,
             'is_enabled' => true,
         ];

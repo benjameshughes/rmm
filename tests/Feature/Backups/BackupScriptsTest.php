@@ -36,7 +36,7 @@ it('keeps the backup scripts plain ASCII PowerShell 5.1 without try/catch, endin
         ->and($content)->not->toMatch('/\btry\s*\{/i')
         ->and($content)->not->toMatch('/\bcatch\s*\{/i')
         ->and($content)->toContain('ConvertTo-Json');
-})->with(['shared/restic.ps1', 'install-restic.ps1', 'backup-files.ps1', 'backup-snapshots.ps1', 'backup-restore.ps1']);
+})->with(['shared/restic.ps1', 'install-restic.ps1', 'backup-files.ps1', 'backup-snapshots.ps1', 'backup-restore.ps1', 'backup-restore-profile.ps1']);
 
 it('never carries a secret, server address or pinned value in the script text', function (BackupScript $backupScript): void {
     $content = Script::findSystem($backupScript->value)->script_content;

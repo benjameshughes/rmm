@@ -88,7 +88,7 @@ enum AuditAction: string
             self::AlertResolved => 'Alert resolved',
             self::StaffAccountCreated => 'Staff account created',
             self::StaffAccountUpdated => 'Staff account updated',
-            self::StaffAccountPasswordChanged => 'Staff password changed',
+            self::StaffAccountPasswordChanged => 'Staff password reset',
             self::StaffAccountDeleted => 'Staff account deleted',
         };
     }

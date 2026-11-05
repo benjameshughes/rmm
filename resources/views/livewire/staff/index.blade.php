@@ -74,9 +74,7 @@
                                 @can('update', $account)
                                     <flux:button size="sm" variant="ghost" icon="arrow-path" wire:click="sync({{ $account->id }})">Sync</flux:button>
                                     <flux:button size="sm" variant="ghost" icon="pencil-square" wire:click="edit({{ $account->id }})">Edit</flux:button>
-                                    @can('reveal-staff-passwords')
-                                        <flux:button size="sm" variant="ghost" icon="key" x-on:click="$dispatch('confirm-action', { heading: 'Reset password', message: {{ Js::from('Generate a new password for '.$account->username.' and push it to its PCs?') }}, confirm: 'Reset', action: () => $wire.resetAccountPassword({{ $account->id }}) })">Reset</flux:button>
-                                    @endcan
+                                    <flux:button size="sm" variant="ghost" icon="key" x-on:click="$dispatch('confirm-action', { heading: 'Reset password', message: {{ Js::from('Reset '.$account->username.' to the temp password on every PC it targets? They must change it at next logon.') }}, confirm: 'Reset', action: () => $wire.resetAccountPassword({{ $account->id }}) })">Reset</flux:button>
                                     @if ($account->is_enabled)
                                         <flux:button size="sm" variant="ghost" icon="no-symbol" x-on:click="$dispatch('confirm-action', { heading: 'Disable account', message: {{ Js::from('Disable '.$account->username.' on every PC it targets?') }}, confirm: 'Disable', danger: true, action: () => $wire.disable({{ $account->id }}) })">Disable</flux:button>
                                     @endif
@@ -105,18 +103,6 @@
             <flux:input wire:model="username" label="Username" placeholder="e.g. sophie" class="font-mono" :disabled="$editingId !== null" :description="$editingId ? 'Fixed once created: the PCs know the account by it.' : null" required />
 
             <flux:input wire:model="fullName" label="Full name" placeholder="e.g. Sophie Smith" required />
-
-            <div class="space-y-2">
-                <flux:input wire:model="password" type="password" label="Password" viewable copyable :placeholder="$editingId ? 'Leave blank to keep the current password' : null" :required="$editingId === null" />
-                <div class="flex gap-2">
-                    <flux:button size="sm" variant="ghost" icon="sparkles" wire:click="generatePassword">Generate</flux:button>
-                    @if ($editingId)
-                        @can('reveal-staff-passwords')
-                            <flux:button size="sm" variant="ghost" icon="eye" wire:click="revealPassword">Show current</flux:button>
-                        @endcan
-                    @endif
-                </div>
-            </div>
 
             <div class="flex gap-6">
                 <flux:switch wire:model="isAdmin" label="Administrator" />
@@ -148,14 +134,4 @@
         </form>
     </flux:modal>
 
-    <flux:modal wire:model="showResetPassword" @close="closeResetPassword" class="md:w-96">
-        <div class="space-y-6">
-            <flux:heading size="lg">New password</flux:heading>
-            <flux:text>Queued to every PC the account targets. Hand it over now; it can be shown again from Edit.</flux:text>
-            <flux:input :value="$resetPassword" readonly copyable class="font-mono" />
-            <div class="flex justify-end">
-                <flux:button wire:click="closeResetPassword" variant="primary">Done</flux:button>
-            </div>
-        </div>
-    </flux:modal>
 </div>

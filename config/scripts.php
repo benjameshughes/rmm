@@ -235,6 +235,24 @@ return [
                 ['name' => 'SourceDevice', 'label' => 'Source device ID', 'type' => 'number', 'required' => false],
             ],
         ],
+        'backup-restore-profile' => [
+            'name' => 'Restore Backup Into Profile',
+            'description' => 'Restore a backed-up profile\'s Desktop, Documents, Pictures and the other folders in config/backup.php into a staff account\'s profile, skipping files already there. The profile must exist. Source Device restores another PC\'s backup onto this one',
+            'category' => 'backup',
+            'platform' => 'windows',
+            'internal' => true,
+            'file' => 'windows/backup-restore-profile.ps1',
+            'includes' => ['windows/shared/restic.ps1'],
+            'secrets' => ['RestUrl', 'RestCaCert', 'RepositoryName', 'ResticPassword', 'ResticVersion', 'ResticDownloadUrl', 'ResticSha256', 'ResticExeSha256', 'RestoreProfileFolders'],
+            'timeout_seconds' => 7200,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'SnapshotId', 'label' => 'Snapshot ID', 'type' => 'text', 'required' => true, 'default' => 'latest'],
+                ['name' => 'SourceProfile', 'label' => 'Profile folder in the backup', 'type' => 'text', 'required' => true],
+                ['name' => 'Username', 'label' => 'Staff account username', 'type' => 'text', 'required' => true],
+                ['name' => 'SourceDevice', 'label' => 'Source device ID', 'type' => 'number', 'required' => false],
+            ],
+        ],
         'clear-print-queue' => [
             'name' => 'Clear Print Queue',
             'description' => 'Remove every job from one printer\'s queue. Jobs stuck at Deleting need the print spooler restarted',
@@ -315,12 +333,12 @@ return [
         ],
         'sync-local-user' => [
             'name' => 'Sync Local User',
-            'description' => 'Create or update one staff account as a local Windows user: full name, password (never expires, user cannot change it), Administrators membership and enabled or disabled. Queued from the Staff page',
+            'description' => 'Create or update one staff account as a local Windows user: full name, Administrators membership and enabled or disabled. Reset Password (on create and reset only) sets the temp password from config/staff.php, to be changed at next logon. Queued from the Staff page',
             'category' => 'user',
             'platform' => 'windows',
             'internal' => true,
             'file' => 'windows/sync-local-user.ps1',
-            'secrets' => ['StaffPassword'],
+            'secrets' => ['StaffTempPassword'],
             'timeout_seconds' => 120,
             'requires_admin' => true,
             'parameters' => [
@@ -329,6 +347,7 @@ return [
                 ['name' => 'FullName', 'label' => 'Full name', 'type' => 'text', 'required' => true],
                 ['name' => 'IsAdmin', 'label' => 'Administrator', 'type' => 'boolean', 'required' => false],
                 ['name' => 'IsEnabled', 'label' => 'Enabled', 'type' => 'boolean', 'required' => false],
+                ['name' => 'ResetPassword', 'label' => 'Reset password to the temp password', 'type' => 'boolean', 'required' => false],
             ],
         ],
         'remove-local-user' => [

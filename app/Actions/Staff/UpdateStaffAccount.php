@@ -24,19 +24,15 @@ final readonly class UpdateStaffAccount
         private StaffAccountQueries $staffAccounts,
     ) {}
 
-    /**
-     * @param  string|null  $password  A new password, or null to keep the current one
-     */
-    public function __invoke(StaffAccount $account, StaffAccountDetails $details, User $user, ?string $password = null): StaffAccount
+    public function __invoke(StaffAccount $account, StaffAccountDetails $details, User $user): StaffAccount
     {
-        return DB::transaction(function () use ($account, $details, $user, $password): StaffAccount {
+        return DB::transaction(function () use ($account, $details, $user): StaffAccount {
             $before = $this->staffAccounts->devices($account)->get();
 
             $account->update([
                 'full_name' => $details->fullName,
                 'is_admin' => $details->isAdmin,
                 'is_enabled' => $details->isEnabled,
-                ...($password === null ? [] : ['password' => $password]),
             ]);
 
             $account->devices()->sync($details->deviceIds);

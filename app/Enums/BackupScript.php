@@ -12,6 +12,7 @@ enum BackupScript: string
     case BackUp = 'backup-files';
     case ListSnapshots = 'backup-snapshots';
     case Restore = 'backup-restore';
+    case RestoreProfile = 'backup-restore-profile';
     case InstallRestic = 'install-restic';
 
     public function queuedHeading(): string
@@ -20,6 +21,7 @@ enum BackupScript: string
             self::BackUp => 'Backup queued',
             self::ListSnapshots => 'Refreshing snapshots',
             self::Restore => 'Restore queued',
+            self::RestoreProfile => 'Profile restore queued',
             self::InstallRestic => 'Installing restic',
         };
     }

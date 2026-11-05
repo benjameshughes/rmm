@@ -92,37 +92,38 @@ it('offers actions only on unmanaged accounts and never deletes built-ins or the
         ->assertSeeHtml("data-delete=\"{$loose->id}\"");
 });
 
-it('adopts an unmanaged account as a staff account targeting this PC', function (): void {
+it('adopts an unmanaged account as a staff account targeting this PC, leaving its password alone', function (): void {
     $account = reportedAccount($this->device, ['username' => 'temp', 'full_name' => 'Temp Worker', 'is_admin' => true, 'is_enabled' => true]);
 
     Livewire::actingAs($this->user)
         ->test(Users::class, ['device' => $this->device])
         ->call('startAdopt', $account->id)
-        ->set('password', 'correct-horse-battery')
+        ->assertSet('resetPassword', false)
         ->call('adopt')
         ->assertHasNoErrors();
 
     $staff = StaffAccount::query()->sole();
+    $sync = queuedLocalAccountCommand('sync-local-user');
 
     expect($staff->username)->toBe('temp')
         ->and($staff->full_name)->toBe('Temp Worker')
         ->and($staff->is_admin)->toBeTrue()
-        ->and($staff->password)->toBe('correct-horse-battery')
         ->and($staff->devices()->pluck('devices.id')->all())->toBe([$this->device->id])
-        ->and(queuedLocalAccountCommand('sync-local-user')?->device_id)->toBe($this->device->id);
+        ->and($sync?->device_id)->toBe($this->device->id)
+        ->and($sync?->parameters['ResetPassword'])->toBe('false');
 });
 
-it('needs a password to adopt', function (): void {
+it('resets the password to the temp password on adopt only when ticked', function (): void {
     $account = reportedAccount($this->device, ['username' => 'temp']);
 
     Livewire::actingAs($this->user)
         ->test(Users::class, ['device' => $this->device])
         ->call('startAdopt', $account->id)
-        ->set('password', '')
+        ->set('resetPassword', true)
         ->call('adopt')
-        ->assertHasErrors(['password' => 'required']);
+        ->assertHasNoErrors();
 
-    expect(StaffAccount::query()->exists())->toBeFalse();
+    expect(queuedLocalAccountCommand('sync-local-user')?->parameters['ResetPassword'])->toBe('true');
 });
 
 it('will not adopt a name another staff account already has', function (): void {
@@ -132,7 +133,6 @@ it('will not adopt a name another staff account already has', function (): void 
     Livewire::actingAs($this->user)
         ->test(Users::class, ['device' => $this->device])
         ->call('startAdopt', $account->id)
-        ->set('password', 'correct-horse-battery')
         ->call('adopt')
         ->assertHasErrors('username');
 

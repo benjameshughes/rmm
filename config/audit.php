@@ -63,7 +63,7 @@ return [
         AlertRule::class => ['name', 'metric', 'operator', 'threshold', 'duration_minutes', 'severity', 'is_active'],
         Alert::class => ['status'],
         User::class => ['name', 'email', 'password'],
-        StaffAccount::class => ['username', 'full_name', 'is_admin', 'is_enabled', 'password'],
+        StaffAccount::class => ['username', 'full_name', 'is_admin', 'is_enabled'],
     ],
 
     /*

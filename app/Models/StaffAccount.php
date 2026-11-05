@@ -12,8 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * A local Windows account the RMM keeps in step on every PC it targets. The
- * password is encrypted at rest, hidden from serialisation and recorded by
- * name only in the audit log (config/audit.php).
+ * RMM never knows its password: creating or resetting the account sets the
+ * temp password from config/staff.php, which the person must change at
+ * their next logon.
  */
 final class StaffAccount extends Model
 {
@@ -22,14 +23,11 @@ final class StaffAccount extends Model
     /** @use HasFactory<StaffAccountFactory> */
     use HasFactory;
 
-    protected $fillable = ['username', 'full_name', 'password', 'is_admin', 'is_enabled'];
-
-    protected $hidden = ['password'];
+    protected $fillable = ['username', 'full_name', 'is_admin', 'is_enabled'];
 
     protected function casts(): array
     {
         return [
-            'password' => 'encrypted',
             'is_admin' => 'boolean',
             'is_enabled' => 'boolean',
         ];

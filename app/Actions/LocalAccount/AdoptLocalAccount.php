@@ -14,8 +14,8 @@ use App\Queries\DeviceLocalAccountQueries;
 
 /**
  * Turns an unmanaged local account into a staff account targeting its PC,
- * keeping its name, full name, admin rights and enabled state. Its current
- * password cannot be read, so a new one is given here and pushed by the sync.
+ * keeping its name, full name, admin rights and enabled state. Its password
+ * is left alone unless resetPassword asks for the temp password.
  */
 final readonly class AdoptLocalAccount
 {
@@ -24,7 +24,7 @@ final readonly class AdoptLocalAccount
         private DeviceLocalAccountQueries $localAccounts,
     ) {}
 
-    public function __invoke(DeviceLocalAccount $account, string $password, User $user): StaffAccount
+    public function __invoke(DeviceLocalAccount $account, User $user, bool $resetPassword = false): StaffAccount
     {
         throw_if($account->isBuiltIn, LocalAccountCannotBeChanged::builtIn($account));
         throw_if($this->localAccounts->isManaged($account), LocalAccountCannotBeChanged::managed($account));
@@ -39,8 +39,8 @@ final readonly class AdoptLocalAccount
                 deviceGroupIds: [],
                 tagIds: [],
             ),
-            password: $password,
             user: $user,
+            resetPassword: $resetPassword,
         );
     }
 }

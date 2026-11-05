@@ -43,7 +43,6 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureGates(): void
     {
-        Gate::define('reveal-staff-passwords', fn (User $user): bool => true);
         Gate::define('lock-staff-screens', fn (User $user): bool => true);
     }
 

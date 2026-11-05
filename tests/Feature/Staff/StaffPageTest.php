@@ -53,7 +53,6 @@ it('creates an account from the modal and queues its sync', function (): void {
         ->test(Index::class)
         ->call('create')
         ->assertSet('showModal', true)
-        ->assertNotSet('password', '')
         ->set('username', 'sophie')
         ->set('fullName', 'Sophie Smith')
         ->set('isAdmin', true)
@@ -66,53 +65,50 @@ it('creates an account from the modal and queues its sync', function (): void {
 
     expect($account->is_admin)->toBeTrue()
         ->and($account->devices->pluck('id')->all())->toBe([$this->device->id])
-        ->and(DeviceCommand::query()->sole()->parameters['Username'])->toBe('sophie');
+        ->and(DeviceCommand::query()->sole()->parameters['Username'])->toBe('sophie')
+        ->and(DeviceCommand::query()->sole()->parameters['ResetPassword'])->toBe('true');
 });
 
-it('refuses a bad username, a short password and a taken username', function (): void {
+it('refuses a bad username and a taken username', function (): void {
     StaffAccount::factory()->create(['username' => 'taken']);
 
     Livewire::actingAs($this->user)
         ->test(Index::class)
         ->set('username', 'bad name!')
         ->set('fullName', 'Someone')
-        ->set('password', 'short')
         ->call('save')
-        ->assertHasErrors(['username' => 'regex', 'password' => 'min'])
+        ->assertHasErrors(['username' => 'regex'])
         ->set('username', 'taken')
         ->call('save')
         ->assertHasErrors(['username' => 'unique']);
 });
 
-it('edits an account, keeping the password when left blank, and reveals it on request', function (): void {
-    $account = StaffAccount::factory()->create(['username' => 'sophie', 'password' => 'kept-password-1']);
+it('edits an account without touching its password', function (): void {
+    $account = StaffAccount::factory()->create(['username' => 'sophie']);
+    $account->devices()->attach($this->device);
 
     Livewire::actingAs($this->user)
         ->test(Index::class)
         ->call('edit', $account->id)
         ->assertSet('username', 'sophie')
-        ->assertSet('password', '')
-        ->call('revealPassword')
-        ->assertSet('password', 'kept-password-1')
-        ->set('password', '')
         ->set('fullName', 'Sophie Jones')
         ->call('save')
         ->assertHasNoErrors();
 
     expect($account->fresh()->full_name)->toBe('Sophie Jones')
-        ->and($account->fresh()->password)->toBe('kept-password-1');
+        ->and(DeviceCommand::query()->sole()->parameters['ResetPassword'])->toBe('false');
 });
 
 it('resets, disables and deletes from the row buttons', function (): void {
-    $account = StaffAccount::factory()->create(['password' => 'old-password-12']);
+    $account = StaffAccount::factory()->create();
     $account->devices()->attach($this->device);
 
     $page = Livewire::actingAs($this->user)
         ->test(Index::class)
         ->call('resetAccountPassword', $account->id)
-        ->assertSet('showResetPassword', true);
+        ->assertHasNoErrors();
 
-    expect($page->get('resetPassword'))->toBe($account->fresh()->password)->not->toBe('old-password-12');
+    expect(DeviceCommand::query()->sole()->parameters['ResetPassword'])->toBe('true');
 
     $page->call('disable', $account->id);
     expect($account->fresh()->is_enabled)->toBeFalse();

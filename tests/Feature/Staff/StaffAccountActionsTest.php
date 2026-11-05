@@ -17,6 +17,7 @@ use App\Models\DeviceGroup;
 use App\Models\Script;
 use App\Models\StaffAccount;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
     app(SyncSystemScripts::class)();
@@ -56,40 +57,43 @@ function queuedOf(string $slug): array
 it('creates an account with its targets and queues sync-local-user to each resolved PC', function (): void {
     $account = app(CreateStaffAccount::class)(
         staffDetails(['isAdmin' => true, 'deviceIds' => [$this->second->id], 'deviceGroupIds' => [$this->group->id]]),
-        'correct-horse-battery',
         $this->user,
     );
 
-    $expected = ['StaffAccountId' => (string) $account->id, 'Username' => 'sophie', 'FullName' => 'Sophie Smith', 'IsAdmin' => 'true', 'IsEnabled' => 'true'];
+    $expected = ['StaffAccountId' => (string) $account->id, 'Username' => 'sophie', 'FullName' => 'Sophie Smith', 'IsAdmin' => 'true', 'IsEnabled' => 'true', 'ResetPassword' => 'true'];
 
-    expect($account->password)->toBe('correct-horse-battery')
-        ->and(queuedOf('sync-local-user'))->toEqual([$this->first->id => $expected, $this->second->id => $expected]);
+    expect(queuedOf('sync-local-user'))->toEqual([$this->first->id => $expected, $this->second->id => $expected]);
 });
 
 it('updates an account, removes it from PCs it no longer targets and keeps the username', function (): void {
-    $account = StaffAccount::factory()->create(['username' => 'sophie', 'password' => 'old-password-123']);
+    $account = StaffAccount::factory()->create(['username' => 'sophie']);
     $account->devices()->attach([$this->first->id, $this->second->id]);
 
     app(UpdateStaffAccount::class)($account, staffDetails(['username' => 'renamed', 'fullName' => 'Sophie Jones', 'deviceIds' => [$this->first->id]]), $this->user);
 
     expect($account->fresh()->username)->toBe('sophie')
         ->and($account->fresh()->full_name)->toBe('Sophie Jones')
-        ->and($account->fresh()->password)->toBe('old-password-123')
         ->and(queuedOf('remove-local-user'))->toBe([$this->second->id => ['Username' => 'sophie']])
+        ->and(queuedOf('sync-local-user')[$this->first->id]['ResetPassword'])->toBe('false')
         ->and(array_keys(queuedOf('sync-local-user')))->toBe([$this->first->id]);
 });
 
-it('generates a new password on reset, or takes the one given, and syncs it', function (): void {
+it('queues a reset to the temp password on every PC and audits it', function (): void {
     $account = StaffAccount::factory()->create();
     $account->devices()->attach($this->first);
 
-    $generated = app(ResetStaffPassword::class)($account, $this->user);
-    $given = app(ResetStaffPassword::class)($account, $this->user, 'chosen-password-1');
+    expect(app(ResetStaffPassword::class)($account, $this->user))->toBe(1)
+        ->and(queuedOf('sync-local-user')[$this->first->id]['ResetPassword'])->toBe('true')
+        ->and(DB::table('audit_logs')->where('action', 'staff_account.password_changed')->where('subject_id', $account->id)->exists())->toBeTrue();
+});
 
-    expect(strlen($generated))->toBe(config('staff.generated_password_length'))
-        ->and($given)->toBe('chosen-password-1')
-        ->and($account->fresh()->password)->toBe('chosen-password-1')
-        ->and(DeviceCommand::query()->count())->toBe(2);
+it('never resets the password on a plain sync', function (): void {
+    $account = StaffAccount::factory()->create();
+    $account->devices()->attach($this->first);
+
+    app(SyncStaffAccount::class)($account, $this->user);
+
+    expect(queuedOf('sync-local-user')[$this->first->id]['ResetPassword'])->toBe('false');
 });
 
 it('disables an account and syncs it as disabled', function (): void {

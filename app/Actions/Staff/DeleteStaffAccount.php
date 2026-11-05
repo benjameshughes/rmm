@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Queues remove-local-user on every PC the account targets, then deletes it.
- * Any sync still waiting for a PC then gets a blank password, which
+ * Any sync still waiting for a PC then gets a blank temp password, which
  * sync-local-user refuses, so a deleted account is never recreated.
  */
 final readonly class DeleteStaffAccount

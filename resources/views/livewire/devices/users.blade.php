@@ -83,15 +83,12 @@
         <form wire:submit="adopt" class="space-y-6">
             <div class="space-y-1">
                 <flux:heading size="lg">Adopt {{ $adopting?->username }}</flux:heading>
-                <flux:text size="sm">It becomes a staff account targeting {{ $device->hostname }}. The current password cannot be read, so this one replaces it.</flux:text>
+                <flux:text size="sm">It becomes a staff account targeting {{ $device->hostname }}. Its password stays as it is unless you reset it.</flux:text>
             </div>
 
             <flux:error name="username" />
 
-            <div class="space-y-2">
-                <flux:input wire:model="password" type="password" label="New password" viewable copyable required />
-                <flux:button size="sm" variant="ghost" icon="sparkles" wire:click="generatePassword">Generate</flux:button>
-            </div>
+            <flux:checkbox wire:model="resetPassword" label="Reset the password to the temp password" description="They must change it at their next logon." data-adopt-reset-password />
 
             <div class="flex justify-end gap-2">
                 <flux:button variant="ghost" wire:click="cancelAdopt">Cancel</flux:button>
