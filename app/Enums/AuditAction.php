@@ -42,6 +42,10 @@ enum AuditAction: string
     case AlertRuleDeleted = 'alert_rule.deleted';
     case AlertAcknowledged = 'alert.acknowledged';
     case AlertResolved = 'alert.resolved';
+    case StaffAccountCreated = 'staff_account.created';
+    case StaffAccountUpdated = 'staff_account.updated';
+    case StaffAccountPasswordChanged = 'staff_account.password_changed';
+    case StaffAccountDeleted = 'staff_account.deleted';
 
     public function label(): string
     {
@@ -82,14 +86,18 @@ enum AuditAction: string
             self::AlertRuleDeleted => 'Alert rule deleted',
             self::AlertAcknowledged => 'Alert acknowledged',
             self::AlertResolved => 'Alert resolved',
+            self::StaffAccountCreated => 'Staff account created',
+            self::StaffAccountUpdated => 'Staff account updated',
+            self::StaffAccountPasswordChanged => 'Staff password changed',
+            self::StaffAccountDeleted => 'Staff account deleted',
         };
     }
 
     public function color(): string
     {
         return match ($this) {
-            self::LoginFailed, self::TwoFactorDisabled, self::UserDeleted, self::ScriptDeleted, self::DeviceDeleted, self::PathDeleted, self::QuarantinePurged => 'red',
-            self::LoginFromNewDevice, self::PasswordReset, self::UserPasswordChanged, self::ScriptContentChanged, self::DeviceEnrolmentReset, self::PathQuarantined => 'amber',
+            self::LoginFailed, self::TwoFactorDisabled, self::UserDeleted, self::ScriptDeleted, self::DeviceDeleted, self::PathDeleted, self::QuarantinePurged, self::StaffAccountDeleted => 'red',
+            self::LoginFromNewDevice, self::PasswordReset, self::UserPasswordChanged, self::ScriptContentChanged, self::DeviceEnrolmentReset, self::PathQuarantined, self::StaffAccountPasswordChanged => 'amber',
             self::Login, self::TwoFactorEnabled, self::TwoFactorConfirmed, self::DeviceApproved, self::AlertResolved, self::QuarantineRestored => 'green',
             self::CommandQueued, self::DeviceWakeRequested => 'blue',
             default => 'zinc',

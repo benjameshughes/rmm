@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\DeviceGroups;
 
+use App\Actions\Device\DeleteDeviceGroup;
 use App\Models\DeviceGroup;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -70,9 +71,9 @@ final class Index extends Component
         $this->resetForm();
     }
 
-    public function delete(DeviceGroup $group): void
+    public function delete(DeviceGroup $group, DeleteDeviceGroup $deleteAction): void
     {
-        $group->delete();
+        $deleteAction($group);
     }
 
     public function resetForm(): void

@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Device;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+        $this->configureGates();
 
         Carbon::macro('inDisplayTimezone', fn (): Carbon => $this->copy()->setTimezone(config('app.display_timezone')));
 
@@ -32,6 +35,16 @@ class AppServiceProvider extends ServiceProvider
          * Flux charts always label times as UTC, so the display timezone's wall clock is sent dressed up as UTC.
          */
         Carbon::macro('toChartTime', fn (): string => $this->inDisplayTimezone()->format('Y-m-d\TH:i:s\Z'));
+    }
+
+    /**
+     * Abilities that are not about one model. Admin-only in the house matrix;
+     * this app has one admin and no roles, so any signed-in user holds them.
+     */
+    protected function configureGates(): void
+    {
+        Gate::define('reveal-staff-passwords', fn (User $user): bool => true);
+        Gate::define('lock-staff-screens', fn (User $user): bool => true);
     }
 
     /**

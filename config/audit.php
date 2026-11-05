@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\ScheduledTask;
 use App\Models\Script;
+use App\Models\StaffAccount;
 use App\Models\User;
 
 return [
@@ -62,6 +63,7 @@ return [
         AlertRule::class => ['name', 'metric', 'operator', 'threshold', 'duration_minutes', 'severity', 'is_active'],
         Alert::class => ['status'],
         User::class => ['name', 'email', 'password'],
+        StaffAccount::class => ['username', 'full_name', 'is_admin', 'is_enabled', 'password'],
     ],
 
     /*

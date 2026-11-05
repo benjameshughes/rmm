@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Tags;
 
+use App\Actions\Device\DeleteTag;
 use App\Models\Tag;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -34,9 +35,9 @@ final class Index extends Component
         $this->color = 'zinc';
     }
 
-    public function delete(Tag $tag): void
+    public function delete(Tag $tag, DeleteTag $deleteAction): void
     {
-        $tag->delete();
+        $deleteAction($tag);
     }
 
     public function render(): View

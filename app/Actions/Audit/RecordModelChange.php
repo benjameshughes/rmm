@@ -13,6 +13,7 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\ScheduledTask;
 use App\Models\Script;
+use App\Models\StaffAccount;
 use App\Models\User;
 use BackedEnum;
 use DateTimeInterface;
@@ -87,6 +88,11 @@ final class RecordModelChange
                 'updated' => $model->wasChanged('password') ? AuditAction::UserPasswordChanged : AuditAction::UserUpdated,
                 'deleted' => AuditAction::UserDeleted,
             },
+            $model instanceof StaffAccount => match ($event) {
+                'created' => AuditAction::StaffAccountCreated,
+                'updated' => $model->wasChanged('password') ? AuditAction::StaffAccountPasswordChanged : AuditAction::StaffAccountUpdated,
+                'deleted' => AuditAction::StaffAccountDeleted,
+            },
             default => null,
         };
     }
@@ -108,6 +114,7 @@ final class RecordModelChange
         return match (true) {
             $model instanceof Device => $model->hostname,
             $model instanceof User => $model->email,
+            $model instanceof StaffAccount => $model->username,
             $model instanceof DeviceCommand => "{$model->displayName()} on {$model->device?->hostname}",
             $model instanceof Alert => "{$model->conditionLabel()} on {$model->device?->hostname}",
             default => (string) $model->getAttribute('name'),

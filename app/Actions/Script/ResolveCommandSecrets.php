@@ -7,6 +7,7 @@ namespace App\Actions\Script;
 use App\Enums\ScriptPlatform;
 use App\Models\Device;
 use App\Models\DeviceCommand;
+use App\Models\StaffAccount;
 use App\Models\ZebraTemplate;
 use InvalidArgumentException;
 
@@ -26,7 +27,9 @@ use InvalidArgumentException;
  * and the delete and restore scripts the protected paths from config/devices.php
  * as JSON, so the PC refuses them too. install-zebra gets the ZDesigner driver
  * pin and match patterns from config/zebra.php and the Zebra template's
- * settings. Ad-hoc commands and user scripts never
+ * settings. sync-local-user gets the password of the staff account its
+ * StaffAccountId parameter names, only while that account still exists under
+ * the same username; anything else gets a blank, which the script refuses. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -45,7 +48,7 @@ final class ResolveCommandSecrets
         $source = $this->credentialSource($command);
 
         return collect($names)
-            ->mapWithKeys(fn (string $name): array => [$name => $this->value($name, $source)])
+            ->mapWithKeys(fn (string $name): array => [$name => $this->value($name, $source, $command)])
             ->all();
     }
 
@@ -58,7 +61,7 @@ final class ResolveCommandSecrets
         return $source?->canBackUp() ? $source : null;
     }
 
-    private function value(string $name, ?Device $source): string
+    private function value(string $name, ?Device $source, DeviceCommand $command): string
     {
         return match ($name) {
             'RestUrl' => rtrim((string) config('backup.rest_url'), '/'),
@@ -81,8 +84,16 @@ final class ResolveCommandSecrets
             'ZebraTemplateDriver' => (string) ZebraTemplate::current()?->driver_name,
             'ZebraTemplateMaxChars' => (string) config('zebra.template_max_chars'),
             'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
+            'StaffPassword' => $this->staffPassword($command),
             'DeletePathProtected' => json_encode(config('devices.delete_path.protected'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),
         };
+    }
+
+    private function staffPassword(DeviceCommand $command): string
+    {
+        $account = StaffAccount::query()->find((int) ($command->parameters['StaffAccountId'] ?? 0));
+
+        return $account?->username === ($command->parameters['Username'] ?? null) ? (string) $account?->password : '';
     }
 }
