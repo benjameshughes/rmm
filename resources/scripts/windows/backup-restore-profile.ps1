@@ -20,7 +20,11 @@ $maxErrors = 20
 $snapshotId = "$env:RMM_SnapshotId".Trim()
 $sourceProfile = "$env:RMM_SourceProfile".Trim().TrimEnd('\')
 $username = "$env:RMM_Username".Trim()
-$folders = @("$env:RMM_RestoreProfileFolders" | ConvertFrom-Json)
+# Windows PowerShell 5.1 emits a JSON array as one object, so wrapping the
+# pipeline in @() makes a one-item list holding the whole array. Assigning
+# first and then wrapping gives the folders as separate items.
+$parsedFolders = "$env:RMM_RestoreProfileFolders" | ConvertFrom-Json
+$folders = @($parsedFolders)
 
 if (-not $snapshotId) {
     $snapshotId = 'latest'
