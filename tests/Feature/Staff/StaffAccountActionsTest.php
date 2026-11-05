@@ -6,7 +6,6 @@ use App\Actions\Script\SyncSystemScripts;
 use App\Actions\Staff\CreateStaffAccount;
 use App\Actions\Staff\DeleteStaffAccount;
 use App\Actions\Staff\DisableStaffAccount;
-use App\Actions\Staff\LockStaffScreens;
 use App\Actions\Staff\ResetStaffPassword;
 use App\Actions\Staff\SyncStaffAccount;
 use App\Actions\Staff\UpdateStaffAccount;
@@ -121,13 +120,4 @@ it('skips monitor-only and outdated PCs when syncing', function (): void {
     $account->devices()->attach([$this->first->id, $outdated->id]);
 
     expect(app(SyncStaffAccount::class)($account, $this->user))->toBe(1);
-});
-
-it('queues the screen lock once per PC any staff account targets, with the configured minutes', function (): void {
-    config(['staff.screen_lock_idle_minutes' => 7]);
-    StaffAccount::factory()->create()->devices()->attach([$this->first->id, $this->second->id]);
-    StaffAccount::factory()->create()->deviceGroups()->attach($this->group);
-
-    expect(app(LockStaffScreens::class)($this->user))->toBe(2)
-        ->and(queuedOf('set-screen-lock'))->toEqual([$this->first->id => ['IdleMinutes' => '7'], $this->second->id => ['IdleMinutes' => '7']]);
 });

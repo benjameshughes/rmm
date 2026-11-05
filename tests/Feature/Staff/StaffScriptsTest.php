@@ -38,11 +38,3 @@ it('syncs remove-local-user as an internal script that spares built-in accounts 
         ->and($script->script_content)->toContain("'500', '501', '503', '504'")
         ->toContain('Win32_ComputerSystem');
 });
-
-it('syncs set-screen-lock as a machine-wide idle lock taking minutes', function (): void {
-    $script = Script::findSystem('set-screen-lock');
-
-    expect($script->is_internal)->toBeFalse()
-        ->and($script->parameters->pluck('name')->all())->toBe(['IdleMinutes'])
-        ->and($script->script_content)->toContain('InactivityTimeoutSecs');
-});

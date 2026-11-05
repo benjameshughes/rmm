@@ -19,10 +19,6 @@ it('lets a signed-in user do everything with staff accounts', function (string $
     'delete' => ['delete', true],
 ]);
 
-it('lets a signed-in user lock staff screens', function (): void {
-    expect(Gate::forUser(User::factory()->create())->allows('lock-staff-screens'))->toBeTrue();
-});
-
 it('no longer defines a gate for revealing staff passwords', function (): void {
     expect(Gate::has('reveal-staff-passwords'))->toBeFalse();
 });

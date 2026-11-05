@@ -2,11 +2,6 @@
     <div class="flex items-center justify-between">
         <flux:heading size="xl">Staff</flux:heading>
         <div class="flex items-center gap-2">
-            @can('lock-staff-screens')
-                <flux:button variant="ghost" icon="lock-closed" x-on:click="$dispatch('confirm-action', { heading: 'Set screen lock', message: {{ Js::from('Lock every staff PC after '.$screenLockMinutes.' idle minutes? It takes effect after a restart.') }}, confirm: 'Queue', action: () => $wire.lockScreens() })">
-                    Screen Lock
-                </flux:button>
-            @endcan
             @can('create', App\Models\StaffAccount::class)
                 <flux:button wire:click="create" variant="primary">New Account</flux:button>
             @endcan

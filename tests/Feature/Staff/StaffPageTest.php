@@ -118,21 +118,13 @@ it('resets, disables and deletes from the row buttons', function (): void {
         ->and(DeviceCommand::query()->where('script_id', Script::findSystem('remove-local-user')->id)->count())->toBe(1);
 });
 
-it('queues the screen lock to staff PCs', function (): void {
-    StaffAccount::factory()->create()->devices()->attach($this->device);
-
-    Livewire::actingAs($this->user)->test(Index::class)->call('lockScreens');
-
-    expect(DeviceCommand::query()->sole()->script->slug)->toBe('set-screen-lock');
-});
-
 it('authorises every mutating action', function (string $method, string $ability): void {
     $account = StaffAccount::factory()->create();
     Gate::before(fn (User $user, string $checked): ?bool => $checked === $ability ? false : null);
 
     Livewire::actingAs($this->user)
         ->test(Index::class)
-        ->call($method, ...($method === 'lockScreens' ? [] : [$account->id]))
+        ->call($method, $account->id)
         ->assertForbidden();
 })->with([
     'sync' => ['sync', 'update'],
@@ -140,7 +132,6 @@ it('authorises every mutating action', function (string $method, string $ability
     'reset' => ['resetAccountPassword', 'update'],
     'disable' => ['disable', 'update'],
     'delete' => ['delete', 'delete'],
-    'screen lock' => ['lockScreens', 'lock-staff-screens'],
 ]);
 
 it('refreshes the sync results when a command updates over Reverb', function (): void {

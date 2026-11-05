@@ -7,7 +7,6 @@ namespace App\Livewire\Staff;
 use App\Actions\Staff\CreateStaffAccount;
 use App\Actions\Staff\DeleteStaffAccount;
 use App\Actions\Staff\DisableStaffAccount;
-use App\Actions\Staff\LockStaffScreens;
 use App\Actions\Staff\ResetStaffPassword;
 use App\Actions\Staff\SyncStaffAccount;
 use App\Actions\Staff\UpdateStaffAccount;
@@ -162,16 +161,6 @@ final class Index extends Component
         Flux::toast(text: "{$account->username} is being removed from {$queued} ".Str::plural('PC', $queued).'.', heading: 'Staff account deleted', variant: 'success');
     }
 
-    public function lockScreens(LockStaffScreens $lockScreens): void
-    {
-        $this->authorize('lock-staff-screens');
-
-        $queued = $lockScreens(auth()->user());
-        $minutes = config('staff.screen_lock_idle_minutes');
-
-        Flux::toast(text: "{$minutes} idle minutes on {$queued} ".Str::plural('PC', $queued).'.', heading: 'Screen lock queued', variant: 'success');
-    }
-
     public function resetForm(): void
     {
         $this->reset('username', 'fullName', 'isAdmin', 'isEnabled', 'deviceIds', 'deviceGroupIds', 'tagIds', 'editingId', 'showModal');
@@ -212,7 +201,6 @@ final class Index extends Component
             'devices' => Device::query()->acceptsCommands()->runsWindows()->orderBy('hostname')->get(['id', 'hostname']),
             'groups' => DeviceGroup::query()->orderBy('name')->get(['id', 'name']),
             'tags' => Tag::query()->orderBy('name')->get(['id', 'name']),
-            'screenLockMinutes' => config('staff.screen_lock_idle_minutes'),
         ]);
     }
 

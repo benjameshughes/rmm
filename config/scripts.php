@@ -391,14 +391,15 @@ return [
         ],
         'set-screen-lock' => [
             'name' => 'Set Screen Lock',
-            'description' => 'Lock every session after the given idle minutes, machine-wide (the InactivityTimeoutSecs policy). Takes effect after a restart',
+            'description' => 'Lock every session after the given idle minutes, machine-wide (the InactivityTimeoutSecs policy), and optionally require sign-in on wake. 0 minutes turns the lock off. Takes effect after a restart',
             'category' => 'security',
             'platform' => 'windows',
             'file' => 'windows/set-screen-lock.ps1',
             'timeout_seconds' => 60,
             'requires_admin' => true,
             'parameters' => [
-                ['name' => 'IdleMinutes', 'label' => 'Idle minutes', 'type' => 'number', 'required' => true],
+                ['name' => 'IdleMinutes', 'label' => 'Idle minutes (0 turns it off)', 'type' => 'number', 'required' => false, 'default' => '10'],
+                ['name' => 'RequirePasswordOnWake', 'label' => 'Require sign-in on wake', 'type' => 'boolean', 'required' => false, 'default' => 'true'],
             ],
         ],
         'log-off' => [

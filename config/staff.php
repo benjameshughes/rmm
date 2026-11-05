@@ -30,17 +30,4 @@ return [
 
     'temp_password' => 'password',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Screen Lock
-    |--------------------------------------------------------------------------
-    |
-    | set-screen-lock locks every session on a PC after this many idle
-    | minutes, machine-wide. Queued from the Staff page to every PC a staff
-    | account targets.
-    |
-    */
-
-    'screen_lock_idle_minutes' => (int) env('STAFF_SCREEN_LOCK_IDLE_MINUTES', 10),
-
 ];

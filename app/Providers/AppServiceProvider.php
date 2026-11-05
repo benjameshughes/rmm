@@ -7,7 +7,6 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -41,10 +40,7 @@ class AppServiceProvider extends ServiceProvider
      * Abilities that are not about one model. Admin-only in the house matrix;
      * this app has one admin and no roles, so any signed-in user holds them.
      */
-    protected function configureGates(): void
-    {
-        Gate::define('lock-staff-screens', fn (User $user): bool => true);
-    }
+    protected function configureGates(): void {}
 
     /**
      * Configure the rate limiters for the application.
