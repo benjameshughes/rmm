@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Device;
 
+use App\Actions\DiskUsage\StoreDiskScan;
 use App\Actions\Inventory\StoreLinuxSecurityReport;
+use App\Actions\LocalAccount\StoreDeviceLocalAccounts;
 use App\Actions\ServerBackup\StoreServerBackups;
 use App\DTOs\NetdataAppUsage;
 use App\DTOs\NetdataCpuMetric;
@@ -33,13 +35,17 @@ final class StoreDeviceMetrics
         private readonly RecordMetricSamples $recordMetricSamples,
         private readonly StoreServerBackups $storeServerBackups,
         private readonly StoreLinuxSecurityReport $storeLinuxSecurityReport,
+        private readonly StoreDiskScan $storeDiskScan,
+        private readonly StoreDeviceLocalAccounts $storeLocalAccounts,
     ) {}
 
     /**
      * A server's backup status files ride along as `backups`; agents that
      * predate them, or servers without the folder, leave the key out. A
      * Linux agent's security report rides along as `linux_security` every
-     * few hours and is stored as an inventory snapshot.
+     * few hours and is stored as an inventory snapshot. It cannot be told to
+     * scan its disks, so it scans them itself and sends one as `disk_scan`.
+     * A Windows agent from 0.11.0 sends its local accounts as `local_accounts`.
      */
     public function __invoke(Device $device, array $input, ?string $ip = null): DeviceMetric
     {
@@ -53,6 +59,19 @@ final class StoreDeviceMetrics
 
         if (is_array($input['linux_security'] ?? null)) {
             ($this->storeLinuxSecurityReport)($device, $input['linux_security']);
+        }
+
+        if (is_array($input['disk_scan'] ?? null)) {
+            ($this->storeDiskScan)(
+                device: $device,
+                data: $input['disk_scan'],
+                depth: config('disk_usage.default_depth'),
+                scannedAt: now(),
+            );
+        }
+
+        if (is_array($input['local_accounts'] ?? null)) {
+            ($this->storeLocalAccounts)($device, $input['local_accounts']);
         }
 
         return $metric;
@@ -200,11 +219,11 @@ final class StoreDeviceMetrics
 
     /**
      * Every useful field is extracted into columns, so the raw request is only kept while debugging the agent.
-     * Backup status files and the security report are left out: they are stored on their own.
+     * Backup status files, the security report and disk scans are left out: they are stored on their own.
      */
     private function rawPayload(array $input): ?array
     {
-        return config('devices.metrics.store_raw_payload') ? Arr::except($input, ['backups', 'linux_security']) : null;
+        return config('devices.metrics.store_raw_payload') ? Arr::except($input, ['backups', 'linux_security', 'disk_scan', 'local_accounts']) : null;
     }
 
     private function parseCpuMetric(mixed $input): ?float

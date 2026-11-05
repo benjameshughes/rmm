@@ -16,6 +16,7 @@ enum DeviceTab: string
     case Storage = 'storage';
     case Printers = 'printers';
     case Backups = 'backups';
+    case Users = 'users';
     case Details = 'details';
 
     public function label(): string
@@ -29,6 +30,7 @@ enum DeviceTab: string
             self::Storage => 'Storage',
             self::Printers => 'Printers',
             self::Backups => 'Backups',
+            self::Users => 'Users',
             self::Details => 'Details',
         };
     }
@@ -44,6 +46,7 @@ enum DeviceTab: string
             self::Storage => 'circle-stack',
             self::Printers => 'printer',
             self::Backups => 'cloud-arrow-up',
+            self::Users => 'users',
             self::Details => 'information-circle',
         };
     }

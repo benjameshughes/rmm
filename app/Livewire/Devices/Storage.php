@@ -13,6 +13,7 @@ use App\Actions\DiskUsage\QueueDiskScan;
 use App\DTOs\DiskUsage\DiskScan;
 use App\DTOs\DiskUsage\DiskScanFile;
 use App\DTOs\DiskUsage\DiskScanNode;
+use App\DTOs\DiskUsage\DiskScanTree;
 use App\Enums\DeviceTab;
 use App\Enums\ScriptPlatform;
 use App\Models\Device;
@@ -24,16 +25,18 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Number;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * What fills a Windows PC's drives, from its disk-usage scans: the folder
+ * What fills a device's disks, from its disk-usage scans: the folder
  * tree with growth since the previous scan, known space hogs, the biggest
  * files and extensions, and what sits in quarantine. Folders and files are
- * deleted through the shared DeletePath modal. The folder shown lives in
+ * deleted through the shared DeletePath modal; Linux servers scan
+ * themselves and can only be looked at. The folder shown lives in
  * the query string as an index path, so drill-downs are bookmarkable.
  */
 #[Layout('components.layouts.app')]
@@ -151,10 +154,10 @@ final class Storage extends Component
     public function render(BuildDiskFolderRows $buildRows, FindDiskCulprits $findCulprits, GuardDeletablePath $guard): View
     {
         $canScan = $this->device->platform() === ScriptPlatform::Windows && ! $this->device->isMonitorOnly;
-        $activeRoot = $canScan ? $this->activeRoot() : null;
+        $activeRoot = $this->activeRoot();
         $scans = $this->scansOf($activeRoot);
         $latest = $scans->first();
-        $scan = $latest?->scan();
+        $scan = $this->withMountVolume($latest?->scan());
         $previousScan = $scans->get(1)?->scan();
         $scanCommand = $canScan ? $this->inFlightScan() : null;
         $index = $scan?->tree->resolve($this->node) ?? 0;
@@ -166,7 +169,7 @@ final class Storage extends Component
 
         return view('livewire.devices.storage', [
             'canScan' => $canScan,
-            'roots' => $canScan ? $this->roots() : collect(),
+            'roots' => $this->roots(),
             'nodeUrl' => fn (string $indexPath): string => route('devices.storage', ['device' => $this->device, 'root' => $activeRoot, 'node' => $indexPath === '' ? null : $indexPath]),
             'latest' => $latest,
             'previous' => $scans->get(1),
@@ -214,6 +217,23 @@ final class Storage extends Component
     private function scansOf(?string $root): Collection
     {
         return $root === null ? collect() : $this->device->diskScans()->ofRoot($root)->latest('scanned_at')->latest('id')->limit(2)->get();
+    }
+
+    /**
+     * A Linux mount point scanned without volume figures borrows them from
+     * the latest disk metrics of that mount point.
+     */
+    private function withMountVolume(?DiskScan $scan): ?DiskScan
+    {
+        if ($scan === null || $scan->volumeTotal !== null || ! Str::startsWith($scan->root, '/')) {
+            return $scan;
+        }
+
+        $disk = $this->device->latestMetric?->diskMetrics->firstWhere('mount_point', $scan->root);
+
+        return $disk?->total_gb === null || $disk->available_gb === null
+            ? $scan
+            : $scan->withVolume(total: (int) ($disk->total_gb * 1024 ** 3), free: (int) ($disk->available_gb * 1024 ** 3));
     }
 
     private function latestScan(): ?DeviceDiskScan
@@ -281,7 +301,7 @@ final class Storage extends Component
             ->sortByDesc(fn (DiskScanFile $file): int => $file->allocated)
             ->take(config('disk_usage.top_files_shown'))
             ->map(function (DiskScanFile $file) use ($scan, $deleting): array {
-                $path = rtrim($scan->tree->path($file->parentIndex), '\\').'\\'.$file->name;
+                $path = DiskScanTree::join($scan->tree->path($file->parentIndex), $file->name);
 
                 return [
                     'path' => $path,

@@ -43,7 +43,7 @@ final readonly class DiskScanTree
 
         $paths = [];
         $nodes->each(function (DiskScanNode $node) use (&$paths): void {
-            $paths[$node->index] = $node->index === 0 ? $node->name : rtrim($paths[$node->parentIndex], '\\').'\\'.$node->name;
+            $paths[$node->index] = $node->index === 0 ? $node->name : self::join($paths[$node->parentIndex], $node->name);
         });
 
         return new self(
@@ -53,6 +53,17 @@ final readonly class DiskScanTree
                 ->all(),
             paths: $paths,
         );
+    }
+
+    /**
+     * A Linux scan's paths start at `/` and use forward slashes; a Windows
+     * scan's start at a drive letter and use backslashes.
+     */
+    public static function join(string $folder, string $name): string
+    {
+        $separator = Str::startsWith($folder, '/') ? '/' : '\\';
+
+        return rtrim($folder, $separator).$separator.$name;
     }
 
     public function root(): DiskScanNode

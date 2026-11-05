@@ -231,11 +231,11 @@ it('hides scanning from users who cannot run commands', function (): void {
     expect(DeviceCommand::query()->count())->toBe(0);
 });
 
-it('explains that only Windows PCs are scanned', function (): void {
+it('explains where scans come from on a device with none', function (): void {
     $linux = Device::factory()->active()->linux()->create();
 
     Livewire::actingAs($this->user)->test(Storage::class, ['device' => $linux])
-        ->assertSee('Disk scans run on Windows PCs that accept commands.')
+        ->assertSee('Linux servers scan their own disks every few hours.')
         ->assertDontSeeHtml('data-scan-now');
 });
 

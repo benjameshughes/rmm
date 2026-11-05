@@ -79,6 +79,9 @@ pub const DEFAULT_APT_CHECK_INTERVAL_SECS: u64 = 3600;
 /// failed logins, listening ports)
 pub const DEFAULT_SECURITY_REPORT_INTERVAL_SECS: u64 = 4 * 3600;
 
+/// Least time between local Windows account reports
+pub const DEFAULT_LOCAL_ACCOUNTS_REPORT_INTERVAL_SECS: u64 = 15 * 60;
+
 /// Longest a read-only health query command (systemctl, apt-get -s) may run
 pub const DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS: u64 = 30;
 
@@ -133,6 +136,36 @@ pub const DU_TOP_EXTENSIONS: usize = 30;
 /// `rmm du`: bytes read per directory listing call on Windows
 #[cfg_attr(not(windows), allow(dead_code))]
 pub const DU_DIR_BUFFER_BYTES: usize = 64 * 1024;
+
+/// Seconds between the Linux agent's own disk-usage scans of each mounted
+/// filesystem (it takes no commands, so nobody can ask it for one)
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const DEFAULT_DISK_SCAN_INTERVAL_SECS: u64 = 6 * 3600;
+
+/// Directory reader threads for the Linux agent's scheduled scans: fewer than
+/// `rmm du`, as nobody is waiting on them
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const DISK_SCAN_THREADS: usize = 2;
+
+/// Nice value the scan threads run at (19 is the lowest CPU priority)
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const DU_BACKGROUND_NICE: i32 = 19;
+
+/// Filesystems the scheduled scans never walk: pseudo and RAM-backed
+/// filesystems, read-only images, and network shares that belong to
+/// whichever box serves them
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const DISK_SCAN_IGNORED_FILESYSTEMS: &[&str] = &[
+    "autofs", "binfmt_misc", "bpf", "cgroup", "cgroup2", "configfs", "debugfs", "devpts",
+    "devtmpfs", "efivarfs", "fusectl", "fuse.lxcfs", "hugetlbfs", "mqueue", "nsfs", "overlay",
+    "proc", "pstore", "ramfs", "rpc_pipefs", "securityfs", "squashfs", "sysfs", "tmpfs",
+    "tracefs", "iso9660", "nfs", "nfs4", "cifs", "smb3", "fuse.sshfs", "fuse.rclone", "9p",
+    "virtiofs",
+];
+
+/// Mount points the scheduled scans never walk, with everything below them
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const DISK_SCAN_IGNORED_MOUNTS: &[&str] = &["/proc", "/sys", "/dev", "/run", "/snap", "/boot"];
 
 /// Backup status files written by backup scripts, one `<job>.json` per job
 /// (Linux agent, read only)
@@ -226,6 +259,10 @@ pub struct Config {
     pub health_command_timeout: u64,
     /// Seconds between Linux security reports
     pub security_report_interval: u64,
+    /// Seconds between the Linux agent's disk-usage scans
+    pub disk_scan_interval: u64,
+    /// Seconds between local Windows account reports
+    pub local_accounts_report_interval: u64,
     /// Milliseconds of spooler silence before a printer change is reported
     pub printer_quiet_ms: u64,
     /// Most milliseconds a burst of spooler signals can delay a report
@@ -290,6 +327,8 @@ impl Default for Config {
             apt_check_interval: DEFAULT_APT_CHECK_INTERVAL_SECS,
             health_command_timeout: DEFAULT_HEALTH_COMMAND_TIMEOUT_SECS,
             security_report_interval: DEFAULT_SECURITY_REPORT_INTERVAL_SECS,
+            disk_scan_interval: DEFAULT_DISK_SCAN_INTERVAL_SECS,
+            local_accounts_report_interval: DEFAULT_LOCAL_ACCOUNTS_REPORT_INTERVAL_SECS,
             printer_quiet_ms: DEFAULT_PRINTER_QUIET_MS,
             printer_max_delay_ms: DEFAULT_PRINTER_MAX_DELAY_MS,
             printer_wait_slice_ms: DEFAULT_PRINTER_WAIT_SLICE_MS,

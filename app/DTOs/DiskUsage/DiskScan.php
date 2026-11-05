@@ -6,6 +6,7 @@ namespace App\DTOs\DiskUsage;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * One `rmm du --json` result (schema rmm.du/1). The agent runs on machines we
@@ -81,11 +82,40 @@ final readonly class DiskScan
     }
 
     /**
-     * Free-space figures and unaccounted space only mean something for a whole drive.
+     * Free-space figures and unaccounted space only mean something for a
+     * whole drive: a Windows drive letter, or a Linux mount point, which the
+     * agent marks by reporting the unaccounted space itself.
      */
     public function isDriveRoot(): bool
     {
-        return preg_match('/^[A-Za-z]:\\\\$/', $this->root) === 1;
+        return preg_match('/^[A-Za-z]:\\\\$/', $this->root) === 1
+            || (Str::startsWith($this->root, '/') && $this->reportedUnaccounted !== null);
+    }
+
+    /**
+     * The same scan with volume figures from elsewhere (the device's disk
+     * metrics), for a Linux mount point scanned without them.
+     */
+    public function withVolume(int $total, int $free): self
+    {
+        return new self(
+            root: $this->root,
+            agentVersion: $this->agentVersion,
+            startedAt: $this->startedAt,
+            durationMs: $this->durationMs,
+            volumeTotal: $total,
+            volumeFree: $free,
+            filesystem: $this->filesystem,
+            allocated: $this->allocated,
+            files: $this->files,
+            dirs: $this->dirs,
+            reportedUnaccounted: max(0, $total - $free - $this->allocated),
+            tree: $this->tree,
+            topFiles: $this->topFiles,
+            extensions: $this->extensions,
+            errorCount: $this->errorCount,
+            errorSample: $this->errorSample,
+        );
     }
 
     public function usedBytes(): ?int

@@ -9,6 +9,7 @@ use App\Enums\CommandStatus;
 use App\Events\CommandUpdated;
 use App\Models\DeviceCommand;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 /**
  * A finished disk-usage run stores a new scan for the device's Storage tab
@@ -33,10 +34,18 @@ final class StoreDiskScanForCommand
             ->whereRelation('script', fn (Builder $scriptQuery): Builder => $scriptQuery->system()->where('slug', config('disk_usage.slug')))
             ->find($event->commandId);
 
-        if ($command === null) {
+        if ($command === null || $command->device->isMonitorOnly) {
             return;
         }
 
-        ($this->storeDiskScan)($command->device, $command);
+        $depth = $command->parameters['Depth'] ?? config('disk_usage.default_depth');
+
+        ($this->storeDiskScan)(
+            device: $command->device,
+            data: $command->resultJson(),
+            depth: is_numeric($depth) ? (int) $depth : null,
+            scannedAt: $command->completed_at ?? now(),
+            logContext: ['command_id' => $command->id, 'output_start' => Str::limit((string) $command->output, 200)],
+        );
     }
 }

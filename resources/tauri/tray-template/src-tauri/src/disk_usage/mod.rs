@@ -144,6 +144,19 @@ pub struct Volume {
 /// Run the scan and print the report. Returns the process exit code:
 /// 0 when everything was read, 1 when some paths failed.
 pub fn run(args: &DuArgs) -> i32 {
+    let (json, error_count) = report(args);
+    println!("{json}");
+
+    if error_count > 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Run the scan and return the `rmm.du/1` JSON line with the number of
+/// paths that could not be read.
+pub fn report(args: &DuArgs) -> (String, u64) {
     let started_at = chrono::Utc::now();
     let clock = Instant::now();
 
@@ -174,13 +187,8 @@ pub fn run(args: &DuArgs) -> i32 {
         started_at: report::iso8601(started_at.timestamp()),
         duration_ms: clock.elapsed().as_millis() as u64,
     };
-    println!("{}", report::render(&scan, &report_options));
 
-    if scan.tally.errors.count > 0 {
-        1
-    } else {
-        0
-    }
+    (report::render(&scan, &report_options), scan.tally.errors.count)
 }
 
 fn thread_count(requested: usize) -> usize {

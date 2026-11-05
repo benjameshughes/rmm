@@ -296,6 +296,14 @@ pub struct RawMetricsPayload {
     /// only; sent once per security report interval, omitted otherwise)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linux_security: Option<crate::linux_security::LinuxSecurity>,
+    /// One `rmm.du/1` disk-usage report of a mounted filesystem (Linux only;
+    /// the agent scans on its own schedule, omitted between scans)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disk_scan: Option<serde_json::Value>,
+
+    /// Local Windows accounts, every few minutes (Windows only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_accounts: Option<Vec<crate::local_accounts::LocalAccount>>,
 }
 
 // ============================================================================
@@ -365,6 +373,12 @@ pub struct MetricsCollector {
     /// When the last Linux security report was delivered.
     #[cfg(not(windows))]
     security: tokio::sync::Mutex<crate::linux_security::ReportSchedule>,
+    /// Disk-usage reports waiting to go out, one per submission.
+    #[cfg(not(windows))]
+    disk_scans: Arc<crate::linux_disk_scan::ScanQueue>,
+    /// When the last local accounts report was delivered.
+    #[cfg(windows)]
+    local_accounts: tokio::sync::Mutex<crate::linux_security::ReportSchedule>,
 }
 
 impl MetricsCollector {
@@ -392,6 +406,10 @@ impl MetricsCollector {
             health: tokio::sync::Mutex::new(Default::default()),
             #[cfg(not(windows))]
             security: tokio::sync::Mutex::new(Default::default()),
+            #[cfg(not(windows))]
+            disk_scans: Default::default(),
+            #[cfg(windows)]
+            local_accounts: tokio::sync::Mutex::new(Default::default()),
         })
     }
 
@@ -539,6 +557,8 @@ impl MetricsCollector {
             linux_health: None,
             backups: None,
             linux_security: None,
+            disk_scan: None,
+            local_accounts: None,
         }
     }
 
@@ -627,17 +647,65 @@ impl MetricsCollector {
     #[cfg(windows)]
     async fn mark_security_report_sent(&self) {}
 
+    /// Where the disk scan loop leaves its reports for this collector to send.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg(not(windows))]
+    pub fn disk_scan_queue(&self) -> Arc<crate::linux_disk_scan::ScanQueue> {
+        self.disk_scans.clone()
+    }
+
+    /// The local accounts report, when one is due (Windows only).
+    #[cfg(windows)]
+    async fn collect_local_accounts(&self) -> Option<Vec<crate::local_accounts::LocalAccount>> {
+        let interval = Duration::from_secs(self.config.local_accounts_report_interval);
+        if !self.local_accounts.lock().await.is_due(Instant::now(), interval) {
+            return None;
+        }
+
+        crate::local_accounts::collect().await
+    }
+
+    #[cfg(not(windows))]
+    async fn collect_local_accounts(&self) -> Option<Vec<crate::local_accounts::LocalAccount>> {
+        None
+    }
+
+    #[cfg(windows)]
+    async fn mark_local_accounts_sent(&self) {
+        self.local_accounts.lock().await.mark_sent(Instant::now());
+    }
+
+    #[cfg(not(windows))]
+    async fn mark_local_accounts_sent(&self) {}
+
     /// Collect and submit metrics in one operation
     pub async fn collect_and_submit(&self, api_key: &str) -> RequestOutcome {
         let mut metrics = self.collect_metrics().await;
         metrics.linux_health = self.collect_linux_health().await;
         metrics.backups = crate::backups::collect().await;
         metrics.linux_security = self.collect_linux_security().await;
+        metrics.local_accounts = self.collect_local_accounts().await;
+        #[cfg(not(windows))]
+        let disk_scan_root = self.disk_scans.take().map(|(root, report)| {
+            metrics.disk_scan = Some(report);
+            root
+        });
         let outcome = self.submit_metrics(&metrics, api_key).await;
+
+        // An undelivered scan goes out again with the next metrics.
+        #[cfg(not(windows))]
+        if let (Some(root), Some(report), false) =
+            (disk_scan_root, metrics.disk_scan.take(), outcome == RequestOutcome::Success)
+        {
+            self.disk_scans.put_back(root, report);
+        }
 
         if outcome == RequestOutcome::Success {
             if metrics.linux_security.is_some() {
                 self.mark_security_report_sent().await;
+            }
+            if metrics.local_accounts.is_some() {
+                self.mark_local_accounts_sent().await;
             }
             if metrics.netdata_cpu.is_some() || metrics.netdata_ram.is_some() {
                 info!("Metrics submitted (raw Netdata data)");
@@ -823,6 +891,8 @@ mod tests {
             linux_health: None,
             backups: None,
             linux_security: None,
+            disk_scan: None,
+            local_accounts: None,
         }
     }
 

@@ -20,6 +20,7 @@ use App\Livewire\Devices\Pending as DevicesPending;
 use App\Livewire\Devices\Printers as DevicePrinters;
 use App\Livewire\Devices\Security as DeviceSecurity;
 use App\Livewire\Devices\Storage as DeviceStorage;
+use App\Livewire\Devices\Users as DeviceUsers;
 use App\Livewire\Hardware\Index as HardwareIndex;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
 use App\Livewire\Scripts\Create as ScriptsCreate;
@@ -32,6 +33,7 @@ use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
 use App\Livewire\Software\Index as SoftwareIndex;
 use App\Livewire\Software\Show as SoftwareShow;
+use App\Livewire\Staff\Index as StaffIndex;
 use App\Livewire\Tags\Index as TagsIndex;
 use App\Livewire\Trends\Index as TrendsIndex;
 use App\Models\Device;
@@ -80,6 +82,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('storage', DeviceStorage::class)->name('storage');
         Route::get('printers', DevicePrinters::class)->name('printers');
         Route::get('backups', DeviceBackups::class)->name('backups');
+        Route::get('users', DeviceUsers::class)->name('users');
         Route::get('details', DeviceDetails::class)->name('details');
     });
 
@@ -98,6 +101,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('scripts/create', ScriptsCreate::class)->name('scripts.create');
     Route::get('scripts/{script}', ScriptsShow::class)->name('scripts.show');
     Route::get('scripts/{script}/edit', ScriptsEdit::class)->name('scripts.edit');
+
+    // Staff
+    Route::get('staff', StaffIndex::class)->name('staff.index');
 
     // Device Groups & Tags
     Route::get('device-groups', DeviceGroupsIndex::class)->name('device-groups.index');

@@ -375,6 +375,14 @@ impl Agent {
             }
         };
 
+        // The Linux agent takes no commands, so it scans its own disks.
+        #[cfg(target_os = "linux")]
+        let disk_scan_handle = tokio::spawn(crate::linux_disk_scan::run_loop(
+            collector.disk_scan_queue(),
+            std::time::Duration::from_secs(self.config.disk_scan_interval),
+            session_token.clone(),
+        ));
+
         // Spawn update check loop as a separate task
         let update_config = self.config.clone();
         let update_token = session_token.clone();
@@ -410,6 +418,8 @@ impl Agent {
             let _ = handle.await;
         }
         let _ = update_handle.await;
+        #[cfg(target_os = "linux")]
+        let _ = disk_scan_handle.await;
         self.set_session_auth(None);
 
         session_end(

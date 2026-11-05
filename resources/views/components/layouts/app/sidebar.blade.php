@@ -22,7 +22,7 @@
             <flux:navlist variant="outline">
                 <flux:navlist.group :heading="__('Fleet')" class="grid">
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
-                    <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index', 'devices.show', 'devices.metrics', 'devices.commands', 'devices.apps', 'devices.security', 'devices.storage', 'devices.printers', 'devices.backups', 'devices.details')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
+                    <flux:navlist.item icon="server" :href="route('devices.index')" :current="request()->routeIs('devices.index', 'devices.show', 'devices.metrics', 'devices.commands', 'devices.apps', 'devices.security', 'devices.storage', 'devices.printers', 'devices.backups', 'devices.users', 'devices.details')" wire:navigate>{{ __('Devices') }}</flux:navlist.item>
                     <flux:navlist.item icon="clock" :href="route('devices.pending')" :current="request()->routeIs('devices.pending')" wire:navigate>{{ __('Pending') }}</flux:navlist.item>
                     <flux:navlist.item icon="squares-plus" :href="route('software.index')" :current="request()->routeIs('software.*')" wire:navigate>{{ __('Software') }}</flux:navlist.item>
                     <flux:navlist.item icon="cpu-chip" :href="route('hardware.index')" :current="request()->routeIs('hardware.*')" wire:navigate>{{ __('Hardware') }}</flux:navlist.item>
@@ -43,6 +43,7 @@
                 </flux:navlist.group>
 
                 <flux:navlist.group :heading="__('Setup')" class="grid">
+                    <flux:navlist.item icon="users" :href="route('staff.index')" :current="request()->routeIs('staff.*')" wire:navigate>{{ __('Staff') }}</flux:navlist.item>
                     <flux:navlist.item icon="rectangle-group" :href="route('device-groups.index')" :current="request()->routeIs('device-groups.*', 'tags.*')" wire:navigate>{{ __('Groups') }}</flux:navlist.item>
                     <flux:navlist.item icon="download" :href="route('devices.agent')" :current="request()->routeIs('devices.agent')" wire:navigate>{{ __('Agent') }}</flux:navlist.item>
                 </flux:navlist.group>

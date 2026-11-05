@@ -7,46 +7,43 @@ namespace App\Actions\DiskUsage;
 use App\DTOs\DiskUsage\DiskScan;
 use App\Events\DiskScanStored;
 use App\Models\Device;
-use App\Models\DeviceCommand;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Stores the scan a disk-usage run printed and keeps only the newest
- * scans_kept for that device and folder. Output that is not a scan this app
- * reads, including an unknown schema version, stores nothing.
+ * Stores a disk-usage scan (a Windows PC's command output, or the scan a
+ * Linux agent sends with its metrics) and keeps only the newest scans_kept
+ * for that device and folder. Data that is not a scan this app reads,
+ * including an unknown schema version, stores nothing.
  */
 final class StoreDiskScan
 {
     /**
+     * @param  array<string, mixed>|null  $data  The decoded rmm.du/1 report
+     * @param  array<string, mixed>  $logContext  Where the data came from, logged if it is unreadable
      * @return bool Whether a scan was stored
      */
-    public function __invoke(Device $device, DeviceCommand $command): bool
+    public function __invoke(Device $device, ?array $data, ?int $depth, CarbonInterface $scannedAt, array $logContext = []): bool
     {
-        if ($device->isMonitorOnly) {
-            return false;
-        }
-
-        $data = $command->resultJson();
         $scan = $data === null ? null : DiskScan::fromArray($data);
 
         if ($scan === null) {
             Log::warning('disk_usage.unreadable_scan', [
                 'device_id' => $device->id,
-                'command_id' => $command->id,
+                ...$logContext,
                 'schema' => is_string($data['schema'] ?? null) ? Str::limit($data['schema'], 50) : null,
-                'output_start' => Str::limit((string) $command->output, 200),
             ]);
 
             return false;
         }
 
-        DB::transaction(function () use ($device, $command, $scan, $data): void {
+        DB::transaction(function () use ($device, $scan, $data, $depth, $scannedAt): void {
             $device->diskScans()->create([
                 'root' => $scan->root,
-                'depth' => $this->depth($command),
-                'scanned_at' => $command->completed_at ?? now(),
+                'depth' => $depth,
+                'scanned_at' => $scannedAt,
                 'duration_ms' => $scan->durationMs,
                 'allocated' => $scan->allocated,
                 'files' => $scan->files,
@@ -60,13 +57,6 @@ final class StoreDiskScan
         DiskScanStored::dispatch($device->id);
 
         return true;
-    }
-
-    private function depth(DeviceCommand $command): ?int
-    {
-        $depth = $command->parameters['Depth'] ?? config('disk_usage.default_depth');
-
-        return is_numeric($depth) ? (int) $depth : null;
     }
 
     private function prune(Device $device, string $root): void

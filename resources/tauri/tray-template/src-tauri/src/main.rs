@@ -11,9 +11,12 @@ mod data_dir_security;
 mod disk_usage;
 mod enrollment;
 mod keep_awake;
+#[cfg(not(windows))]
+mod linux_disk_scan;
 mod linux_health;
 mod linux_security;
 mod linux_service;
+mod local_accounts;
 mod metrics;
 mod power;
 #[cfg(windows)]

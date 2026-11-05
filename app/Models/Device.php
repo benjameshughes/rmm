@@ -252,6 +252,18 @@ final class Device extends Model
         return $this->hasMany(DeviceInventory::class);
     }
 
+    public function localAccounts(): HasMany
+    {
+        return $this->hasMany(DeviceLocalAccount::class);
+    }
+
+    public function reportsLocalAccounts(): bool
+    {
+        return $this->platform() === ScriptPlatform::Windows
+            && $this->agent_version !== null
+            && version_compare($this->agent_version, config('local_accounts.min_agent_version'), '>=');
+    }
+
     public function latestInventory(): HasOne
     {
         return $this->hasOne(DeviceInventory::class)->latestOfMany('collected_at');

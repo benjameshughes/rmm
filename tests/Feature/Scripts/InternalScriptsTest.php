@@ -52,6 +52,7 @@ it('marks the feature-owned system scripts as internal when it syncs them', func
     expect(internalScriptSlugs())->toEqualCanonicalizing([
         'update-agent', 'backup-snapshots', 'backup-restore', 'disk-usage', 'remove-path', 'purge-quarantine', 'restore-quarantine',
         'clear-print-queue', 'cancel-print-job', 'restart-print-spooler', 'print-test-page', 'winget-install', 'winget-upgrade', 'winget-uninstall',
+        'sync-local-user', 'remove-local-user', 'disable-local-user',
     ]);
 
     expect(Script::query()->where('is_internal', true)->pluck('slug')->all())->toEqualCanonicalizing(internalScriptSlugs())

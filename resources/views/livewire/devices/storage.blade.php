@@ -1,7 +1,7 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Storage">
-    @if(! $canScan)
-        <flux:card>
-            <flux:text>Disk scans run on Windows PCs that accept commands.</flux:text>
+    @if(! $canScan && $scan === null)
+        <flux:card data-storage-unscannable>
+            <flux:text>Disk scans run on Windows PCs that accept commands, and Linux servers scan their own disks every few hours. None has come in from this device yet.</flux:text>
         </flux:card>
     @elseif($scan === null)
         <x-dashboard.section title="Storage">

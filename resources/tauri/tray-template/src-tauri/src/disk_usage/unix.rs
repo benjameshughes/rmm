@@ -89,11 +89,52 @@ pub fn deferred_dirs(_root: &Path) -> Vec<PathBuf> {
     Vec::new()
 }
 
+/// Lowest CPU priority and idle I/O class for the calling thread. Linux
+/// keeps both per thread and new threads inherit them, so calling this
+/// before the walk starts its readers covers the whole scan. Lowering your
+/// own priority needs no privilege; a failure only means a faster scan.
+#[cfg(target_os = "linux")]
+pub fn enter_background() {
+    use crate::config::DU_BACKGROUND_NICE;
+
+    extern "C" {
+        fn setpriority(which: i32, who: u32, prio: i32) -> i32;
+    }
+    const PRIO_PROCESS: i32 = 0;
+
+    // SAFETY: plain syscall wrappers on the calling thread (who = 0).
+    unsafe {
+        setpriority(PRIO_PROCESS, 0, DU_BACKGROUND_NICE);
+    }
+    set_idle_io_priority();
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn set_idle_io_priority() {
+    extern "C" {
+        fn syscall(number: i64, ...) -> i64;
+    }
+    const SYS_IOPRIO_SET: i64 = 251;
+    const IOPRIO_WHO_PROCESS: i64 = 1;
+    const IOPRIO_CLASS_IDLE: i64 = 3;
+    const IOPRIO_CLASS_SHIFT: i64 = 13;
+
+    // SAFETY: ioprio_set on the calling thread (who = 0) takes no pointers.
+    unsafe {
+        syscall(SYS_IOPRIO_SET, IOPRIO_WHO_PROCESS, 0i64, IOPRIO_CLASS_IDLE << IOPRIO_CLASS_SHIFT);
+    }
+}
+
+#[cfg(all(target_os = "linux", not(target_arch = "x86_64")))]
+fn set_idle_io_priority() {}
+
+#[cfg(not(target_os = "linux"))]
 pub fn enter_background() {}
 
 pub fn enable_backup_privilege() {}
 
-/// The mounted filesystem holding the root (longest matching mount point).
+/// The mounted filesystem holding the root (longest matching mount point);
+/// a scan of the mount point itself is a whole volume.
 pub fn volume_info(root: &Path) -> Option<Volume> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
     let disk = disks
@@ -106,7 +147,7 @@ pub fn volume_info(root: &Path) -> Option<Volume> {
         total: disk.total_space(),
         free: disk.available_space(),
         fs: disk.file_system().to_string_lossy().into_owned(),
-        is_volume_root: false,
+        is_volume_root: disk.mount_point() == root,
     })
 }
 
@@ -165,6 +206,17 @@ mod tests {
         assert_eq!(scan.nodes.len(), 1);
         assert_eq!(scan.nodes[0].files, 1);
         assert!(scan.nodes[0].logical < 100_000);
+    }
+
+    #[test]
+    fn only_a_mount_point_is_a_whole_volume() {
+        let root = volume_info(Path::new("/")).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let folder = volume_info(dir.path()).unwrap();
+
+        assert!(root.is_volume_root);
+        assert!(root.total > 0);
+        assert!(!folder.is_volume_root);
     }
 
     #[test]
