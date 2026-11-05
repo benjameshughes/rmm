@@ -179,6 +179,19 @@ return [
             'timeout_seconds' => 1800,
             'requires_admin' => true,
         ],
+        'fix-ownership' => [
+            'name' => 'Fix Ownership',
+            'description' => 'Make a local user the owner of a file or folder and everything in it, with full control. For files restored or copied as SYSTEM that now say access denied',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/fix-ownership.ps1',
+            'timeout_seconds' => 1800,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'Path', 'label' => 'File or folder, e.g. C:\\Users\\michelle', 'type' => 'text', 'required' => true],
+                ['name' => 'Username', 'label' => 'Local username to own it', 'type' => 'text', 'required' => true],
+            ],
+        ],
         'install-restic' => [
             'name' => 'Install Restic',
             'description' => 'Install the pinned restic release the file backups use, checked against its published sha256. Skips a PC that already has it',
