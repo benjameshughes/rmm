@@ -25,14 +25,14 @@ pub struct LocalAccount {
     pub is_signed_in: Option<bool>,
 }
 
-/// One account as read from USER_INFO_23 and USER_INFO_2.
+/// One account as read from USER_INFO_4.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawAccount {
     pub name: String,
     pub full_name: String,
     pub sid: String,
     pub flags: u32,
-    /// Seconds since 1970 from usri2_last_logon; 0 means never.
+    /// Seconds since 1970 from usri4_last_logon; 0 means never.
     pub last_logon: Option<u32>,
 }
 
@@ -59,7 +59,7 @@ pub fn assemble(
         .collect()
 }
 
-/// usri2_last_logon as an ISO-8601 time; 0 (never signed in) is None.
+/// usri4_last_logon as an ISO-8601 time; 0 (never signed in) is None.
 pub fn logon_time(seconds: u32) -> Option<String> {
     if seconds == 0 {
         return None;
@@ -101,12 +101,13 @@ mod platform {
     use winapi::shared::winerror::ERROR_MORE_DATA;
     use winapi::um::lmaccess::{
         NetLocalGroupGetMembers, NetUserEnum, NetUserGetInfo, FILTER_NORMAL_ACCOUNT,
-        LOCALGROUP_MEMBERS_INFO_0, USER_INFO_2, USER_INFO_23,
+        LOCALGROUP_MEMBERS_INFO_0, USER_INFO_0, USER_INFO_4,
     };
     use winapi::um::lmapibuf::NetApiBufferFree;
     use winapi::um::lmwksta::{NetWkstaUserEnum, WKSTA_USER_INFO_1};
     use winapi::um::winbase::{GetComputerNameW, LocalFree, LookupAccountSidW};
     use winapi::um::winnt::{PSID, SID_NAME_USE};
+    use tracing::warn;
 
     const NERR_SUCCESS: DWORD = 0;
     const ADMINISTRATORS_SID: &str = "S-1-5-32-544";
@@ -129,18 +130,19 @@ mod platform {
             let (mut read, mut total): (DWORD, DWORD) = (0, 0);
             // SAFETY: every out-pointer is a valid local; the buffer is freed below.
             let status = unsafe {
-                NetUserEnum(null(), 23, FILTER_NORMAL_ACCOUNT, &mut buffer, MAX_PREFERRED_LENGTH, &mut read, &mut total, &mut resume)
+                NetUserEnum(null(), 0, FILTER_NORMAL_ACCOUNT, &mut buffer, MAX_PREFERRED_LENGTH, &mut read, &mut total, &mut resume)
             };
 
             if status != NERR_SUCCESS && status != ERROR_MORE_DATA {
+                warn!("NetUserEnum failed with status {}; local accounts not reported", status);
                 free(buffer);
                 return None;
             }
 
             if !buffer.is_null() {
-                // SAFETY: on success the buffer holds `read` USER_INFO_23 entries.
-                let entries = unsafe { std::slice::from_raw_parts(buffer as *const USER_INFO_23, read as usize) };
-                accounts.extend(entries.iter().filter_map(raw_account));
+                // SAFETY: on success the buffer holds `read` USER_INFO_0 entries.
+                let entries = unsafe { std::slice::from_raw_parts(buffer as *const USER_INFO_0, read as usize) };
+                accounts.extend(entries.iter().filter_map(|entry| raw_account(entry.usri0_name)));
                 free(buffer);
             }
 
@@ -150,30 +152,31 @@ mod platform {
         }
     }
 
-    fn raw_account(entry: &USER_INFO_23) -> Option<RawAccount> {
-        Some(RawAccount {
-            name: wide(entry.usri23_name)?,
-            full_name: wide(entry.usri23_full_name).unwrap_or_default(),
-            sid: sid_string(entry.usri23_user_sid)?,
-            flags: entry.usri23_flags,
-            last_logon: last_logon(entry.usri23_name),
-        })
-    }
-
-    fn last_logon(name: *const u16) -> Option<u32> {
+    /// One account's details from NetUserGetInfo level 4, which carries the SID.
+    fn raw_account(name: *const u16) -> Option<RawAccount> {
         let mut buffer: LPBYTE = null_mut();
         // SAFETY: `name` is the NUL-terminated name from NetUserEnum's live buffer.
-        let status = unsafe { NetUserGetInfo(null(), name, 2, &mut buffer) };
+        let status = unsafe { NetUserGetInfo(null(), name, 4, &mut buffer) };
         if status != NERR_SUCCESS || buffer.is_null() {
+            warn!("NetUserGetInfo failed with status {}; skipping one local account", status);
             free(buffer);
             return None;
         }
 
-        // SAFETY: level 2 fills one USER_INFO_2.
-        let seconds = unsafe { (*(buffer as *const USER_INFO_2)).usri2_last_logon };
+        // SAFETY: level 4 fills one USER_INFO_4.
+        let info = unsafe { &*(buffer as *const USER_INFO_4) };
+        let account = (|| {
+            Some(RawAccount {
+                name: wide(info.usri4_name)?,
+                full_name: wide(info.usri4_full_name).unwrap_or_default(),
+                sid: sid_string(info.usri4_user_sid)?,
+                flags: info.usri4_flags,
+                last_logon: Some(info.usri4_last_logon),
+            })
+        })();
         free(buffer);
 
-        Some(seconds)
+        account
     }
 
     /// The upper-cased SIDs of the local Administrators group's direct members.
