@@ -30,4 +30,13 @@ return [
 
     'temp_password' => 'password',
 
+    // A password chosen on the Staff page (set-local-password). It is kept
+    // encrypted in command_secrets only until the agent fetches the command;
+    // one never fetched is pruned after handover_ttl_minutes.
+    'password_min_length' => 12,
+
+    'password_max_length' => 127,
+
+    'password_handover_ttl_minutes' => 1440,
+
 ];

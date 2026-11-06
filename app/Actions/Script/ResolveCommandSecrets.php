@@ -33,7 +33,9 @@ use InvalidArgumentException;
  * which it sets only when its ResetPassword parameter says so or the user is
  * new to the PC, and only while the staff account its StaffAccountId names
  * still exists under the same username; anything else gets a blank, which
- * the script refuses, so a deleted account is never recreated. Ad-hoc commands and user scripts never
+ * the script refuses, so a deleted account is never recreated. set-local-password
+ * gets the password chosen on the Staff page, taken once from command_secrets
+ * (which deletes it) under the same account checks. Ad-hoc commands and user scripts never
  * declare secrets, and a device that is not Windows never receives any.
  */
 final class ResolveCommandSecrets
@@ -61,6 +63,18 @@ final class ResolveCommandSecrets
         $account = StaffAccount::query()->find((int) ($command->parameters['StaffAccountId'] ?? 0));
 
         return $account !== null && $account->username === ($command->parameters['Username'] ?? null) ? (string) config('staff.temp_password') : '';
+    }
+
+    /**
+     * Taken from command_secrets, which deletes it, so it reaches the agent once.
+     * It is still taken (and so gone) when the account was deleted or renamed,
+     * but then handed over blank.
+     */
+    private function staffPassword(DeviceCommand $command): string
+    {
+        $password = $command->takeSecret('StaffPassword');
+
+        return $this->staffTempPassword($command) === '' ? '' : $password;
     }
 
     private function credentialSource(DeviceCommand $command): ?Device
@@ -96,6 +110,7 @@ final class ResolveCommandSecrets
             'ZebraTemplateMaxChars' => (string) config('zebra.template_max_chars'),
             'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
             'StaffTempPassword' => $this->staffTempPassword($command),
+            'StaffPassword' => $this->staffPassword($command),
             'RestoreProfileFolders' => json_encode(config('backup.restore_profile.folders'), JSON_THROW_ON_ERROR),
             'UsmtAdkUrl' => (string) config('usmt.adk_download_url'),
             'UsmtFolder' => (string) config('usmt.folder'),

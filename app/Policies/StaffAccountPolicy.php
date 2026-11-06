@@ -34,6 +34,15 @@ final class StaffAccountPolicy
         return true;
     }
 
+    /**
+     * A chosen password is for admin accounts only; standard users keep the
+     * temp password they must change at next logon.
+     */
+    public function setPassword(User $user, StaffAccount $account): bool
+    {
+        return $account->is_admin;
+    }
+
     public function delete(User $user, StaffAccount $account): bool
     {
         return true;

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\CommandSecret;
 use App\Models\DeviceAppMetric;
 use App\Models\MetricSample;
 use Illuminate\Foundation\Inspiring;
@@ -16,5 +17,5 @@ Schedule::command('schedule:run-tasks')->everyMinute();
 Schedule::command('commands:expire-stale')->everyMinute();
 Schedule::command('agent:check-version')->hourly();
 Schedule::command('backups:check')->hourly();
-Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class, AuditLog::class, MetricSample::class]])->hourly();
+Schedule::command('model:prune', ['--model' => [DeviceAppMetric::class, AuditLog::class, MetricSample::class, CommandSecret::class]])->hourly();
 Schedule::command('quarantine:purge')->dailyAt('03:00');

@@ -8,6 +8,7 @@ use App\Actions\Staff\CreateStaffAccount;
 use App\Actions\Staff\DeleteStaffAccount;
 use App\Actions\Staff\DisableStaffAccount;
 use App\Actions\Staff\ResetStaffPassword;
+use App\Actions\Staff\SetStaffPassword;
 use App\Actions\Staff\SyncStaffAccount;
 use App\Actions\Staff\UpdateStaffAccount;
 use App\DTOs\Staff\StaffAccountDetails;
@@ -55,6 +56,15 @@ final class Index extends Component
 
     #[Locked]
     public ?int $editingId = null;
+
+    public string $password = '';
+
+    public string $passwordConfirmation = '';
+
+    public bool $showPasswordModal = false;
+
+    #[Locked]
+    public ?int $passwordAccountId = null;
 
     private StaffAccountQueries $staffAccounts;
 
@@ -141,6 +151,47 @@ final class Index extends Component
         $queued = $resetPassword($account, auth()->user());
 
         Flux::toast(text: "{$account->username} must change it at next logon. Queued on {$queued} ".Str::plural('PC', $queued).'.', heading: 'Password reset to the temp password', variant: 'success');
+    }
+
+    public function choosePassword(StaffAccount $account): void
+    {
+        $this->authorize('setPassword', $account);
+        $this->resetPasswordForm();
+
+        $this->passwordAccountId = $account->id;
+        $this->showPasswordModal = true;
+    }
+
+    /**
+     * The password leaves the component's state as soon as it is queued, so
+     * it never rides back to the browser in a snapshot.
+     */
+    public function setAccountPassword(SetStaffPassword $setPassword): void
+    {
+        $account = StaffAccount::findOrFail($this->passwordAccountId);
+        $this->authorize('setPassword', $account);
+
+        $this->validate([
+            'password' => ['required', 'string', 'min:'.config('staff.password_min_length'), 'max:'.config('staff.password_max_length')],
+            'passwordConfirmation' => ['required', 'same:password'],
+        ], [
+            'password.required' => 'Enter the new password.',
+            'password.min' => 'Use at least '.config('staff.password_min_length').' characters.',
+            'password.max' => 'Windows takes at most '.config('staff.password_max_length').' characters.',
+            'passwordConfirmation.required' => 'Type the password again to confirm it.',
+            'passwordConfirmation.same' => 'The two passwords do not match.',
+        ]);
+
+        $queued = $setPassword($account, $this->password, auth()->user());
+
+        $this->resetPasswordForm();
+        Flux::toast(text: "{$account->username} on {$queued} ".Str::plural('PC', $queued).'.', heading: 'Password queued', variant: 'success');
+    }
+
+    public function resetPasswordForm(): void
+    {
+        $this->reset('password', 'passwordConfirmation', 'passwordAccountId', 'showPasswordModal');
+        $this->resetErrorBag();
     }
 
     public function disable(StaffAccount $account, DisableStaffAccount $disableAccount): void

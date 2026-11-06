@@ -12,9 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * A local Windows account the RMM keeps in step on every PC it targets. The
- * RMM never knows its password: creating or resetting the account sets the
+ * RMM never keeps its password: creating or resetting the account sets the
  * temp password from config/staff.php, which the person must change at
- * their next logon.
+ * their next logon, and a password set from the Staff page lives encrypted
+ * in command_secrets only until each PC's agent fetches it.
  */
 final class StaffAccount extends Model
 {

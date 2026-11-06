@@ -468,6 +468,21 @@ return [
                 ['name' => 'ResetPassword', 'label' => 'Reset password to the temp password', 'type' => 'boolean', 'required' => false],
             ],
         ],
+        'set-local-password' => [
+            'name' => 'Set Local Password',
+            'description' => 'Set a chosen password on one staff account\'s existing local Windows user, with no change at next logon. The password is handed over once when the agent fetches the command and never stored or printed. Queued from the Staff page',
+            'category' => 'user',
+            'platform' => 'windows',
+            'internal' => true,
+            'file' => 'windows/set-local-password.ps1',
+            'secrets' => ['StaffPassword'],
+            'timeout_seconds' => 120,
+            'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'StaffAccountId', 'label' => 'Staff account', 'type' => 'number', 'required' => true],
+                ['name' => 'Username', 'label' => 'Username', 'type' => 'text', 'required' => true],
+            ],
+        ],
         'remove-local-user' => [
             'name' => 'Remove Local User',
             'description' => 'Delete one staff account\'s local Windows user. Never removes the signed-in user or the built-in accounts. Queued from the Staff page',

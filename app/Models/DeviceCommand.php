@@ -9,13 +9,17 @@ use App\Enums\CommandStatus;
 use App\Enums\PackageAction;
 use App\Events\CommandUpdated;
 use App\Models\Concerns\Auditable;
+use App\Observers\DeviceCommandObserver;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+#[ObservedBy(DeviceCommandObserver::class)]
 final class DeviceCommand extends Model
 {
     use Auditable;
@@ -82,6 +86,29 @@ final class DeviceCommand extends Model
     public function queuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'queued_by');
+    }
+
+    public function secrets(): HasMany
+    {
+        return $this->hasMany(CommandSecret::class);
+    }
+
+    /**
+     * Hands over a secret queued with the command and deletes it in the same
+     * breath, so it can be read once. Blank when there is none (already taken,
+     * expired or never queued).
+     */
+    public function takeSecret(string $name): string
+    {
+        $secret = $this->secrets()->where('name', $name)->first();
+
+        if ($secret === null) {
+            return '';
+        }
+
+        $secret->delete();
+
+        return $secret->expires_at->isFuture() ? (string) $secret->value : '';
     }
 
     public function isAdHoc(): bool

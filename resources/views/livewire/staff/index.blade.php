@@ -70,6 +70,9 @@
                                     <flux:button size="sm" variant="ghost" icon="arrow-path" wire:click="sync({{ $account->id }})">Sync</flux:button>
                                     <flux:button size="sm" variant="ghost" icon="pencil-square" wire:click="edit({{ $account->id }})">Edit</flux:button>
                                     <flux:button size="sm" variant="ghost" icon="key" x-on:click="$dispatch('confirm-action', { heading: 'Reset password', message: {{ Js::from('Reset '.$account->username.' to the temp password on every PC it targets? They must change it at next logon.') }}, confirm: 'Reset', action: () => $wire.resetAccountPassword({{ $account->id }}) })">Reset</flux:button>
+                                    @can('setPassword', $account)
+                                        <flux:button size="sm" variant="ghost" icon="lock-closed" wire:click="choosePassword({{ $account->id }})">Set password</flux:button>
+                                    @endcan
                                     @if ($account->is_enabled)
                                         <flux:button size="sm" variant="ghost" icon="no-symbol" x-on:click="$dispatch('confirm-action', { heading: 'Disable account', message: {{ Js::from('Disable '.$account->username.' on every PC it targets?') }}, confirm: 'Disable', danger: true, action: () => $wire.disable({{ $account->id }}) })">Disable</flux:button>
                                     @endif
@@ -125,6 +128,24 @@
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="resetForm" variant="ghost">Cancel</flux:button>
                 <flux:button type="submit" variant="primary">{{ $editingId ? 'Save and sync' : 'Create and sync' }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
+
+    <flux:modal wire:model="showPasswordModal" class="md:w-[28rem]" @cancel="resetPasswordForm">
+        <form wire:submit="setAccountPassword" class="space-y-6">
+            <div>
+                <flux:heading size="lg">Set Password</flux:heading>
+                <flux:text class="mt-2">Sets this password on every PC the account targets, with no change at next logon. The RMM hands it to each PC once and keeps no copy.</flux:text>
+            </div>
+
+            <flux:input type="password" wire:model="password" label="New password" autocomplete="new-password" viewable required />
+
+            <flux:input type="password" wire:model="passwordConfirmation" label="Confirm password" autocomplete="new-password" viewable required />
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="resetPasswordForm" variant="ghost">Cancel</flux:button>
+                <flux:button type="submit" variant="primary">Set password</flux:button>
             </div>
         </form>
     </flux:modal>
