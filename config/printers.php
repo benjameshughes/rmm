@@ -94,4 +94,20 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | CUPS Server
+    |--------------------------------------------------------------------------
+    |
+    | The print server the Add CUPS Printer and Remove CUPS Printer scripts
+    | offer by default. Queues are reached over IPP at
+    | http://server:port/printers/<queue>.
+    |
+    */
+
+    'cups' => [
+        'server' => '10.0.61.215',
+        'port' => 631,
+    ],
+
 ];
