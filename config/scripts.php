@@ -152,6 +152,15 @@ return [
             'timeout_seconds' => 60,
             'requires_admin' => true,
         ],
+        'wake-on-lan-bios' => [
+            'name' => 'Wake-on-LAN BIOS',
+            'description' => 'Set a Dell, HP or Lenovo BIOS to wake on LAN, keep the network card powered when shut down and restore power after a cut',
+            'category' => 'power',
+            'platform' => 'windows',
+            'file' => 'windows/wake-on-lan-bios.ps1',
+            'timeout_seconds' => 60,
+            'requires_admin' => true,
+        ],
         'remove-teams' => [
             'name' => 'Remove Teams',
             'description' => 'Remove Microsoft Teams and its Outlook add-in for every user, and stop Office reinstalling it',
