@@ -80,6 +80,13 @@ if ($result.created -or $resetPassword) {
     $result.password_reset = $true
 }
 
+# New-LocalUser adds the account to no group, and Windows only lists and
+# lets sign in members of Users (S-1-5-32-545), so every account joins it.
+$users = Get-LocalGroup -SID 'S-1-5-32-545'
+$isUser = [bool] (Get-LocalGroupMember -Group $users | Where-Object { $_.SID.Value -eq $user.SID.Value })
+
+if (-not $isUser) { Add-LocalGroupMember -Group $users -Member $user }
+
 $administrators = Get-LocalGroup -SID 'S-1-5-32-544'
 $isMember = [bool] (Get-LocalGroupMember -Group $administrators | Where-Object { $_.SID.Value -eq $user.SID.Value })
 

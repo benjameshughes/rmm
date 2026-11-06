@@ -14,6 +14,7 @@ it('syncs sync-local-user as an internal script that sets only the temp password
         ->and($script->secretNames())->toBe(['StaffTempPassword'])
         ->and($script->parameters->pluck('name')->all())->toBe(['StaffAccountId', 'Username', 'FullName', 'IsAdmin', 'IsEnabled', 'ResetPassword'])
         ->and($script->script_content)->toContain('S-1-5-32-544')
+        ->toContain('S-1-5-32-545')
         ->toContain('$env:RMM_StaffTempPassword')
         ->toContain('if ($result.created -or $resetPassword) {')
         ->toContain('/logonpasswordchg:yes')
