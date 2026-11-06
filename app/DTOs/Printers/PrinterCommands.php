@@ -28,4 +28,13 @@ final readonly class PrinterCommands
             && ($command->parameters['PrinterName'] ?? null) === $printerName
             && ($command->parameters['JobId'] ?? null) === ($jobId === null ? null : (string) $jobId));
     }
+
+    /**
+     * The newest in-flight run of a CUPS printer action, for one CUPS queue or any.
+     */
+    public function forCups(PrinterAction $action, ?string $cupsQueue = null): ?DeviceCommand
+    {
+        return $this->commands->last(fn (DeviceCommand $command): bool => $command->script?->slug === $action->value
+            && ($cupsQueue === null || ($command->parameters['Printer'] ?? null) === $cupsQueue));
+    }
 }

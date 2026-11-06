@@ -85,6 +85,17 @@ final readonly class PrinterQueue
     }
 
     /**
+     * The CUPS queue this printer prints to, when its port is the IPP URL of
+     * that CUPS server, as Add CUPS Printer sets it up.
+     */
+    public function cupsQueue(string $server, int $port): ?string
+    {
+        $matched = preg_match('#^(https?|ipps?)://'.preg_quote("{$server}:{$port}", '#').'/printers/([^/]+)/?$#i', (string) $this->portName, $matches);
+
+        return $matched === 1 ? $matches[2] : null;
+    }
+
+    /**
      * Jobs the queue holds beyond the first $shown, for "and 52 more".
      */
     public function jobsBeyond(int $shown): int

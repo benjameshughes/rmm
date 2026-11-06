@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Devices;
 
+use App\Actions\Printer\QueueCupsPrinterAction;
 use App\Actions\Printer\QueuePrinterAction;
 use App\Actions\Printer\QueueZebraTemplateCapture;
 use App\DTOs\Printers\PrinterCommands;
@@ -26,7 +27,8 @@ use Livewire\Component;
 /**
  * Every print queue on the PC and its jobs, from the agent's latest snapshot,
  * with the print queue scripts one click away, plus installing the Zebra
- * label printer and capturing the Zebra template it restores.
+ * label printer and capturing the Zebra template it restores, and adding or
+ * removing printers shared by the CUPS server.
  */
 #[Layout('components.layouts.app')]
 final class Printers extends Component
@@ -92,6 +94,35 @@ final class Printers extends Component
         $this->announceQueued(PrinterAction::InstallZebra, "On {$this->device->hostname}.");
     }
 
+    /**
+     * Only a queue listed in printers.cups.printers can be installed from here.
+     */
+    public function installCupsPrinter(string $cupsQueue, QueueCupsPrinterAction $action): void
+    {
+        $this->authorize('runCommands', $this->device);
+
+        $displayName = config('printers.cups.printers')[$cupsQueue] ?? null;
+        abort_if($displayName === null, 404);
+
+        $action(PrinterAction::AddCupsPrinter, $this->device, auth()->user(), cupsQueue: $cupsQueue, displayName: $displayName);
+        $this->announceQueued(PrinterAction::AddCupsPrinter, "{$displayName} on {$this->device->hostname}.");
+    }
+
+    /**
+     * Only a printer whose port is an IPP URL on the CUPS server can be removed.
+     */
+    public function removeCupsPrinter(int $printerId, QueueCupsPrinterAction $action): void
+    {
+        $this->authorize('runCommands', $this->device);
+
+        $printer = $this->findPrinter($printerId);
+        $cupsQueue = $this->cupsQueueOf($printer);
+        abort_if($cupsQueue === null, 404);
+
+        $action(PrinterAction::RemoveCupsPrinter, $this->device, auth()->user(), cupsQueue: $cupsQueue, displayName: $printer->name);
+        $this->announceQueued(PrinterAction::RemoveCupsPrinter, "{$printer->name} on {$this->device->hostname}.");
+    }
+
     public function captureZebraTemplate(int $printerId, QueueZebraTemplateCapture $action): void
     {
         $this->authorize('runCommands', $this->device);
@@ -110,6 +141,11 @@ final class Printers extends Component
         $this->announceQueued($printerAction, "{$printer->name} on {$this->device->hostname}.");
     }
 
+    private function cupsQueueOf(DevicePrinter $printer): ?string
+    {
+        return $printer->queue()->cupsQueue(server: config('printers.cups.server'), port: (int) config('printers.cups.port'));
+    }
+
     private function findPrinter(int $printerId): DevicePrinter
     {
         return $this->device->printers()->findOrFail($printerId);
@@ -126,16 +162,20 @@ final class Printers extends Component
     {
         $isWindows = $this->device->platform() === ScriptPlatform::Windows;
 
+        $printers = $isWindows
+            ? $this->device->printers()->get()->sortBy(fn (DevicePrinter $printer): array => [$printer->queue()->problemRank(), $printer->name])->values()
+            : collect();
+
         return view('livewire.devices.printers', [
             'isWindows' => $isWindows,
-            'printers' => $isWindows
-                ? $this->device->printers()->get()->sortBy(fn (DevicePrinter $printer): array => [$printer->queue()->problemRank(), $printer->name])->values()
-                : collect(),
+            'printers' => $printers,
+            'cupsQueues' => $printers->mapWithKeys(fn (DevicePrinter $printer): array => [$printer->id => $this->cupsQueueOf($printer)]),
             'reported' => $this->device->printersReportedForHumans(),
             'isSpoolerDown' => $this->device->spooler_down_since !== null,
             'commands' => new PrinterCommands($isWindows ? $this->inFlightPrinterCommands() : collect()),
             'jobsShown' => config('printers.jobs_shown'),
             'zebraTemplate' => $isWindows ? ZebraTemplate::current() : null,
+            'cupsPrinters' => config('printers.cups.printers'),
         ])->title(DeviceTab::Printers->pageTitle($this->device));
     }
 

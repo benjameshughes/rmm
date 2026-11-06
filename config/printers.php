@@ -103,11 +103,17 @@ return [
     | offer by default. Queues are reached over IPP at
     | http://server:port/printers/<queue>.
     |
+    | printers lists the queues the Printers tab offers to install, queue
+    | name => the name the printer gets on the PC.
+    |
     */
 
     'cups' => [
         'server' => '10.0.60.218',
         'port' => 631,
+        'printers' => [
+            'xerox-b230' => 'Xerox B230',
+        ],
     ],
 
 ];

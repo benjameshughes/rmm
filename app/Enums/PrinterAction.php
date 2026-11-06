@@ -8,6 +8,7 @@ namespace App\Enums;
  * What the Printers tab can do to a PC's print queues, each a system script.
  * InstallZebra sets up the label printer on the ZDesigner driver;
  * CaptureZebraTemplate saves one ZDesigner queue's settings for it to restore.
+ * AddCupsPrinter and RemoveCupsPrinter manage printers shared by the CUPS server.
  */
 enum PrinterAction: string
 {
@@ -17,6 +18,8 @@ enum PrinterAction: string
     case PrintTestPage = 'print-test-page';
     case InstallZebra = 'install-zebra';
     case CaptureZebraTemplate = 'capture-zebra-template';
+    case AddCupsPrinter = 'add-cups-printer';
+    case RemoveCupsPrinter = 'remove-cups-printer';
 
     public function label(): string
     {
@@ -27,6 +30,8 @@ enum PrinterAction: string
             self::PrintTestPage => 'Print test page',
             self::InstallZebra => 'Install Zebra',
             self::CaptureZebraTemplate => 'Use as Zebra template',
+            self::AddCupsPrinter => 'Install printer',
+            self::RemoveCupsPrinter => 'Remove printer',
         };
     }
 
@@ -39,6 +44,8 @@ enum PrinterAction: string
             self::PrintTestPage => 'Test page queued',
             self::InstallZebra => 'Installing the Zebra',
             self::CaptureZebraTemplate => 'Capturing the Zebra template',
+            self::AddCupsPrinter => 'Installing the printer',
+            self::RemoveCupsPrinter => 'Removing the printer',
         };
     }
 }

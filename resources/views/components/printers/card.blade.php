@@ -1,4 +1,4 @@
-@props(['printer', 'queue', 'device', 'commands', 'jobsShown'])
+@props(['printer', 'queue', 'device', 'commands', 'jobsShown', 'cupsQueue' => null])
 
 <flux:card {{ $attributes->class('space-y-4') }} data-printer="{{ $printer->name }}">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -25,6 +25,13 @@
                     <x-device.commands.busy :command="$commands->for(App\Enums\PrinterAction::ClearQueue, $printer->name)" />
                 @elseif($queue->jobsCount > 0)
                     <flux:button size="sm" variant="ghost" icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Clear print queue', message: {{ Js::from('Remove all '.$queue->jobsCount.' '.Str::plural('job', $queue->jobsCount).' from '.$printer->name.' on '.$device->hostname.'?') }}, confirm: 'Clear queue', danger: true, action: () => $wire.clearQueue({{ $printer->id }}) })" data-clear-queue>Clear queue</flux:button>
+                @endif
+                @if($cupsQueue)
+                    @if($commands->forCups(App\Enums\PrinterAction::RemoveCupsPrinter, $cupsQueue))
+                        <x-device.commands.busy :command="$commands->forCups(App\Enums\PrinterAction::RemoveCupsPrinter, $cupsQueue)" variant="ghost" />
+                    @else
+                        <flux:button size="sm" variant="ghost" icon="x-mark" x-on:click="$dispatch('confirm-action', { heading: 'Remove printer', message: {{ Js::from('Remove '.$printer->name.' from '.$device->hostname.' for every user? It can be installed again from the print server.') }}, confirm: 'Remove printer', danger: true, action: () => $wire.removeCupsPrinter({{ $printer->id }}) })" data-remove-cups-printer>Remove</flux:button>
+                    @endif
                 @endif
             </div>
         @endcan

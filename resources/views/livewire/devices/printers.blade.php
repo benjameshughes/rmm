@@ -21,6 +21,19 @@
                     @else
                         <flux:button size="sm" icon="tag" x-on:click="$dispatch('confirm-action', { heading: 'Install Zebra', message: {{ Js::from('Set the USB Zebra on '.$device->hostname.' up on the ZDesigner driver, '.($zebraTemplate ? 'apply the Zebra template' : 'with the driver defaults (no Zebra template yet)').', make it every user\'s default printer and remove every other Zebra queue, such as the Seagull ones, #2 and Copy 1?') }}, confirm: 'Install Zebra', action: () => $wire.installZebra() })" data-install-zebra>Install Zebra</flux:button>
                     @endif
+                    @if($commands->forCups(App\Enums\PrinterAction::AddCupsPrinter))
+                        <x-device.commands.busy :command="$commands->forCups(App\Enums\PrinterAction::AddCupsPrinter)" />
+                    @elseif($cupsPrinters !== [])
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button size="sm" icon="printer" icon:trailing="chevron-down" data-install-cups-printer>Install printer</flux:button>
+
+                            <flux:menu>
+                                @foreach($cupsPrinters as $cupsQueue => $displayName)
+                                    <flux:menu.item x-on:click="$dispatch('confirm-action', { heading: 'Install printer', message: {{ Js::from('Add '.$displayName.' from the print server to '.$device->hostname.' for every user?') }}, confirm: 'Install printer', action: () => $wire.installCupsPrinter({{ Js::from($cupsQueue) }}) })" data-install-cups-queue="{{ $cupsQueue }}">{{ $displayName }}</flux:menu.item>
+                                @endforeach
+                            </flux:menu>
+                        </flux:dropdown>
+                    @endif
                     @if($commands->for(App\Enums\PrinterAction::RestartSpooler))
                         <x-device.commands.busy :command="$commands->for(App\Enums\PrinterAction::RestartSpooler)" />
                     @else
@@ -49,7 +62,7 @@
         @endif
 
         @forelse($printers as $printer)
-            <x-printers.card :printer="$printer" :queue="$printer->queue()" :device="$device" :commands="$commands" :jobs-shown="$jobsShown" wire:key="printer-{{ $printer->id }}" />
+            <x-printers.card :printer="$printer" :queue="$printer->queue()" :device="$device" :commands="$commands" :jobs-shown="$jobsShown" :cups-queue="$cupsQueues[$printer->id]" wire:key="printer-{{ $printer->id }}" />
         @empty
             <flux:card>
                 <flux:text>No printers on this PC, apart from software ones like Microsoft Print to PDF.</flux:text>

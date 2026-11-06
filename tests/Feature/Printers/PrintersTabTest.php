@@ -162,6 +162,75 @@ it('hides management buttons from users who cannot run commands', function (): v
         ->assertDontSeeHtml('data-restart-spooler');
 });
 
+it('installs a configured CUPS printer with its queue and display name', function (): void {
+    config(['printers.cups.printers' => ['xerox-b230' => 'Xerox B230']]);
+
+    Livewire::test(Printers::class, ['device' => tabPc()])
+        ->assertSeeHtml('data-install-cups-queue="xerox-b230"')
+        ->assertSee('Xerox B230')
+        ->call('installCupsPrinter', 'xerox-b230')
+        ->assertHasNoErrors()
+        ->assertDispatched('command-queued')
+        ->assertDontSeeHtml('data-install-cups-printer')
+        ->assertSeeHtml('data-run-button-busy');
+
+    $command = DeviceCommand::query()->with('script')->sole();
+    expect($command->script->slug)->toBe('add-cups-printer')
+        ->and($command->parameters)->toMatchArray(['Server' => config('printers.cups.server'), 'Printer' => 'xerox-b230', 'DisplayName' => 'Xerox B230'])
+        ->and($command->queued_by)->toBe($this->user->id);
+});
+
+it('refuses to install a CUPS queue that is not configured', function (): void {
+    Livewire::test(Printers::class, ['device' => tabPc()])->call('installCupsPrinter', 'anything')->assertNotFound();
+
+    expect(DeviceCommand::query()->count())->toBe(0);
+});
+
+it('offers Remove only on printers on the CUPS server and queues remove-cups-printer', function (): void {
+    $device = tabPc();
+    $server = config('printers.cups.server').':'.config('printers.cups.port');
+    $xerox = DevicePrinter::factory()->for($device)->create(['name' => 'Xerox B230', 'snapshot' => [...epsonSnapshot(), 'name' => 'Xerox B230', 'port_name' => "http://{$server}/printers/xerox-b230", 'jobs_count' => 0, 'jobs' => []]]);
+    $epson = DevicePrinter::factory()->for($device)->create(['name' => 'Epson ET9C934EE3ADF7', 'snapshot' => epsonSnapshot()]);
+
+    Livewire::test(Printers::class, ['device' => $device])
+        ->assertSeeHtml('data-remove-cups-printer')
+        ->call('removeCupsPrinter', $epson->id)
+        ->assertNotFound();
+
+    $component = Livewire::test(Printers::class, ['device' => $device])
+        ->call('removeCupsPrinter', $xerox->id)
+        ->assertHasNoErrors()
+        ->assertDispatched('command-queued');
+
+    $component->assertDontSeeHtml('data-remove-cups-printer');
+
+    $command = DeviceCommand::query()->with('script')->sole();
+    expect($command->script->slug)->toBe('remove-cups-printer')
+        ->and($command->parameters)->toMatchArray(['Printer' => 'xerox-b230', 'DisplayName' => 'Xerox B230']);
+});
+
+it('shows Remove on no printer that is not on the CUPS server', function (): void {
+    $device = tabPc();
+    DevicePrinter::factory()->for($device)->create(['name' => 'Epson ET9C934EE3ADF7', 'snapshot' => epsonSnapshot()]);
+
+    Livewire::test(Printers::class, ['device' => $device])->assertDontSeeHtml('data-remove-cups-printer');
+});
+
+it('refuses CUPS printer changes from users who cannot run commands', function (): void {
+    $device = tabPc(['is_monitor_only' => true]);
+    $printer = DevicePrinter::factory()->for($device)->create(['name' => 'Xerox B230', 'snapshot' => [...epsonSnapshot(), 'name' => 'Xerox B230', 'port_name' => 'http://'.config('printers.cups.server').':631/printers/xerox-b230']]);
+
+    Livewire::test(Printers::class, ['device' => $device])
+        ->assertDontSeeHtml('data-install-cups-printer')
+        ->assertDontSeeHtml('data-remove-cups-printer')
+        ->call('installCupsPrinter', 'xerox-b230')
+        ->assertForbidden();
+
+    Livewire::test(Printers::class, ['device' => $device])->call('removeCupsPrinter', $printer->id)->assertForbidden();
+
+    expect(DeviceCommand::query()->count())->toBe(0);
+});
+
 it('is served at its own device tab route', function (): void {
     $device = tabPc();
 
