@@ -100,17 +100,20 @@ $vendor = switch -Regex ($manufacturer) {
 }
 
 if (-not $vendor) {
-    Stop-Run "this PC is made by $manufacturer, which this script does not know. Set Wake-on-LAN in its BIOS by hand"
+    Write-Output "ATTENTION: this PC is made by $manufacturer, which this script does not know. Set Wake-on-LAN in its BIOS by hand"
+    exit 1
 }
 
 $settings = @(Get-BiosSettings $vendor)
 
 if ($settings.Count -eq 0) {
-    Stop-Run "this $vendor has no BIOS WMI interface (too old, or an old BIOS). Update the BIOS or set it by hand"
+    Write-Output "ATTENTION: this $vendor has no BIOS WMI interface (too old, or an old BIOS). Update the BIOS or set it by hand"
+    exit 1
 }
 
 if (Test-BiosPassword $vendor) {
-    Stop-Run "a BIOS admin password is set on this $vendor, so Windows cannot change BIOS settings"
+    Write-Output "ATTENTION: a BIOS admin password is set on this $vendor, so Windows cannot change BIOS settings"
+    exit 1
 }
 
 $problems = @()

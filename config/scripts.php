@@ -494,12 +494,15 @@ return [
         ],
         'windows-feature-upgrade' => [
             'name' => 'Windows Feature Upgrade',
-            'description' => 'Install a new Windows version such as 25H2. Expect a long restart (does not restart)',
+            'description' => 'Install a new Windows version such as 26H2, pinning the PC to it first so Windows Update offers it. Never crosses from Windows 10 to 11. Expect a long restart (does not restart)',
             'category' => 'updates',
             'platform' => 'windows',
             'file' => 'windows/windows-feature-upgrade.ps1',
             'timeout_seconds' => 7200,
             'requires_admin' => true,
+            'parameters' => [
+                ['name' => 'TargetVersion', 'label' => 'Version to pin, like 26H2 (empty leaves the pin alone)', 'type' => 'text', 'required' => false, 'default' => null],
+            ],
         ],
         'winget-upgrade-all' => [
             'name' => 'Upgrade All Apps (winget)',
