@@ -43,6 +43,10 @@ $apps = @(
 # service and the OS recovery plugin). Dell Command | Update is left alone.
 $desktopApps = @('Dell SupportAssist*')
 
+# Pro cannot switch telemetry off by policy (AllowTelemetry 0 counts as 1), so
+# the service that uploads it is stopped and disabled instead.
+$services = @('DiagTrack')
+
 $machineSettings = [ordered]@{
     'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' = @{ AllowNewsAndInterests = 0 }
     'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' = @{ EnableDynamicContentInWSB = 0; AllowCortana = 0 }
@@ -196,6 +200,18 @@ foreach ($path in $machineSettings.Keys) {
             $changed.Add("$path\$name = $($machineSettings[$path][$name])")
         }
     }
+}
+
+foreach ($name in $services) {
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+
+    if (-not $service -or ($service.StartType -eq 'Disabled' -and $service.Status -eq 'Stopped')) {
+        continue
+    }
+
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+    Set-Service -Name $name -StartupType Disabled
+    $changed.Add("service $name disabled")
 }
 
 foreach ($task in $tasks) {

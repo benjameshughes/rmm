@@ -121,7 +121,6 @@ it('never touches Defender, the Store or wildcard app names', function (string $
     'Win32_Product |',
     '*Xbox*',
     '*Copilot*',
-    'DiagTrack',
 ]);
 
 it('keeps the script plain ASCII for Windows PowerShell 5.1', function (): void {
@@ -132,4 +131,10 @@ it('reads the provisioned packages only after removing apps, since removing for 
     $script = file_get_contents(resource_path('scripts/windows/debloat-windows.ps1'));
 
     expect(strpos($script, 'Get-AppxProvisionedPackage -Online'))->toBeGreaterThan(strpos($script, 'Remove-AppxPackage -Package'));
+});
+
+it('disables the telemetry upload service, since Pro ignores telemetry off by policy', function (): void {
+    expect(debloatScript())
+        ->toContain("\$services = @('DiagTrack')")
+        ->toContain('Set-Service -Name $name -StartupType Disabled');
 });
