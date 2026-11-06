@@ -21,12 +21,13 @@
                 </div>
 
                 @can('runCommands', $device)
-                    @if($device->canBackUp())
-                        <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:button wire:click="$dispatch('migrate-user')" icon="arrows-right-left" variant="ghost" data-migrate-user>Migrate user</flux:button>
+                        @if($device->canBackUp())
                             <x-device.commands.run-button :command="$inFlight->get(App\Enums\BackupScript::ListSnapshots->value)" action="refreshSnapshots" icon="arrow-path" variant="ghost" data-refresh-snapshots>Refresh snapshots</x-device.commands.run-button>
                             <x-device.commands.run-button :command="$inFlight->get(App\Enums\BackupScript::BackUp->value)" action="backUpNow" icon="cloud-arrow-up" variant="primary" data-back-up-now>Back up now</x-device.commands.run-button>
-                        </div>
-                    @endif
+                        @endif
+                    </div>
                 @endcan
             </div>
 
@@ -95,5 +96,7 @@
         <livewire:devices.backup-credentials :device="$device" :key="'backup-credentials-'.$device->id" />
 
         <livewire:devices.restore-backup :device="$device" :key="'restore-backup-'.$device->id" />
+
+        <livewire:devices.migrate-user :device="$device" :key="'migrate-user-'.$device->id" />
     @endif
 </x-device.shell>

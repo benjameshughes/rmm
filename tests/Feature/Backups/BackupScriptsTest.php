@@ -116,8 +116,8 @@ it('restores into a new folder without overwriting anything', function (): void 
         ->toContain('^(latest|[0-9a-fA-F]{8,64})$');
 });
 
-it('lists snapshots of this PC only', function (): void {
-    expect(backupScriptFile('backup-snapshots.ps1'))->toContain("@('snapshots', '--host', \$env:COMPUTERNAME, '--json')");
+it('lists file backup snapshots of this PC only', function (): void {
+    expect(backupScriptFile('backup-snapshots.ps1'))->toContain("@('snapshots', '--host', \$env:COMPUTERNAME, '--tag', 'rmm', '--json')");
 });
 
 it('streams restic status as PROGRESS lines in the rmm.progress/1 schema without keeping them', function (): void {

@@ -44,7 +44,8 @@ if (-not (Test-BackupCredentials)) {
 Use-Restic
 Set-ResticRepository
 
-$arguments = @('restore', $snapshotId, '--target', $target, '--overwrite', 'never', '--json') + $resticArguments
+# --tag rmm makes latest mean the newest file backup, never a Migrate User capture (tag usmt).
+$arguments = @('restore', $snapshotId, '--tag', 'rmm', '--target', $target, '--overwrite', 'never', '--json') + $resticArguments
 
 # restic stores C:\Users\anna as /C/Users/anna inside a snapshot.
 if ($includePath) {

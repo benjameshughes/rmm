@@ -166,7 +166,7 @@ it('labels each fleet grid group with its count and offline devices, and explain
 
 it('colours a fleet square red when offline, amber when it needs attention, and green when online and fine', function (): void {
     $this->device->delete();
-    Device::factory()->active()->windows()->create(['hostname' => 'FINE', 'last_seen' => now(), 'agent_version' => null]);
+    Device::factory()->active()->windows()->create(['hostname' => 'FINE', 'last_seen' => now(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 60.0]]]);
     Device::factory()->active()->windows()->create(['hostname' => 'FULL', 'last_seen' => now(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 3.0]]]);
     Device::factory()->active()->windows()->create(['hostname' => 'GONE', 'last_seen' => now()->subHour(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 3.0]]]);
 

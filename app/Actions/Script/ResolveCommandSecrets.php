@@ -26,7 +26,8 @@ use InvalidArgumentException;
  * usage scan gets the space-hog folders it must keep from config/disk_usage.php,
  * and the delete and restore scripts the protected paths from config/devices.php
  * as JSON, so the PC refuses them too. backup-restore-profile gets the profile
- * folders it restores from config/backup.php as JSON. install-zebra gets the ZDesigner driver
+ * folders it restores from config/backup.php as JSON. The USMT scripts get
+ * config/usmt.php's ADK URL, folder, XML list (as JSON) and log level. install-zebra gets the ZDesigner driver
  * pin and match patterns from config/zebra.php and the Zebra template's
  * settings. sync-local-user gets the staff temp password from config/staff.php,
  * which it sets only when its ResetPassword parameter says so or the user is
@@ -96,6 +97,10 @@ final class ResolveCommandSecrets
             'DiskUsageKeep' => collect(config('disk_usage.culprits'))->pluck('glob')->unique()->implode(config('disk_usage.keep_separator')),
             'StaffTempPassword' => $this->staffTempPassword($command),
             'RestoreProfileFolders' => json_encode(config('backup.restore_profile.folders'), JSON_THROW_ON_ERROR),
+            'UsmtAdkUrl' => (string) config('usmt.adk_download_url'),
+            'UsmtFolder' => (string) config('usmt.folder'),
+            'UsmtXmlFiles' => json_encode(config('usmt.xml_files'), JSON_THROW_ON_ERROR),
+            'UsmtVerbosity' => (string) config('usmt.log_verbosity'),
             'DeletePathProtected' => json_encode(config('devices.delete_path.protected'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             default => throw new InvalidArgumentException("No value is known for the script secret '{$name}'."),
         };

@@ -68,7 +68,8 @@ $staging = Join-Path $resticDir "staging\$([guid]::NewGuid().ToString('N'))"
 
 # restic stores C:\Users\anna as /C/Users/anna inside a snapshot.
 $snapshotProfile = ($sourceProfile -replace '^([A-Za-z]):', '/$1') -replace '\\', '/'
-$arguments = @('restore', $snapshotId, '--target', $staging, '--json') + $resticArguments
+# --tag rmm makes latest mean the newest file backup, never a Migrate User capture (tag usmt).
+$arguments = @('restore', $snapshotId, '--tag', 'rmm', '--target', $staging, '--json') + $resticArguments
 
 foreach ($folder in $folders) {
     $arguments += @('--iinclude', "$snapshotProfile/$folder")

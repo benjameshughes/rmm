@@ -9,7 +9,8 @@ if (-not (Test-BackupCredentials)) {
 Use-Restic
 Set-ResticRepository
 
-$run = Invoke-Restic (@('snapshots', '--host', $env:COMPUTERNAME, '--json') + $resticArguments)
+# Only file backups carry the rmm tag; Migrate User captures (tag usmt) are left out.
+$run = Invoke-Restic (@('snapshots', '--host', $env:COMPUTERNAME, '--tag', 'rmm', '--json') + $resticArguments)
 $exitCode = [int]$run.ExitCode
 
 if ($exitCode -ne 0) {
