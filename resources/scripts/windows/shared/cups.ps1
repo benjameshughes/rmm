@@ -14,7 +14,7 @@ $cupsQueue = "$env:RMM_Printer".Trim()
 $cupsDisplayName = "$env:RMM_DisplayName".Trim()
 
 if ($cupsServer -notmatch '^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$') {
-    Write-Output 'ATTENTION: The CUPS server must be a host name or IPv4 address, e.g. 10.0.61.215'
+    Write-Output 'ATTENTION: The CUPS server must be a host name or IPv4 address, e.g. 10.0.60.218'
     exit 1
 }
 
