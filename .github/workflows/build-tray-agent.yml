@@ -2,10 +2,8 @@ name: Build RMM Agent
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'resources/tauri/tray-template/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -196,7 +194,7 @@ jobs:
   # One release with every platform's assets, created only once both builds
   # (and their tests) have passed.
   release:
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, build-linux]
     runs-on: ubuntu-latest
 
