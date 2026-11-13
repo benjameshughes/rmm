@@ -384,6 +384,15 @@ return [
             'timeout_seconds' => 60,
             'requires_admin' => true,
         ],
+        'setup-zebra-labels' => [
+            'name' => 'Set Up Zebra 80 x 40 mm Labels',
+            'description' => 'Tell the Zebra it has 80 x 40 mm gap labels torn off at the bar, save it on the printer and calibrate the gap sensor',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/setup-zebra-labels.ps1',
+            'timeout_seconds' => 60,
+            'requires_admin' => true,
+        ],
         'print-test-page' => [
             'name' => 'Print Test Page',
             'description' => 'Print the Windows test page on one printer',
