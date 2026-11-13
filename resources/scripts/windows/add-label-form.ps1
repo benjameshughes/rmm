@@ -56,7 +56,7 @@ $defaults = New-Object RmmPrint.Native+PrinterDefaults
 $defaults.DesiredAccess = 1
 $server = [IntPtr]::Zero
 
-if (-not [RmmPrint.Native]::OpenPrinter($null, [ref] $server, [ref] $defaults)) {
+if (-not [RmmPrint.Native]::OpenPrinter([NullString]::Value, [ref] $server, [ref] $defaults)) {
     Stop-Run ("could not open the local print server: Win32 error {0}" -f [Runtime.InteropServices.Marshal]::GetLastWin32Error())
 }
 
