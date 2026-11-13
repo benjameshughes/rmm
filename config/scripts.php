@@ -375,6 +375,15 @@ return [
             'timeout_seconds' => 120,
             'requires_admin' => true,
         ],
+        'add-label-form' => [
+            'name' => 'Add 80 x 40 mm Label Size',
+            'description' => 'Add the 80 x 40 mm label paper size to Windows so any printer, the Zebra included, can use it',
+            'category' => 'maintenance',
+            'platform' => 'windows',
+            'file' => 'windows/add-label-form.ps1',
+            'timeout_seconds' => 60,
+            'requires_admin' => true,
+        ],
         'print-test-page' => [
             'name' => 'Print Test Page',
             'description' => 'Print the Windows test page on one printer',
