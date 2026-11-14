@@ -52,7 +52,7 @@
             @endcan
 
             @can('runCommands', $device)
-                <flux:button wire:click="$set('showScriptModal', true)" icon="code-bracket">Run Script</flux:button>
+                <flux:button wire:click="openScriptPicker" icon="code-bracket" data-run-script>Run Script</flux:button>
 
                 <flux:dropdown position="bottom" align="end">
                     <flux:button icon="power" icon:trailing="chevron-down">Power</flux:button>
@@ -72,27 +72,32 @@
         </div>
     </div>
 
-    <flux:modal wire:model="showScriptModal" class="md:w-96">
+    <flux:modal wire:model="showScriptModal" class="w-full md:max-w-3xl">
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Run Script</flux:heading>
-                <flux:text class="mt-2">Execute a script on {{ $device->hostname }}.</flux:text>
+                <flux:text class="mt-2">Scripts that run on {{ $device->hostname }}, grouped by what they do.</flux:text>
             </div>
 
-            <flux:select wire:model.live="selectedScriptId" label="Script" placeholder="Select a script..." variant="listbox" searchable>
-                @foreach($scripts as $script)
-                    <flux:select.option value="{{ $script->id }}">{{ $script->name }} ({{ $script->platform->name }})</flux:select.option>
-                @endforeach
-            </flux:select>
+            @if($this->selectedScript)
+                <form wire:submit="runScript" class="space-y-6">
+                    <div class="flex items-start justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                        <x-script.row :script="$this->selectedScript" :show-platform="false" class="flex-1" data-selected-script />
+                        <flux:button size="sm" variant="ghost" icon="arrow-left" wire:click="selectScript(null)" class="m-3">Change</flux:button>
+                    </div>
 
-            <x-script.parameter-inputs :parameters="$this->parameterFields" />
+                    <x-script.parameter-inputs :parameters="$this->parameterFields" />
 
-            <flux:error name="script" />
+                    <flux:error name="script" />
 
-            <div class="flex justify-end gap-2">
-                <flux:button wire:click="$set('showScriptModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button wire:click="runScript" variant="primary" icon="play">Execute</flux:button>
-            </div>
+                    <div class="flex justify-end gap-2">
+                        <flux:button wire:click="$set('showScriptModal', false)" variant="ghost">Cancel</flux:button>
+                        <flux:button type="submit" variant="primary" icon="play">Run</flux:button>
+                    </div>
+                </form>
+            @else
+                <x-script.picker :groups="$scriptGroups" :empty-message="$scriptPickerEmpty" />
+            @endif
         </div>
     </flux:modal>
 

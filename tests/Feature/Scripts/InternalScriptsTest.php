@@ -79,8 +79,8 @@ it('leaves user scripts runnable', function (): void {
 it('leaves internal scripts out of the device Run Script picker', function (): void {
     Livewire::actingAs($this->user)
         ->test(Header::class, ['device' => $this->device])
-        ->set('showScriptModal', true)
-        ->assertViewHas('scripts', fn ($scripts): bool => $scripts->pluck('slug')->intersect(internalScriptSlugs())->isEmpty() && $scripts->contains('slug', 'restart'));
+        ->call('openScriptPicker')
+        ->assertViewHas('scriptGroups', fn ($groups): bool => ($scripts = $groups->flatMap->scripts)->pluck('slug')->intersect(internalScriptSlugs())->isEmpty() && $scripts->contains('slug', 'restart'));
 });
 
 it('leaves internal scripts out of the bulk Run Script picker', function (): void {

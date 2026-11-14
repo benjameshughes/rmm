@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\CommandStatus;
+use App\Enums\ScriptPlatform;
 use App\Livewire\Scripts\Show;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -15,7 +16,7 @@ pest()->use(RefreshDatabase::class);
 
 it('shows script details', function (): void {
     $user = User::factory()->create();
-    $script = Script::factory()->create(['name' => 'Test Script']);
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All, 'name' => 'Test Script']);
 
     Livewire::actingAs($user)
         ->test(Show::class, ['script' => $script])
@@ -25,7 +26,7 @@ it('shows script details', function (): void {
 
 it('shows recent command history for the script', function (): void {
     $user = User::factory()->create();
-    $script = Script::factory()->create();
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All]);
     $device = Device::factory()->active()->create();
 
     DeviceCommand::factory()->count(3)->create([
@@ -41,7 +42,7 @@ it('shows recent command history for the script', function (): void {
 
 it('executes a script on a device', function (): void {
     $user = User::factory()->create();
-    $script = Script::factory()->create(['script_content' => 'Get-Process']);
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All, 'script_content' => 'Get-Process']);
     $device = Device::factory()->active()->create();
 
     Livewire::actingAs($user)
@@ -60,7 +61,7 @@ it('executes a script on a device', function (): void {
 });
 
 it('requires authentication to execute', function (): void {
-    $script = Script::factory()->create();
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All]);
     $device = Device::factory()->active()->create();
 
     Livewire::test(Show::class, ['script' => $script])
@@ -71,7 +72,7 @@ it('requires authentication to execute', function (): void {
 
 it('runs one script on several devices at once and says how many it queued on', function (): void {
     $user = User::factory()->create();
-    $script = Script::factory()->create(['name' => 'Flush DNS']);
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All, 'name' => 'Flush DNS']);
     $devices = Device::factory()->active()->windows()->count(3)->create();
 
     Livewire::actingAs($user)

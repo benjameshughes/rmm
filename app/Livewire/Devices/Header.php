@@ -8,6 +8,7 @@ use App\Actions\Device\RunAdHocCommand;
 use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
+use App\Enums\ScriptPlatform;
 use App\Enums\ScriptType;
 use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\EntersScriptParameterValues;
@@ -16,6 +17,7 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Script;
 use App\Queries\AgentVersionQueries;
+use App\Queries\ScriptQueries;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
@@ -36,6 +38,8 @@ final class Header extends Component
     public bool $showScriptModal = false;
 
     public ?int $selectedScriptId = null;
+
+    public string $scriptSearch = '';
 
     public bool $showCommandModal = false;
 
@@ -76,6 +80,20 @@ final class Header extends Component
         $this->fillParameterValues();
     }
 
+    public function openScriptPicker(): void
+    {
+        $this->reset('selectedScriptId', 'scriptSearch');
+        $this->fillParameterValues();
+        $this->showScriptModal = true;
+    }
+
+    public function selectScript(?int $scriptId): void
+    {
+        $this->selectedScriptId = $scriptId;
+        unset($this->selectedScript);
+        $this->fillParameterValues();
+    }
+
     public function powerOff(ExecuteScriptOnDevice $action): void
     {
         $this->runSystemScript($action, 'shutdown');
@@ -113,12 +131,15 @@ final class Header extends Component
 
         $script = Script::findOrFail($this->selectedScriptId);
         throw_if($script->is_internal, ScriptCannotBeRunDirectly::internal($script));
+        throw_unless($this->runsOnDevice($script), ScriptCannotBeRunDirectly::wrongPlatform($script, $this->device));
 
         $action($script, $this->device, auth()->user(), parameters: $this->validatedParameterValues($validateParameters, $script));
 
         $this->showScriptModal = false;
-        $this->reset('selectedScriptId', 'parameterValues');
+        $this->reset('selectedScriptId', 'parameterValues', 'scriptSearch');
         $this->dispatch('command-queued');
+
+        Flux::toast(text: 'Open it on the Commands tab to see the output once the agent picks it up.', heading: "{$script->name} queued on {$this->device->hostname}", variant: 'success');
     }
 
     public function runAdHocCommand(RunAdHocCommand $action): void
@@ -162,9 +183,23 @@ final class Header extends Component
         return $this->device->platform()->adHocScriptTypes();
     }
 
+    /**
+     * The picked script, once and only once per request.
+     */
+    #[Computed]
+    public function selectedScript(): ?Script
+    {
+        return $this->selectedScriptId === null ? null : Script::query()->runnableDirectly()->find($this->selectedScriptId);
+    }
+
     protected function parameterScript(): ?Script
     {
         return $this->selectedScriptId === null ? null : Script::find($this->selectedScriptId);
+    }
+
+    private function runsOnDevice(Script $script): bool
+    {
+        return in_array($script->platform, [$this->device->platform(), ScriptPlatform::All], true);
     }
 
     private function runSystemScript(ExecuteScriptOnDevice $action, string $slug): void
@@ -190,7 +225,7 @@ final class Header extends Component
         $this->commandTimeoutSeconds = config('commands.ad_hoc.timeout_seconds.default');
     }
 
-    public function render(AgentVersionQueries $agentVersions): View
+    public function render(AgentVersionQueries $agentVersions, ScriptQueries $scripts): View
     {
         return view('livewire.devices.header', [
             'latestAgentVersion' => $agentVersions->latest(),
@@ -198,7 +233,8 @@ final class Header extends Component
             'statusColor' => $this->device->statusColor(),
             'operatingSystem' => $this->device->operatingSystem(),
             'printerProblem' => $this->device->printerProblemLabel(),
-            'scripts' => $this->showScriptModal ? Script::query()->runnableDirectly()->orderBy('name')->get() : collect(),
+            'scriptGroups' => $this->showScriptModal && $this->selectedScriptId === null ? $scripts->runnableOn($this->device->platform(), $this->scriptSearch) : collect(),
+            'scriptPickerEmpty' => $this->scriptSearch === '' ? 'No scripts can run on this device yet.' : "No scripts match \"{$this->scriptSearch}\".",
             'adHocCommand' => $this->inFlightAdHocCommand(),
         ]);
     }

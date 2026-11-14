@@ -11,6 +11,15 @@ enum ScriptPlatform: string
     case MacOs = 'macos';
     case All = 'all';
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::MacOs => 'macOS',
+            self::All => 'Any platform',
+            default => $this->name,
+        };
+    }
+
     /**
      * Shells offered for a command typed on a device's page, the first being the default.
      *

@@ -14,7 +14,7 @@
                 <flux:badge color="zinc" size="lg" data-internal-badge>Internal</flux:badge>
             @else
                 <flux:button wire:click="$set('showExecuteModal', true)" variant="primary" icon="play">
-                    Execute
+                    Run
                 </flux:button>
             @endif
             @unless($script->is_system)
@@ -38,12 +38,12 @@
             <dl class="space-y-3 text-sm">
                 <div class="flex justify-between">
                     <dt class="text-zinc-500 dark:text-zinc-400">Category</dt>
-                    <dd><flux:badge size="sm" color="zinc">{{ $script->category->name }}</flux:badge></dd>
+                    <dd><flux:badge size="sm" color="zinc">{{ $script->category->label() }}</flux:badge></dd>
                 </div>
                 <flux:separator variant="subtle" />
                 <div class="flex justify-between">
                     <dt class="text-zinc-500 dark:text-zinc-400">Platform</dt>
-                    <dd><flux:badge size="sm" color="zinc">{{ $script->platform->name }}</flux:badge></dd>
+                    <dd><flux:badge size="sm" color="zinc">{{ $script->platform->label() }}</flux:badge></dd>
                 </div>
                 <flux:separator variant="subtle" />
                 <div class="flex justify-between">
@@ -165,27 +165,5 @@
         </flux:button>
     </div>
 
-    <flux:modal wire:model="showExecuteModal" class="md:w-96">
-        <div class="space-y-6">
-            <div>
-                <flux:heading size="lg">Execute Script</flux:heading>
-                <flux:text class="mt-2">Run "{{ $script->name }}" on one or more devices.</flux:text>
-            </div>
-
-            <flux:pillbox wire:model="selectedDeviceIds" multiple searchable label="Devices" placeholder="Select devices...">
-                @foreach($availableDevices as $device)
-                    <flux:pillbox.option value="{{ $device->id }}">{{ $device->hostname }}</flux:pillbox.option>
-                @endforeach
-            </flux:pillbox>
-
-            <x-script.parameter-inputs :parameters="$this->parameterFields" />
-
-            <flux:error name="script" />
-
-            <div class="flex justify-end gap-2">
-                <flux:button wire:click="$set('showExecuteModal', false)" variant="ghost">Cancel</flux:button>
-                <flux:button wire:click="executeOnDevices" variant="primary" icon="play">Execute</flux:button>
-            </div>
-        </div>
-    </flux:modal>
+    <x-script.run-modal :script="$script" :devices="$availableDevices" :groups="$runGroups" />
 </div>

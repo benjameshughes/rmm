@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Script\SyncSystemScripts;
 use App\Enums\AlertStatus;
 use App\Enums\DeviceStatus;
+use App\Enums\ScriptPlatform;
 use App\Livewire\AlertBell;
 use App\Livewire\Alerts\Index as AlertsIndex;
 use App\Livewire\Commands\Detail;
@@ -106,7 +107,7 @@ it('gates running a script from the script page through the policy', function ()
     denyAbility('runCommands');
 
     Livewire::actingAs($this->user)
-        ->test(ScriptsShow::class, ['script' => Script::factory()->create()])
+        ->test(ScriptsShow::class, ['script' => Script::factory()->create(['platform' => ScriptPlatform::All])])
         ->set('selectedDeviceIds', [$device->id])
         ->call('executeOnDevices')
         ->assertForbidden();

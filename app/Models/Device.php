@@ -208,6 +208,22 @@ final class Device extends Model
     }
 
     /**
+     * Devices that can run a script written for the platform, read the same way as platform().
+     */
+    public function scopeRunsPlatform(Builder $query, ScriptPlatform $platform): Builder
+    {
+        return match ($platform) {
+            ScriptPlatform::All => $query,
+            ScriptPlatform::Windows => $query->runsWindows(),
+            ScriptPlatform::Linux => $query->whereNot(fn (Builder $windowsQuery): Builder => $windowsQuery
+                ->whereRaw("coalesce(os, '') like ?", ['%windows%'])
+                ->orWhereRaw("coalesce(os_name, '') like ?", ['%windows%'])
+                ->orWhereRaw("coalesce(kernel_name, '') like ?", ['%windows%'])),
+            ScriptPlatform::MacOs => $query->whereRaw('1 = 0'),
+        };
+    }
+
+    /**
      * Devices still carrying a power state that has outlived its window.
      */
     public function scopeWithLapsedPowerState(Builder $query): Builder

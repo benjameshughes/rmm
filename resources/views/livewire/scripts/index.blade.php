@@ -1,96 +1,63 @@
 <div class="space-y-6">
-    <div class="flex items-center justify-between">
-        <flux:heading size="xl">Scripts</flux:heading>
-        <flux:button as="a" :href="route('scripts.create')" wire:navigate variant="primary">
-            New Script
-        </flux:button>
-    </div>
-    <flux:separator variant="subtle" />
-
-    <div class="flex flex-wrap items-center gap-4">
-        <flux:input wire:model.live.debounce.300ms="search" placeholder="Search scripts..." class="max-w-sm" icon="magnifying-glass" />
-        <flux:select wire:model.live="categoryFilter" placeholder="All Categories" class="max-w-48">
-            <flux:select.option value="">All Categories</flux:select.option>
-            @foreach($categories as $category)
-                <flux:select.option value="{{ $category->value }}">{{ $category->name }}</flux:select.option>
-            @endforeach
-        </flux:select>
-        <flux:select wire:model.live="platformFilter" placeholder="All Platforms" class="max-w-48">
-            <flux:select.option value="">All Platforms</flux:select.option>
-            @foreach($platforms as $platform)
-                <flux:select.option value="{{ $platform->value }}">{{ $platform->name }}</flux:select.option>
-            @endforeach
-        </flux:select>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <flux:heading size="xl" level="1">Scripts</flux:heading>
+            <flux:text class="mt-1">{{ $summary }}</flux:text>
+        </div>
+        <flux:button as="a" :href="route('scripts.create')" wire:navigate variant="primary" icon="plus">New Script</flux:button>
     </div>
 
-    <flux:card>
-        <flux:table :paginate="$scripts">
-            <flux:table.columns>
-                <flux:table.column>Name</flux:table.column>
-                <flux:table.column>Category</flux:table.column>
-                <flux:table.column>Platform</flux:table.column>
-                <flux:table.column>Type</flux:table.column>
-                <flux:table.column>Timeout</flux:table.column>
-                <flux:table.column></flux:table.column>
-            </flux:table.columns>
-            <flux:table.rows>
-                @forelse ($scripts as $script)
-                    <flux:table.row>
-                        <flux:table.cell>
-                            <div>
-                                <flux:text class="font-medium">{{ $script->name }}</flux:text>
-                                @if($script->is_system)
-                                    <flux:badge size="sm" color="blue">System</flux:badge>
-                                @endif
-                                @if($script->is_internal)
-                                    <flux:badge size="sm" color="zinc" data-internal-badge>Internal</flux:badge>
-                                @endif
-                                @if($script->description)
-                                    <flux:text size="xs" class="text-zinc-500 dark:text-zinc-400">{{ Str::limit($script->description, 60) }}</flux:text>
-                                @endif
-                            </div>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <flux:badge size="sm" color="zinc">{{ $script->category->name }}</flux:badge>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <flux:badge size="sm" color="zinc">{{ $script->platform->name }}</flux:badge>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <flux:badge size="sm" color="zinc">{{ $script->script_type->name }}</flux:badge>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <flux:text class="text-zinc-500 dark:text-zinc-400">{{ $script->timeout_seconds }}s</flux:text>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <div class="flex items-center gap-2">
-                                <flux:button as="a" size="sm" variant="ghost" :href="route('scripts.show', $script)" wire:navigate>
-                                    View
-                                </flux:button>
-                                @unless($script->is_system)
-                                    <flux:dropdown>
-                                        <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" square aria-label="Actions" />
-                                        <flux:menu>
-                                            <flux:menu.item icon="pencil-square" :href="route('scripts.edit', $script)" wire:navigate>
-                                                Edit
-                                            </flux:menu.item>
-                                            <flux:menu.item icon="trash" x-on:click="$dispatch('confirm-action', { heading: 'Delete script', message: {{ Js::from('Delete \''.$script->name.'\'? This cannot be undone.') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $script->id }}) })" variant="danger">
-                                                Delete
-                                            </flux:menu.item>
-                                        </flux:menu>
-                                    </flux:dropdown>
-                                @endunless
-                            </div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="6">
-                            <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">No scripts found</div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
-    </flux:card>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <flux:input wire:model.live.debounce.250ms="search" placeholder="Search by name or what it does..." icon="magnifying-glass" clearable class="sm:max-w-md" />
+        <div class="flex gap-3">
+            <flux:select wire:model.live="categoryFilter" class="sm:w-48">
+                <flux:select.option value="">All categories</flux:select.option>
+                @foreach($categories as $category)
+                    <flux:select.option value="{{ $category->value }}">{{ $category->label() }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <flux:select wire:model.live="platformFilter" class="sm:w-44">
+                <flux:select.option value="">All platforms</flux:select.option>
+                @foreach($platforms as $platform)
+                    <flux:select.option value="{{ $platform->value }}">{{ $platform->label() }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        </div>
+    </div>
+
+    <div class="space-y-8">
+        @forelse($groups as $group)
+            <x-script.group :group="$group" wire:key="library-group-{{ $group->category->value }}">
+                @foreach($group->scripts as $script)
+                    <x-script.row :script="$script" wire:key="library-script-{{ $script->id }}">
+                        <x-slot:actions>
+                            @unless($script->is_internal)
+                                <flux:button size="sm" icon="play" wire:click="openRun({{ $script->id }})" data-run-script="{{ $script->id }}">Run</flux:button>
+                            @endunless
+                            <flux:button as="a" size="sm" variant="ghost" :href="route('scripts.show', $script)" wire:navigate>View</flux:button>
+                            @unless($script->is_system)
+                                <flux:dropdown position="bottom" align="end">
+                                    <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" square aria-label="More actions" />
+                                    <flux:menu>
+                                        <flux:menu.item icon="pencil-square" :href="route('scripts.edit', $script)" wire:navigate>Edit</flux:menu.item>
+                                        <flux:menu.item icon="trash" variant="danger" x-on:click="$dispatch('confirm-action', { heading: 'Delete script', message: {{ Js::from('Delete \''.$script->name.'\'? This cannot be undone.') }}, confirm: 'Delete', danger: true, action: () => $wire.delete({{ $script->id }}) })">Delete</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
+                            @endunless
+                        </x-slot:actions>
+                    </x-script.row>
+                @endforeach
+            </x-script.group>
+        @empty
+            <flux:card class="py-12 text-center">
+                <flux:icon.code-bracket class="mx-auto mb-3 text-zinc-300 dark:text-zinc-600" />
+                <flux:heading>No scripts found</flux:heading>
+                @if($isFiltered)
+                    <flux:button size="sm" variant="ghost" class="mt-3" wire:click="clearFilters">Clear filters</flux:button>
+                @endif
+            </flux:card>
+        @endforelse
+    </div>
+
+    <x-script.run-modal :script="$runScript" :devices="$availableDevices" :groups="$runGroups" />
 </div>

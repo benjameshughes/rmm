@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Device\BulkExecuteScript;
 use App\Actions\Schedule\RunScheduledTask;
 use App\Actions\Script\ExecuteScriptOnDevice;
+use App\Enums\ScriptPlatform;
 use App\Livewire\Devices\Header as DeviceHeader;
 use App\Livewire\Devices\Index as DevicesIndex;
 use App\Livewire\ScheduledTasks\Index as ScheduledTasksIndex;
@@ -24,6 +25,7 @@ pest()->use(RefreshDatabase::class);
 beforeEach(function (): void {
     $this->user = User::factory()->create();
     $this->script = Script::factory()->create([
+        'platform' => ScriptPlatform::All,
         'parameters' => [
             ['name' => 'PackageId', 'label' => 'Package ID', 'type' => 'text', 'required' => true],
             ['name' => 'Force', 'label' => 'Force', 'type' => 'boolean', 'required' => false, 'default' => 'true'],
@@ -140,7 +142,7 @@ describe('device page', function (): void {
     it('renders no parameter inputs for a script without parameters', function (): void {
         Livewire::actingAs($this->user)
             ->test(DeviceHeader::class, ['device' => deviceOnAgent(null)])
-            ->set('selectedScriptId', Script::factory()->create()->id)
+            ->set('selectedScriptId', Script::factory()->create(['platform' => ScriptPlatform::All])->id)
             ->assertSet('parameterValues', [])
             ->assertDontSeeHtml('wire:model="parameterValues.')
             ->call('runScript')

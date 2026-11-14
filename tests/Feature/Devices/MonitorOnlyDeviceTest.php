@@ -24,6 +24,7 @@ use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
@@ -33,7 +34,7 @@ beforeEach(function (): void {
     $this->user = User::factory()->create();
 });
 
-function postLinuxMetrics(array $overrides = [], string $apiKey = 'LINUX-KEY'): Illuminate\Testing\TestResponse
+function postLinuxMetrics(array $overrides = [], string $apiKey = 'LINUX-KEY'): TestResponse
 {
     return test()->withHeaders(['X-Device-Key' => $apiKey])->postJson('/api/metrics', [
         'cpu' => ['usage_percent' => 12.5],
@@ -222,7 +223,7 @@ describe('the device pages', function (): void {
             ->assertSeeHtml('data-monitor-only')
             ->assertDontSeeHtml('wire:click="wake"')
             ->assertDontSeeHtml('showCommandModal\', true')
-            ->assertDontSeeHtml('showScriptModal\', true')
+            ->assertDontSeeHtml('data-run-script')
             ->assertDontSeeHtml('$wire.restart()')
             ->assertDontSeeHtml('$wire.powerOff()')
             ->assertDontSeeHtml('$wire.logOff()');
@@ -236,7 +237,7 @@ describe('the device pages', function (): void {
             ->assertSeeHtml('wire:click="wake"')
             ->assertSeeHtml('$wire.restart()')
             ->assertSeeHtml('showCommandModal\', true')
-            ->assertSeeHtml('showScriptModal\', true');
+            ->assertSeeHtml('data-run-script');
     });
 
     it('refuses header actions called directly on a monitor-only device', function (string $method): void {
@@ -286,7 +287,7 @@ describe('the device pages', function (): void {
         Device::factory()->monitorOnly()->active()->create(['hostname' => 'linux-watch-only']);
         Device::factory()->windows()->active()->create(['hostname' => 'WINDOWS-BOX']);
 
-        Livewire::actingAs($this->user)->test(ScriptsShow::class, ['script' => Script::factory()->create()])
+        Livewire::actingAs($this->user)->test(ScriptsShow::class, ['script' => Script::factory()->windows()->create()])
             ->set('showExecuteModal', true)
             ->assertViewHas('availableDevices', fn ($devices): bool => $devices->pluck('hostname')->all() === ['WINDOWS-BOX']);
     });

@@ -100,6 +100,24 @@ final class Script extends Model
         return $query->whereIn('platform', [$platform, ScriptPlatform::All]);
     }
 
+    /**
+     * Matches the name or the description, so a half-remembered purpose finds the script.
+     */
+    public function scopeSearch($query, string $term)
+    {
+        return $query->when($term !== '', fn ($searchQuery) => $searchQuery->where(fn ($termQuery) => $termQuery
+            ->where('name', 'like', "%{$term}%")
+            ->orWhere('description', 'like', "%{$term}%")));
+    }
+
+    /**
+     * The timeout as a person reads it: seconds under a minute, minutes after.
+     */
+    public function timeoutLabel(): string
+    {
+        return $this->timeout_seconds < 60 ? "{$this->timeout_seconds}s" : round($this->timeout_seconds / 60, 1).' min';
+    }
+
     public function scopeByCategory($query, ScriptCategory $category)
     {
         return $query->where('category', $category);

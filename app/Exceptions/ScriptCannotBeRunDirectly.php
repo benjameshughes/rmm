@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Exceptions;
 
 use App\Exceptions\Concerns\Httpable;
+use App\Models\Device;
 use App\Models\Script;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -24,5 +25,10 @@ final class ScriptCannotBeRunDirectly extends RuntimeException implements HttpEx
     public static function internal(Script $script): self
     {
         return new self("{$script->name} is queued by its own feature, with its own checks, and cannot be run directly.");
+    }
+
+    public static function wrongPlatform(Script $script, Device $device): self
+    {
+        return new self("{$script->name} is a {$script->platform->label()} script and cannot run on {$device->hostname}.", status: 422);
     }
 }
