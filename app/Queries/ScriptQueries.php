@@ -38,4 +38,19 @@ final class ScriptQueries
     {
         return $this->grouped(Script::query()->runnableDirectly()->forPlatform($platform), $search);
     }
+
+    /**
+     * The command palette list: runnable scripts by name, narrowed to a platform when scoped to a device.
+     *
+     * @return Collection<int, Script>
+     */
+    public function palette(?ScriptPlatform $platform, string $search = ''): Collection
+    {
+        return Script::query()
+            ->runnableDirectly()
+            ->when($platform !== null, fn (Builder $scripts) => $scripts->forPlatform($platform))
+            ->search($search)
+            ->orderBy('name')
+            ->get();
+    }
 }

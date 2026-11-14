@@ -7,8 +7,8 @@ namespace App\Livewire\Scripts;
 use App\DTOs\Scripts\ScriptGroup;
 use App\Enums\ScriptCategory;
 use App\Enums\ScriptPlatform;
-use App\Exceptions\ScriptCannotBeRunDirectly;
 use App\Livewire\Concerns\EntersScriptParameterValues;
+use App\Livewire\Concerns\PicksScriptToRun;
 use App\Livewire\Concerns\RunsScriptOnDevices;
 use App\Models\Script;
 use App\Queries\ScriptQueries;
@@ -16,7 +16,6 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -24,6 +23,7 @@ use Livewire\Component;
 final class Index extends Component
 {
     use EntersScriptParameterValues;
+    use PicksScriptToRun;
     use RunsScriptOnDevices;
 
     #[Url(except: '')]
@@ -35,21 +35,6 @@ final class Index extends Component
     #[Url(as: 'platform', except: '')]
     public string $platformFilter = '';
 
-    #[Locked]
-    public ?int $runScriptId = null;
-
-    public function openRun(int $scriptId): void
-    {
-        $script = Script::query()->findOrFail($scriptId);
-        throw_if($script->is_internal, ScriptCannotBeRunDirectly::internal($script));
-
-        $this->runScriptId = $script->id;
-        $this->reset('selectedDeviceIds');
-        unset($this->runTargets, $this->runTargetGroups);
-        $this->fillParameterValues();
-        $this->showExecuteModal = true;
-    }
-
     public function clearFilters(): void
     {
         $this->reset('search', 'categoryFilter', 'platformFilter');
@@ -59,11 +44,6 @@ final class Index extends Component
     {
         abort_unless(! $script->is_system, 403);
         $script->delete();
-    }
-
-    protected function scriptToRun(): ?Script
-    {
-        return $this->runScriptId === null ? null : Script::query()->find($this->runScriptId);
     }
 
     public function render(ScriptQueries $scriptQueries): View

@@ -87,6 +87,16 @@ final class Header extends Component
         $this->showScriptModal = true;
     }
 
+    /**
+     * The command palette picked a script for this device: open Run Script on it.
+     */
+    #[On('run-device-script')]
+    public function openScript(int $scriptId): void
+    {
+        $this->openScriptPicker();
+        $this->selectScript($scriptId);
+    }
+
     public function selectScript(?int $scriptId): void
     {
         $this->selectedScriptId = $scriptId;

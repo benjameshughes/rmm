@@ -19,6 +19,10 @@
                 @endauth
             </div>
 
+            @auth
+                <flux:input as="button" icon="magnifying-glass" placeholder="Run a script..." kbd="⌘K" x-on:click="$dispatch('open-script-palette')" data-open-script-palette />
+            @endauth
+
             <flux:navlist variant="outline">
                 <flux:navlist.group :heading="__('Fleet')" class="grid">
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
@@ -104,6 +108,7 @@
             <flux:spacer />
 
             @auth
+                <flux:button variant="ghost" icon="magnifying-glass" square aria-label="Run a script" x-on:click="$dispatch('open-script-palette')" />
                 <livewire:alert-bell />
             @endauth
 
@@ -155,6 +160,9 @@
 
         <x-modal.confirm />
         <livewire:commands.detail />
+        @auth
+            <livewire:scripts.palette :device="request()->route('device')" />
+        @endauth
 
         <flux:toast />
 
