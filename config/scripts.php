@@ -774,6 +774,15 @@ return [
             'timeout_seconds' => 60,
             'requires_admin' => false,
         ],
+        'enforce-windows-security' => [
+            'name' => 'Enforce Windows Security',
+            'description' => 'Turn UAC, Defender real-time protection (with cloud protection and unwanted app blocking) and the firewall back on, removing policies that switched Defender off, and update signatures. Names any other antivirus keeping Defender passive. Safe to run daily',
+            'category' => 'security',
+            'platform' => 'windows',
+            'file' => 'windows/enforce-windows-security.ps1',
+            'timeout_seconds' => 300,
+            'requires_admin' => true,
+        ],
         'firewall-status' => [
             'name' => 'Firewall Status',
             'description' => 'Check Windows Firewall profile status',
