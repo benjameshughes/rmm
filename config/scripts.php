@@ -783,6 +783,15 @@ return [
             'timeout_seconds' => 300,
             'requires_admin' => true,
         ],
+        'same-day-orders-reminder' => [
+            'name' => 'Same Day Orders Reminder',
+            'description' => 'Install a large on-screen "Check Same Day Orders" reminder for whoever is logged in at 13:00 and 15:00, Monday to Friday, with Done and Snooze 10m buttons. Safe to rerun',
+            'category' => 'user',
+            'platform' => 'windows',
+            'file' => 'windows/same-day-orders-reminder.ps1',
+            'timeout_seconds' => 60,
+            'requires_admin' => true,
+        ],
         'firewall-status' => [
             'name' => 'Firewall Status',
             'description' => 'Check Windows Firewall profile status',
