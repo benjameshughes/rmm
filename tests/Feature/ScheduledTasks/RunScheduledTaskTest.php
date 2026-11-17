@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\Schedule\RunScheduledTask;
+use App\Enums\CommandStatus;
 use App\Enums\ScheduleTargetType;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -115,4 +116,48 @@ it('updates last_run_at after running', function (): void {
 
     $task->refresh();
     expect($task->last_run_at)->not->toBeNull();
+});
+
+it('skips devices that still have the same script queued from an earlier run', function (): void {
+    $user = User::factory()->create();
+    $script = Script::factory()->create();
+    $offline = Device::factory()->active()->create();
+    $online = Device::factory()->active()->create();
+
+    $task = ScheduledTask::factory()->create([
+        'script_id' => $script->id,
+        'target_type' => ScheduleTargetType::All,
+        'created_by' => $user->id,
+    ]);
+
+    app(RunScheduledTask::class)($task);
+    DeviceCommand::where('device_id', $online->id)->first()->markAsCompleted('done', 0);
+
+    $count = app(RunScheduledTask::class)($task);
+
+    expect($count)->toBe(1)
+        ->and(DeviceCommand::where('device_id', $offline->id)->count())->toBe(1)
+        ->and(DeviceCommand::where('device_id', $online->id)->count())->toBe(2);
+});
+
+it('still queues the script when the queued copy has different parameters', function (): void {
+    $user = User::factory()->create();
+    $script = Script::factory()->create();
+    $device = Device::factory()->active()->create();
+
+    DeviceCommand::factory()->create([
+        'device_id' => $device->id,
+        'script_id' => $script->id,
+        'parameters' => ['package' => 'firefox'],
+        'status' => CommandStatus::Pending,
+    ]);
+
+    $task = ScheduledTask::factory()->create([
+        'script_id' => $script->id,
+        'target_type' => ScheduleTargetType::Device,
+        'target_id' => $device->id,
+        'created_by' => $user->id,
+    ]);
+
+    expect(app(RunScheduledTask::class)($task))->toBe(1);
 });
