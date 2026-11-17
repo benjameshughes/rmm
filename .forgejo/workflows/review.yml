@@ -1,0 +1,10 @@
+name: Review
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  review:
+    uses: ben/shared-workflows/.forgejo/workflows/review.yml@main
+    secrets: inherit

@@ -1,0 +1,11 @@
+name: Bump
+
+on:
+  schedule:
+    - cron: '10 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  bump:
+    uses: ben/shared-workflows/.forgejo/workflows/bump.yml@main
+    secrets: inherit
