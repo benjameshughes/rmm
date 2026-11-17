@@ -128,7 +128,7 @@ it('records a run that timed out or died without a result line, using its verdic
     runningBackupCommand($this->device)->markAsTimedOut('', -1);
     runningBackupCommand($this->device)->markAsCompleted("ATTENTION: could not lock C:\\ProgramData\\RMM to SYSTEM and Administrators\r\n", 1);
 
-    $backups = DeviceBackup::query()->orderBy('id')->get();
+    $backups = DeviceBackup::query()->with('command')->orderBy('id')->get();
 
     expect($backups->pluck('status')->all())->toBe([BackupRunStatus::Failed, BackupRunStatus::Failed])
         ->and($backups[0]->errors)->toBe(['Command timed out after '.$backups[0]->command->timeout_seconds.' seconds'])

@@ -52,7 +52,7 @@ it('raises one alert per printer from the built-in rule, without duplicates', fu
     syncPrinterAlerts($device);
     syncPrinterAlerts($device);
 
-    $alerts = Alert::query()->orderBy('subject')->get();
+    $alerts = Alert::query()->with('alertRule')->orderBy('subject')->get();
     expect($alerts)->toHaveCount(2)
         ->and($alerts->pluck('subject')->all())->toBe(['Zebra GK420d - ZPL', 'Zebra GK420d - ZPL #2'])
         ->and($alerts->first()->metric)->toBe(AlertMetric::PrinterProblem)

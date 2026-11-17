@@ -6,7 +6,9 @@ use App\Models\Device;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureRateLimiting();
         $this->configureGates();
+        $this->configureLazyLoading();
 
         Carbon::macro('inDisplayTimezone', fn (): Carbon => $this->copy()->setTimezone(config('app.display_timezone')));
 
@@ -34,6 +37,24 @@ class AppServiceProvider extends ServiceProvider
          * Flux charts always label times as UTC, so the display timezone's wall clock is sent dressed up as UTC.
          */
         Carbon::macro('toChartTime', fn (): string => $this->inDisplayTimezone()->format('Y-m-d\TH:i:s\Z'));
+    }
+
+    /**
+     * Lazy loading throws everywhere but production, so a forgotten eager load fails a test instead of
+     * quietly running a query per row. Production only logs it, because a slow page beats a broken one.
+     */
+    private function configureLazyLoading(): void
+    {
+        Model::preventLazyLoading();
+
+        if (! $this->app->isProduction()) {
+            return;
+        }
+
+        Model::handleLazyLoadingViolationUsing(fn (Model $model, string $relation) => Log::warning('eloquent.lazy_load', [
+            'model' => $model::class,
+            'relation' => $relation,
+        ]));
     }
 
     /**
