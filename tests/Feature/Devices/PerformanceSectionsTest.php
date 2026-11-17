@@ -87,9 +87,23 @@ it('eager loads the parts of the latest report each tab shows, on mount and on l
     expect($tab->get('device')->latestMetric->relationLoaded($relation))->toBeTrue();
 })->with([
     'overview' => [Overview::class, 'diskMetrics', 'CPU Queue 0.27'],
-    'details adapters' => [Details::class, 'networkMetrics', 'Network Adapters'],
     'apps' => [Apps::class, 'appMetrics', 'Top Apps'],
 ]);
+
+it('eager loads the network adapters on the details tab and redraws only its island on live refresh', function (): void {
+    $device = Device::factory()->withApiKey('KEY-LIVE')->create(['disks' => null]);
+
+    $tab = Livewire::actingAs(User::factory()->create())
+        ->test(Details::class, ['device' => $device])
+        ->assertDontSee('Network Adapters');
+
+    reportFromWindowsAgent('KEY-LIVE');
+
+    $tab->call('refreshDevice');
+
+    expect(islandHtml($tab))->toContain('Network Adapters')
+        ->and($tab->get('device')->latestMetric->relationLoaded('networkMetrics'))->toBeTrue();
+});
 
 it('highlights adapters with errors or drops', function (): void {
     $healthy = DeviceNetworkMetric::make(['interface' => 'Ethernet', 'errors_inbound' => 0.0, 'errors_outbound' => 0.0, 'drops_inbound' => 0.0, 'drops_outbound' => 0.0]);

@@ -26,7 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -40,6 +42,7 @@ use Livewire\Component;
  * the query string as an index path, so drill-downs are bookmarkable.
  */
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Storage extends Component
 {
     public Device $device;
@@ -49,6 +52,19 @@ final class Storage extends Component
 
     #[Url(as: 'node')]
     public string $node = '';
+
+    private BuildDiskFolderRows $buildRows;
+
+    private FindDiskCulprits $findCulprits;
+
+    private GuardDeletablePath $guard;
+
+    public function boot(BuildDiskFolderRows $buildRows, FindDiskCulprits $findCulprits, GuardDeletablePath $guard): void
+    {
+        $this->buildRows = $buildRows;
+        $this->findCulprits = $findCulprits;
+        $this->guard = $guard;
+    }
 
     public function mount(Device $device): void
     {
@@ -60,7 +76,11 @@ final class Storage extends Component
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'storage');
+        $this->skipRender();
+    }
 
     /**
      * A new scan landed. Keeps the folder on screen open in it by its path,
@@ -151,42 +171,168 @@ final class Storage extends Component
         );
     }
 
-    public function render(BuildDiskFolderRows $buildRows, FindDiskCulprits $findCulprits, GuardDeletablePath $guard): View
+    public function placeholder(): View
     {
-        $canScan = $this->device->platform() === ScriptPlatform::Windows && ! $this->device->isMonitorOnly;
-        $activeRoot = $this->activeRoot();
-        $scans = $this->scansOf($activeRoot);
-        $latest = $scans->first();
-        $scan = $this->withMountVolume($latest?->scan());
-        $previousScan = $scans->get(1)?->scan();
-        $scanCommand = $canScan ? $this->inFlightScan() : null;
-        $index = $scan?->tree->resolve($this->node) ?? 0;
-        $canDelete = $canScan && auth()->user()->can('deletePaths', $this->device);
-        $removals = $canScan ? $this->inFlightRemovals() : collect();
-        $deleting = $removals
+        return view('livewire.devices.placeholders.storage');
+    }
+
+    public function render(): View
+    {
+        return view('livewire.devices.storage')->title(DeviceTab::Storage->pageTitle($this->device));
+    }
+
+    #[Computed]
+    public function canScan(): bool
+    {
+        return $this->device->platform() === ScriptPlatform::Windows && ! $this->device->isMonitorOnly;
+    }
+
+    /**
+     * @return Collection<int, string> Newest scan first
+     */
+    #[Computed]
+    public function roots(): Collection
+    {
+        return $this->device->diskScans()
+            ->select('root')
+            ->groupBy('root')
+            ->orderByRaw('max(scanned_at) desc')
+            ->pluck('root');
+    }
+
+    /**
+     * @return Collection<int, DeviceDiskScan> Newest first
+     */
+    #[Computed]
+    public function scans(): Collection
+    {
+        return $this->scansOf($this->activeRoot());
+    }
+
+    #[Computed]
+    public function latest(): ?DeviceDiskScan
+    {
+        return $this->scans->first();
+    }
+
+    #[Computed]
+    public function previous(): ?DeviceDiskScan
+    {
+        return $this->scans->get(1);
+    }
+
+    #[Computed]
+    public function scan(): ?DiskScan
+    {
+        return $this->withMountVolume($this->latest?->scan());
+    }
+
+    #[Computed]
+    public function scanCommand(): ?DeviceCommand
+    {
+        return $this->canScan ? $this->inFlightScan() : null;
+    }
+
+    #[Computed]
+    public function folder(): ?DiskScanNode
+    {
+        return $this->scan?->tree->node($this->folderIndex());
+    }
+
+    /**
+     * @return Collection<int, array{name: string, indexPath: string}>
+     */
+    #[Computed]
+    public function breadcrumbs(): Collection
+    {
+        return $this->scan === null ? collect() : $this->breadcrumbsOf($this->scan, $this->folderIndex());
+    }
+
+    #[Computed]
+    public function rows(): Collection
+    {
+        return $this->scan === null ? collect() : ($this->buildRows)($this->scan, $this->previous?->scan(), $this->folderIndex());
+    }
+
+    #[Computed]
+    public function culprits(): Collection
+    {
+        return $this->scan === null ? collect() : ($this->findCulprits)($this->scan, $this->device->latestInventory?->snapshot()->users()->profileNamesBySid() ?? []);
+    }
+
+    /**
+     * @return Collection<int, array{path: string, size: string, modified: ?string, deleting: ?DeviceCommand}>
+     */
+    #[Computed]
+    public function topFiles(): Collection
+    {
+        return $this->scan === null ? collect() : $this->topFilesOf($this->scan, $this->deleting);
+    }
+
+    #[Computed]
+    public function extensions(): Collection
+    {
+        return $this->scan?->extensions->sortByDesc('allocated')->take(config('disk_usage.extensions_shown'))->values() ?? collect();
+    }
+
+    #[Computed]
+    public function canScanFolder(): bool
+    {
+        return $this->scanCommand === null && $this->canScan && auth()->user()->can('runCommands', $this->device);
+    }
+
+    #[Computed]
+    public function canDelete(): bool
+    {
+        return $this->canScan && auth()->user()->can('deletePaths', $this->device);
+    }
+
+    /**
+     * In-flight deletes by path.
+     *
+     * @return Collection<string, DeviceCommand>
+     */
+    #[Computed]
+    public function deleting(): Collection
+    {
+        return $this->removals
             ->filter(fn (DeviceCommand $command): bool => $command->script->slug === config('devices.delete_path.slug'))
             ->keyBy(fn (DeviceCommand $command): string => (string) ($command->parameters['Path'] ?? ''));
+    }
 
-        return view('livewire.devices.storage', [
-            'canScan' => $canScan,
-            'roots' => $this->roots(),
-            'nodeUrl' => fn (string $indexPath): string => route('devices.storage', ['device' => $this->device, 'root' => $activeRoot, 'node' => $indexPath === '' ? null : $indexPath]),
-            'latest' => $latest,
-            'previous' => $scans->get(1),
-            'scan' => $scan,
-            'folder' => $scan?->tree->node($index),
-            'breadcrumbs' => $scan === null ? collect() : $this->breadcrumbs($scan, $index),
-            'rows' => $scan === null ? collect() : $buildRows($scan, $previousScan, $index),
-            'culprits' => $scan === null ? collect() : $findCulprits($scan, $this->device->latestInventory?->snapshot()->users()->profileNamesBySid() ?? []),
-            'topFiles' => $scan === null ? collect() : $this->topFiles($scan, $deleting),
-            'extensions' => $scan?->extensions->sortByDesc('allocated')->take(config('disk_usage.extensions_shown'))->values() ?? collect(),
-            'scanCommand' => $scanCommand,
-            'canScanFolder' => $scanCommand === null && $canScan && auth()->user()->can('runCommands', $this->device),
-            'canDelete' => $canDelete,
-            'isDeletable' => fn (string $path): bool => $canDelete && $guard->refusal($path) === null,
-            'deleting' => $deleting,
-            'quarantineItems' => $canScan ? $this->quarantineItems($removals) : collect(),
-        ])->title(DeviceTab::Storage->pageTitle($this->device));
+    /**
+     * @return Collection<int, array{quarantine: DeviceQuarantine, command: ?DeviceCommand}>
+     */
+    #[Computed]
+    public function quarantineItems(): Collection
+    {
+        return $this->canScan ? $this->quarantineItemsWith($this->removals) : collect();
+    }
+
+    /**
+     * Deletes, purges and restores queued or running, with their scripts.
+     *
+     * @return Collection<int, DeviceCommand>
+     */
+    #[Computed]
+    public function removals(): Collection
+    {
+        return $this->canScan ? $this->inFlightRemovals() : collect();
+    }
+
+    protected function nodeUrl(string $indexPath): string
+    {
+        return route('devices.storage', ['device' => $this->device, 'root' => $this->activeRoot(), 'node' => $indexPath === '' ? null : $indexPath]);
+    }
+
+    protected function isDeletable(string $path): bool
+    {
+        return $this->canDelete && $this->guard->refusal($path) === null;
+    }
+
+    private function folderIndex(): int
+    {
+        return $this->scan?->tree->resolve($this->node) ?? 0;
     }
 
     /**
@@ -197,18 +343,6 @@ final class Storage extends Component
         $roots = $this->roots();
 
         return $roots->contains($this->root) ? $this->root : $roots->first();
-    }
-
-    /**
-     * @return Collection<int, string> Newest scan first
-     */
-    private function roots(): Collection
-    {
-        return $this->device->diskScans()
-            ->select('root')
-            ->groupBy('root')
-            ->orderByRaw('max(scanned_at) desc')
-            ->pluck('root');
     }
 
     /**
@@ -271,7 +405,7 @@ final class Storage extends Component
      * @param  Collection<int, DeviceCommand>  $removals
      * @return Collection<int, array{quarantine: DeviceQuarantine, command: ?DeviceCommand}>
      */
-    private function quarantineItems(Collection $removals): Collection
+    private function quarantineItemsWith(Collection $removals): Collection
     {
         return $this->device->quarantines()->held()->latest('quarantined_at')->get()
             ->map(fn (DeviceQuarantine $quarantine): array => [
@@ -283,7 +417,7 @@ final class Storage extends Component
     /**
      * @return Collection<int, array{name: string, indexPath: string}>
      */
-    private function breadcrumbs(DiskScan $scan, int $index): Collection
+    private function breadcrumbsOf(DiskScan $scan, int $index): Collection
     {
         return $scan->tree->lineage($index)->map(fn (DiskScanNode $node): array => [
             'name' => $node->displayName(),
@@ -295,7 +429,7 @@ final class Storage extends Component
      * @param  Collection<string, DeviceCommand>  $deleting  In-flight deletes by path
      * @return Collection<int, array{path: string, size: string, modified: ?string, deleting: ?DeviceCommand}>
      */
-    private function topFiles(DiskScan $scan, Collection $deleting): Collection
+    private function topFilesOf(DiskScan $scan, Collection $deleting): Collection
     {
         return $scan->topFiles
             ->sortByDesc(fn (DiskScanFile $file): int => $file->allocated)

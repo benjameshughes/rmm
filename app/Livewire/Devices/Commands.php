@@ -7,13 +7,18 @@ namespace App\Livewire\Devices;
 use App\Enums\DeviceTab;
 use App\Livewire\Concerns\CancelsCommands;
 use App\Models\Device;
+use App\Models\DeviceCommand;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Commands extends Component
 {
     use CancelsCommands;
@@ -30,16 +35,32 @@ final class Commands extends Component
 
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'commands');
+        $this->skipRender();
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, DeviceCommand>
+     */
+    #[Computed]
+    public function commands(): LengthAwarePaginator
+    {
+        return $this->device->commands()
+            ->with(['script', 'queuedBy', 'device'])
+            ->latest('queued_at')
+            ->latest('id')
+            ->paginate(config('commands.per_page'));
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.devices.placeholders.commands');
+    }
 
     public function render(): View
     {
-        return view('livewire.devices.commands', [
-            'commands' => $this->device->commands()
-                ->with(['script', 'queuedBy', 'device'])
-                ->latest('queued_at')
-                ->latest('id')
-                ->paginate(config('commands.per_page')),
-        ])->title(DeviceTab::Commands->pageTitle($this->device));
+        return view('livewire.devices.commands')->title(DeviceTab::Commands->pageTitle($this->device));
     }
 }

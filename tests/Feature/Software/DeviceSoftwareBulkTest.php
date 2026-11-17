@@ -32,7 +32,7 @@ function deviceApps(Device $device)
 
 function appIds($component): array
 {
-    return $component->viewData('software')->pluck('package_id')->all();
+    return $component->instance()->software->pluck('package_id')->all();
 }
 
 it('filters the device\'s apps by source and updates available', function (): void {

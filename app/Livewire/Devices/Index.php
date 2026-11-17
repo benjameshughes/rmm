@@ -21,12 +21,15 @@ use App\Models\Tag;
 use App\Queries\AgentVersionQueries;
 use App\Queries\DeviceListQueries;
 use Flux\Flux;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -34,6 +37,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     use EntersScriptParameterValues;
@@ -67,6 +71,16 @@ final class Index extends Component
 
     public ?int $bulkScriptId = null;
 
+    private AgentVersionQueries $agentVersions;
+
+    private DeviceListQueries $deviceList;
+
+    public function boot(AgentVersionQueries $agentVersions, DeviceListQueries $deviceList): void
+    {
+        $this->agentVersions = $agentVersions;
+        $this->deviceList = $deviceList;
+    }
+
     public function mount(): void
     {
         $this->authorize('viewAny', Device::class);
@@ -93,14 +107,26 @@ final class Index extends Component
 
         if (! ($event['isStateChange'] ?? true) && ! $isStale) {
             $this->skipRender();
+
+            return;
         }
+
+        $this->refreshDevices();
     }
 
+    /**
+     * Redraws only the list: summary, filters and rows.
+     */
     #[On('echo-private:devices,CommandUpdated')]
     #[On('echo-private:devices,DeviceEnrolled')]
     #[On('echo-private:devices,LatestAgentVersionChanged')]
     #[On('echo-private:devices,AlertChanged')]
-    public function refreshDevices(): void {}
+    public function refreshDevices(): void
+    {
+        $this->renderedAt = now()->getTimestamp();
+        $this->renderIsland(name: 'device-list');
+        $this->skipRender();
+    }
 
     /**
      * A hand-edited sort falls back to hostname, A to Z.
@@ -275,17 +301,62 @@ final class Index extends Component
         $this->runSystemScript($action, $device, 'windows-update');
     }
 
-    public function render(AgentVersionQueries $agentVersions, DeviceListQueries $deviceList): View
+    public function placeholder(): View
     {
-        $summary = $deviceList->summary();
+        return view('livewire.devices.placeholders.index');
+    }
 
+    /**
+     * @return LengthAwarePaginator<int, Device>
+     */
+    #[Computed]
+    public function devices(): LengthAwarePaginator
+    {
+        return $this->query($this->deviceList)->paginate(config('devices.list.per_page'));
+    }
+
+    /**
+     * @return array{total: int, online: int, poweringOff: int, offline: int, outdated: int, openAlerts: int}
+     */
+    #[Computed]
+    public function summary(): array
+    {
+        return $this->deviceList->summary();
+    }
+
+    #[Computed]
+    public function isFiltered(): bool
+    {
+        return $this->search !== '' || $this->groupFilter !== '' || $this->tagFilter !== '' || $this->listFilter !== null;
+    }
+
+    #[Computed]
+    public function latestAgentVersion(): ?string
+    {
+        return $this->agentVersions->latest();
+    }
+
+    /**
+     * @return EloquentCollection<int, DeviceGroup>
+     */
+    #[Computed]
+    public function groups(): EloquentCollection
+    {
+        return DeviceGroup::query()->orderBy('name')->get();
+    }
+
+    /**
+     * @return EloquentCollection<int, Tag>
+     */
+    #[Computed]
+    public function tags(): EloquentCollection
+    {
+        return Tag::query()->orderBy('name')->get();
+    }
+
+    public function render(): View
+    {
         return view('livewire.devices.index', [
-            'devices' => $this->query($deviceList)->paginate(config('devices.list.per_page')),
-            'summary' => $summary,
-            'isFiltered' => $this->search !== '' || $this->groupFilter !== '' || $this->tagFilter !== '' || $this->listFilter !== null,
-            'latestAgentVersion' => $agentVersions->latest(),
-            'groups' => DeviceGroup::query()->orderBy('name')->get(),
-            'tags' => Tag::query()->orderBy('name')->get(),
             'scripts' => Script::query()->runnableDirectly()->orderBy('name')->get(),
         ]);
     }

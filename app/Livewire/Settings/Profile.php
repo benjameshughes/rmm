@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Livewire\Settings;
 
 use App\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
+#[Lazy]
 final class Profile extends Component
 {
     public string $name = '';
@@ -62,5 +65,10 @@ final class Profile extends Component
         $user->sendEmailVerificationNotification();
 
         Session::flash('status', 'verification-link-sent');
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.settings.placeholders.profile');
     }
 }

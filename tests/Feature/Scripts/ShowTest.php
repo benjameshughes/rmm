@@ -35,9 +35,9 @@ it('shows recent command history for the script', function (): void {
         'queued_by' => $user->id,
     ]);
 
-    Livewire::actingAs($user)
-        ->test(Show::class, ['script' => $script])
-        ->assertViewHas('recentCommands', fn ($commands) => $commands->count() === 3);
+    $component = Livewire::actingAs($user)->test(Show::class, ['script' => $script]);
+
+    expect($component->instance()->recentCommands)->toHaveCount(3);
 });
 
 it('executes a script on a device', function (): void {
@@ -85,4 +85,24 @@ it('runs one script on several devices at once and says how many it queued on', 
 
     expect(DeviceCommand::where('script_id', $script->id)->pluck('device_id')->sort()->values()->all())
         ->toBe($devices->pluck('id')->sort()->values()->all());
+});
+
+it('re-renders the executions island when a command is queued elsewhere', function (): void {
+    $user = User::factory()->create();
+    $script = Script::factory()->create(['platform' => ScriptPlatform::All]);
+    $device = Device::factory()->active()->create(['hostname' => 'island-host']);
+
+    $component = Livewire::actingAs($user)
+        ->test(Show::class, ['script' => $script])
+        ->assertDontSee('island-host');
+
+    DeviceCommand::factory()->create([
+        'script_id' => $script->id,
+        'device_id' => $device->id,
+        'queued_by' => $user->id,
+    ]);
+
+    $component->dispatch('command-queued');
+
+    expect(islandHtml($component))->toContain('island-host');
 });

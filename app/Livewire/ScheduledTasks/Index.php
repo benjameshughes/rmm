@@ -20,9 +20,11 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     use EntersScriptParameterValues;
@@ -147,6 +149,11 @@ final class Index extends Component
         $this->cron_expression = '0 2 * * *';
         $this->target_type = 'all';
         $this->resetErrorBag();
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.scheduled-tasks.placeholders.index');
     }
 
     public function render(): View

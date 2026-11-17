@@ -2,63 +2,65 @@
     <flux:heading size="xl">Pending Enrollments</flux:heading>
     <flux:separator variant="subtle" />
 
-    @if (count($enrolledHostnames) > 0)
-        <flux:callout variant="warning" icon="exclamation-triangle" heading="Duplicate hostnames detected">
-            <flux:callout.text>Some pending devices report a hostname that is already enrolled. Confirm the request came from a machine you expect before approving it.</flux:callout.text>
-        </flux:callout>
-    @endif
+    @island(name: 'pending-devices', always: true)
+        @if (count($this->enrolledHostnames) > 0)
+            <flux:callout variant="warning" icon="exclamation-triangle" heading="Duplicate hostnames detected">
+                <flux:callout.text>Some pending devices report a hostname that is already enrolled. Confirm the request came from a machine you expect before approving it.</flux:callout.text>
+            </flux:callout>
+        @endif
 
-    <div class="overflow-hidden rounded border">
-        <table class="w-full text-sm">
-            <thead class="bg-muted/40">
-            <tr>
-                <th class="px-4 py-2 text-left">Hostname</th>
-                <th class="px-4 py-2 text-left">IP</th>
-                <th class="px-4 py-2 text-left">OS</th>
-                <th class="px-4 py-2 text-left">Requested</th>
-                <th class="px-4 py-2 text-left">Actions</th>
-            </tr>
-            </thead>
-            <tbody>
-            @forelse ($devices as $device)
-                @php $hostnameAlreadyEnrolled = isset($enrolledHostnames[Str::lower($device->hostname)]); @endphp
-                <tr class="border-t" wire:key="pending-{{ $device->id }}">
-                    <td class="px-4 py-2 font-medium">
-                        <div class="flex flex-col items-start gap-1">
-                            <span>{{ $device->hostname }}</span>
-                            @if ($hostnameAlreadyEnrolled)
-                                <flux:badge size="sm" color="red" icon="exclamation-triangle">Hostname already enrolled - verify before approving</flux:badge>
-                            @endif
-                        </div>
-                    </td>
-                    <td class="px-4 py-2">{{ $device->last_ip ?? '—' }}</td>
-                    <td class="px-4 py-2">{{ $device->os ?? '—' }}</td>
-                    <td class="px-4 py-2">{{ $device->created_at->diffForHumans() }}</td>
-                    <td class="px-4 py-2">
-                        <div class="flex gap-2">
-                            @if ($hostnameAlreadyEnrolled)
-                                <flux:button size="xs" variant="primary" x-on:click="$dispatch('confirm-action', { heading: 'Approve duplicate', message: {{ Js::from('Another device is already enrolled as '.$device->hostname.'. Approve this one anyway?') }}, confirm: 'Approve anyway', action: () => $wire.approve({{ $device->id }}) })" wire:loading.attr="disabled">
-                                    <span wire:loading.remove wire:target="approve({{ $device->id }})">Approve</span>
-                                    <span wire:loading wire:target="approve({{ $device->id }})">...</span>
-                                </flux:button>
-                            @else
-                                <flux:button size="xs" variant="primary" wire:click="approve({{ $device->id }})" wire:loading.attr="disabled">
-                                    <span wire:loading.remove wire:target="approve({{ $device->id }})">Approve</span>
-                                    <span wire:loading wire:target="approve({{ $device->id }})">...</span>
-                                </flux:button>
-                            @endif
-                            <flux:button size="xs" variant="danger" wire:click="reject({{ $device->id }})" wire:loading.attr="disabled">Reject</flux:button>
-                        </div>
-                    </td>
-                </tr>
-            @empty
+        <div class="overflow-hidden rounded border">
+            <table class="w-full text-sm">
+                <thead class="bg-muted/40">
                 <tr>
-                    <td class="px-4 py-8 text-center text-muted-foreground" colspan="5">No pending devices</td>
+                    <th class="px-4 py-2 text-left">Hostname</th>
+                    <th class="px-4 py-2 text-left">IP</th>
+                    <th class="px-4 py-2 text-left">OS</th>
+                    <th class="px-4 py-2 text-left">Requested</th>
+                    <th class="px-4 py-2 text-left">Actions</th>
                 </tr>
-            @endforelse
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                @forelse ($this->devices as $device)
+                    @php $hostnameAlreadyEnrolled = isset($this->enrolledHostnames[Str::lower($device->hostname)]); @endphp
+                    <tr class="border-t" wire:key="pending-{{ $device->id }}">
+                        <td class="px-4 py-2 font-medium">
+                            <div class="flex flex-col items-start gap-1">
+                                <span>{{ $device->hostname }}</span>
+                                @if ($hostnameAlreadyEnrolled)
+                                    <flux:badge size="sm" color="red" icon="exclamation-triangle">Hostname already enrolled - verify before approving</flux:badge>
+                                @endif
+                            </div>
+                        </td>
+                        <td class="px-4 py-2">{{ $device->last_ip ?? '—' }}</td>
+                        <td class="px-4 py-2">{{ $device->os ?? '—' }}</td>
+                        <td class="px-4 py-2">{{ $device->created_at->diffForHumans() }}</td>
+                        <td class="px-4 py-2">
+                            <div class="flex gap-2">
+                                @if ($hostnameAlreadyEnrolled)
+                                    <flux:button size="xs" variant="primary" x-on:click="$dispatch('confirm-action', { heading: 'Approve duplicate', message: {{ Js::from('Another device is already enrolled as '.$device->hostname.'. Approve this one anyway?') }}, confirm: 'Approve anyway', action: () => $wire.approve({{ $device->id }}) })" wire:loading.attr="disabled">
+                                        <span wire:loading.remove wire:target="approve({{ $device->id }})">Approve</span>
+                                        <span wire:loading wire:target="approve({{ $device->id }})">...</span>
+                                    </flux:button>
+                                @else
+                                    <flux:button size="xs" variant="primary" wire:click="approve({{ $device->id }})" wire:loading.attr="disabled">
+                                        <span wire:loading.remove wire:target="approve({{ $device->id }})">Approve</span>
+                                        <span wire:loading wire:target="approve({{ $device->id }})">...</span>
+                                    </flux:button>
+                                @endif
+                                <flux:button size="xs" variant="danger" wire:click="reject({{ $device->id }})" wire:loading.attr="disabled">Reject</flux:button>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="px-4 py-8 text-center text-muted-foreground" colspan="5">No pending devices</td>
+                    </tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    @endisland
 
     <div>
         <flux:button as="a" variant="outline" :href="route('devices.index')" wire:navigate>Back to Devices</flux:button>

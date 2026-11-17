@@ -84,7 +84,8 @@
         </x-dashboard.section>
     </div>
 
-    @if($rows->isNotEmpty())
+    @island(name: 'devices', always: true)
+    @if($this->rows->isNotEmpty())
         <flux:card class="space-y-2 p-0! sm:p-0!" data-trends-devices>
             <div class="px-4 pt-4 sm:px-6 sm:pt-6">
                 <flux:heading size="lg">By device</flux:heading>
@@ -102,7 +103,7 @@
                 </flux:table.columns>
 
                 <flux:table.rows>
-                    @foreach($rows as $row)
+                    @foreach($this->rows as $row)
                         <flux:table.row :key="'trend-'.$row->device->id" data-trend-device="{{ $row->device->id }}">
                             <flux:table.cell class="max-w-56">
                                 <x-device.list.identity :device="$row->device" :href="route('devices.metrics', ['device' => $row->device, 'range' => $this->trendPeriod->metricRange()->value])" />
@@ -142,4 +143,5 @@
             </flux:table>
         </flux:card>
     @endif
+    @endisland
 </div>

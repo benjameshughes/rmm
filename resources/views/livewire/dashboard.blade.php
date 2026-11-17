@@ -53,7 +53,9 @@
         </x-dashboard.hero-tile>
     </div>
 
-    <x-dashboard.fleet-grid :groups="$fleetGrid" />
+    @island(name: 'fleet', always: true)
+        <x-dashboard.fleet-grid :groups="$this->fleetGrid" />
+    @endisland
 
     <div class="grid grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-12">
         <section class="min-w-0 bg-zinc-50 p-4 lg:col-span-7 dark:bg-white/[0.03]" data-needs-attention>
@@ -84,14 +86,27 @@
         </section>
 
         <div class="min-w-0 space-y-8 lg:col-span-5">
+        @island(name: 'charts', lazy: true, always: true)
+            @placeholder
+                <flux:skeleton.group animate="shimmer" class="space-y-8">
+                    <div class="space-y-3">
+                        <flux:skeleton.line class="w-32" />
+                        <flux:skeleton class="h-44 w-full" />
+                    </div>
+                    <div class="space-y-3">
+                        <flux:skeleton.line class="w-40" />
+                        <flux:skeleton class="h-44 w-full" />
+                    </div>
+                </flux:skeleton.group>
+            @endplaceholder
             <x-dashboard.panel title="Alerts · 24h" :href="route('alerts.index')" link-label="All alerts" data-alerts-chart>
-                @if($isQuietDay)
+                @if($this->isQuietDay)
                     <div class="flex h-44 flex-col justify-end gap-2">
                         <div class="h-px bg-zinc-200 dark:bg-zinc-700"></div>
                         <span class="text-xs text-zinc-400">Quiet day.</span>
                     </div>
                 @else
-                    <flux:chart :value="$alertsPerBucket" class="h-44">
+                    <flux:chart :value="$this->alertsPerBucket" class="h-44">
                         <flux:chart.svg gutter="4 0 16 20">
                             <flux:chart.stack width="70%">
                                 <flux:chart.bar field="warning" class="text-amber-400" />
@@ -118,7 +133,7 @@
                 <x-slot:titleExtra>
                     <span class="ms-2 text-xs font-normal"><span class="text-zinc-800 dark:text-zinc-100">CPU</span> <span class="text-zinc-400">·</span> <span class="text-zinc-400">RAM</span></span>
                 </x-slot:titleExtra>
-                <flux:chart :value="$fleetLoad" class="h-44">
+                <flux:chart :value="$this->fleetLoad" class="h-44">
                     <flux:chart.svg gutter="4 0 16 28">
                         <flux:chart.line field="threshold" class="text-amber-500" curve="none" stroke-width="1" stroke-dasharray="4 4" />
                         <flux:chart.line field="ram" class="text-zinc-400" curve="none" stroke-width="1.5" />
@@ -139,6 +154,7 @@
                     </flux:chart.tooltip>
                 </flux:chart>
             </x-dashboard.panel>
+        @endisland
         </div>
     </div>
 

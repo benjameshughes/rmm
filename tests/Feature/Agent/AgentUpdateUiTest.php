@@ -56,8 +56,9 @@ it('refreshes badges when a new release is announced', function (): void {
 
     Cache::forever(config('agent.latest_version_cache_key'), '0.6.0');
 
-    $component->dispatch('echo-private:devices,LatestAgentVersionChanged', ['version' => '0.6.0'])
-        ->assertSee('Update available 0.5.1');
+    $component->dispatch('echo-private:devices,LatestAgentVersionChanged', ['version' => '0.6.0']);
+
+    expect(islandHtml($component))->toContain('Update available 0.5.1');
 });
 
 it('shows the update badge and agent version on the device page', function (): void {

@@ -155,7 +155,7 @@ describe('Device page commands', function (): void {
 
         Livewire::actingAs($user)
             ->test(Commands::class, ['device' => $device])
-            ->assertViewHas('commands', function ($commands) {
+            ->assertSet('commands', function ($commands) {
                 return $commands->count() === 5;
             });
     });
@@ -190,7 +190,7 @@ describe('Device page commands', function (): void {
 
         Livewire::actingAs($user)
             ->test(Overview::class, ['device' => $device])
-            ->assertViewHas('recentCommands', fn ($commands): bool => $commands->count() === config('devices.metrics.recent_commands'));
+            ->assertSet('recentCommands', fn ($commands): bool => $commands->count() === config('devices.metrics.recent_commands'));
     });
 
     it('pages the full history on the commands tab', function (): void {
@@ -204,7 +204,7 @@ describe('Device page commands', function (): void {
 
         Livewire::actingAs($user)
             ->test(Commands::class, ['device' => $device])
-            ->assertViewHas('commands', fn ($commands): bool => $commands->count() === config('commands.per_page') && $commands->total() === config('commands.per_page') + 3);
+            ->assertSet('commands', fn ($commands): bool => $commands->count() === config('commands.per_page') && $commands->total() === config('commands.per_page') + 3);
     });
 
     it('requires authentication to queue commands from the device header', function (): void {
@@ -242,7 +242,7 @@ describe('Device page commands', function (): void {
 
         Livewire::actingAs($user)
             ->test(Commands::class, ['device' => $device])
-            ->assertViewHas('commands', function ($commands) use ($newer, $older) {
+            ->assertSet('commands', function ($commands) use ($newer, $older) {
                 return $commands->first()->id === $newer->id
                     && $commands->last()->id === $older->id;
             });

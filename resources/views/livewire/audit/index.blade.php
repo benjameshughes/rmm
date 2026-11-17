@@ -21,8 +21,9 @@
         </flux:select>
     </div>
 
+    @island(name: 'audit-log', always: true)
     <flux:card>
-        <flux:table :paginate="$auditLogs">
+        <flux:table :paginate="$this->auditLogs">
             <flux:table.columns>
                 <flux:table.column>When</flux:table.column>
                 <flux:table.column>User</flux:table.column>
@@ -32,7 +33,7 @@
                 <flux:table.column>IP</flux:table.column>
             </flux:table.columns>
             <flux:table.rows>
-                @forelse ($auditLogs as $auditLog)
+                @forelse ($this->auditLogs as $auditLog)
                     <flux:table.row wire:key="audit-log-{{ $auditLog->id }}">
                         <flux:table.cell>
                             <flux:text class="text-zinc-500 dark:text-zinc-400" title="{{ $auditLog->created_at }}">{{ $auditLog->created_at->diffForHumans() }}</flux:text>
@@ -63,4 +64,5 @@
             </flux:table.rows>
         </flux:table>
     </flux:card>
+    @endisland
 </div>

@@ -77,7 +77,7 @@ it('draws the hero ring, fleet grid, alert bars and busiest sparklines', functio
         ->assertSeeHtml('data-hero-online')
         ->assertSeeHtml('stroke-green-500')
         ->assertSeeHtml('data-fleet-square')
-        ->assertSeeHtml('data-alerts-chart')
+        ->assertSet('isQuietDay', false)
         ->assertViewHas('hero', fn ($hero): bool => $hero->total === 1 && $hero->online === 1 && $hero->alertTrend->latest === 1)
         ->assertViewHas('busiestRows', fn ($rows): bool => $rows->first()->sparkline->count() === 48);
 });
@@ -158,7 +158,7 @@ it('labels each fleet grid group with its count and offline devices, and explain
     Device::factory()->active()->linux()->create(['last_seen' => now()->subHour()]);
 
     Livewire::actingAs(User::factory()->create())->test(Dashboard::class)
-        ->assertViewHas('fleetGrid', fn ($groups): bool => $groups->map(fn ($group): string => $group->label())->all() === ['Windows 1', 'Linux 1 · 1 offline'])
+        ->assertSet('fleetGrid', fn ($groups): bool => $groups->map(fn ($group): string => $group->label())->all() === ['Windows 1', 'Linux 1 · 1 offline'])
         ->assertDontSeeHtml('data-fleet-legend')
         ->assertSeeHtml('data-flux-tooltip')
         ->assertSee('Seen 1 hour ago');
@@ -171,7 +171,7 @@ it('colours a fleet square red when offline, amber when it needs attention, and 
     Device::factory()->active()->windows()->create(['hostname' => 'GONE', 'last_seen' => now()->subHour(), 'agent_version' => null, 'disks' => [['name' => 'C:', 'total_gb' => 100.0, 'available_gb' => 3.0]]]);
 
     Livewire::actingAs(User::factory()->create())->test(Dashboard::class)
-        ->assertViewHas('fleetGrid', fn ($groups): bool => $groups->first()->squares->mapWithKeys(fn ($square): array => [$square->device->hostname => $square->signal->value])->all() === [
+        ->assertSet('fleetGrid', fn ($groups): bool => $groups->first()->squares->mapWithKeys(fn ($square): array => [$square->device->hostname => $square->signal->value])->all() === [
             'FINE' => SignalColor::Green->value,
             'FULL' => SignalColor::Amber->value,
             'GONE' => SignalColor::Red->value,

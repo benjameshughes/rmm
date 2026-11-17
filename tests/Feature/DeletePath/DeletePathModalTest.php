@@ -208,6 +208,7 @@ it('shows a folder being deleted as busy until its command finishes', function (
 
     $command->markAsCompleted('OK: deleted', 0);
 
-    $component->dispatch('echo-private:devices.'.$this->device->id.',CommandUpdated', ['commandId' => $command->id])
-        ->assertDontSee('Deleting...');
+    $component->dispatch('echo-private:devices.'.$this->device->id.',CommandUpdated', ['commandId' => $command->id]);
+
+    expect(islandHtml($component))->toContain('data-storage-breadcrumbs')->not->toContain('Deleting...');
 });

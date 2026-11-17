@@ -87,7 +87,7 @@ it('shows unread notifications in the bell', function (): void {
     $device = Device::factory()->create(['hostname' => 'NOISY-BOX']);
     Alert::factory()->triggered()->create(['device_id' => $device->id]);
 
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    Livewire::actingAs($this->user)->test(AlertBell::class)
         ->assertViewHas('unreadCount', 1)
         ->assertSee('NOISY-BOX');
 });
@@ -96,7 +96,7 @@ it('only shows the user their own notifications', function (): void {
     Alert::factory()->triggered()->create();
     $this->user->notifications()->delete();
 
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    Livewire::actingAs($this->user)->test(AlertBell::class)
         ->assertViewHas('unreadCount', 0)
         ->assertSee('No notifications');
 });
@@ -105,7 +105,7 @@ it('marks a notification read and opens the device', function (): void {
     $alert = Alert::factory()->triggered()->create();
     $notification = $this->user->notifications()->sole();
 
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    Livewire::actingAs($this->user)->test(AlertBell::class)
         ->call('open', $notification->id)
         ->assertRedirect(route('devices.show', $alert->device_id));
 
@@ -116,7 +116,7 @@ it('refuses to open another user\'s notification', function (): void {
     $colleague = User::factory()->create();
     Alert::factory()->triggered()->create();
 
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    Livewire::actingAs($this->user)->test(AlertBell::class)
         ->call('open', $colleague->notifications()->sole()->id)
         ->assertNotFound();
 });
@@ -124,14 +124,14 @@ it('refuses to open another user\'s notification', function (): void {
 it('marks every notification read', function (): void {
     Alert::factory()->count(3)->triggered()->create();
 
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    Livewire::actingAs($this->user)->test(AlertBell::class)
         ->assertViewHas('unreadCount', 3)
         ->call('markAllAsRead')
         ->assertViewHas('unreadCount', 0);
 });
 
 it('refreshes and toasts when a notification arrives over Reverb', function (): void {
-    $component = Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class, ['showsToasts' => true])
+    $component = Livewire::actingAs($this->user)->test(AlertBell::class, ['showsToasts' => true])
         ->assertDontSeeHtml('wire:poll')
         ->assertViewHas('unreadCount', 0);
 
@@ -146,7 +146,7 @@ it('refreshes and toasts when a notification arrives over Reverb', function (): 
 });
 
 it('refreshes without toasting on the bell that does not own toasts', function (): void {
-    $component = Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class);
+    $component = Livewire::actingAs($this->user)->test(AlertBell::class);
 
     Alert::factory()->triggered()->create();
 

@@ -16,6 +16,7 @@ use App\Models\Device;
 use App\Models\DeviceMetric;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
 
@@ -253,11 +254,11 @@ it('agrees between the model and the query on which devices are holding powering
 ]);
 
 it('says when a device went off in UK time, summer and winter, while storing UTC', function (string $storedUtc, string $label): void {
-    $this->travelTo(Illuminate\Support\Carbon::parse($storedUtc, 'UTC')->addMinutes(5));
+    $this->travelTo(Carbon::parse($storedUtc, 'UTC')->addMinutes(5));
     $device = Device::factory()->active()->create([
-        'last_seen' => Illuminate\Support\Carbon::parse($storedUtc, 'UTC'),
+        'last_seen' => Carbon::parse($storedUtc, 'UTC'),
         'power_state' => DevicePowerState::PoweringOff,
-        'power_state_changed_at' => Illuminate\Support\Carbon::parse($storedUtc, 'UTC'),
+        'power_state_changed_at' => Carbon::parse($storedUtc, 'UTC'),
     ]);
 
     expect($device->statusLabel())->toBe($label)

@@ -34,8 +34,9 @@ it('adds a newly enrolled device to the device list', function (): void {
 
     $device = Device::factory()->create(['hostname' => 'LATE-ENROLLER']);
 
-    $component->dispatch('echo-private:devices,DeviceEnrolled', ['deviceId' => $device->id])
-        ->assertSee('LATE-ENROLLER');
+    $component->dispatch('echo-private:devices,DeviceEnrolled', ['deviceId' => $device->id]);
+
+    expect(islandHtml($component))->toContain('LATE-ENROLLER');
 });
 
 it('refreshes the device list when a device changes', function (): void {
@@ -46,9 +47,11 @@ it('refreshes the device list when a device changes', function (): void {
 
     $device->update(['last_seen' => now()]);
 
-    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
-        ->assertSeeHtml('data-device-status="Online"')
-        ->assertDontSeeHtml('data-device-status="Offline"');
+    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active']);
+
+    expect(islandHtml($component))
+        ->toContain('data-device-status="Online"')
+        ->not->toContain('data-device-status="Offline"');
 });
 
 it('updates the pending list as devices enrol and get approved elsewhere', function (): void {
@@ -57,13 +60,15 @@ it('updates the pending list as devices enrol and get approved elsewhere', funct
 
     $device = Device::factory()->create(['hostname' => 'NEW-ARRIVAL']);
 
-    $component->dispatch('echo-private:devices,DeviceEnrolled', ['deviceId' => $device->id])
-        ->assertSee('NEW-ARRIVAL');
+    $component->dispatch('echo-private:devices,DeviceEnrolled', ['deviceId' => $device->id]);
+
+    expect(islandHtml($component))->toContain('NEW-ARRIVAL');
 
     $device->issueApiKey();
 
-    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active'])
-        ->assertDontSee('NEW-ARRIVAL');
+    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active']);
+
+    expect(islandHtml($component))->not->toContain('NEW-ARRIVAL');
 });
 
 it('refreshes the device header from its own channel', function (): void {
@@ -87,9 +92,11 @@ it('shows new commands on the device tabs as they are queued elsewhere', functio
 
     $command = DeviceCommand::factory()->pending()->create(['device_id' => $device->id]);
 
-    $tab->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'pending'])
-        ->assertDontSee('No commands run on this device yet.')
-        ->assertSeeHtml("commandId: {$command->id} ");
+    $tab->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'pending']);
+
+    expect(islandHtml($tab))
+        ->not->toContain('No commands run on this device yet.')
+        ->toContain("commandId: {$command->id} ");
 })->with([
     'overview' => [DeviceOverview::class],
     'commands' => [DeviceCommands::class],
@@ -131,9 +138,11 @@ it('refreshes script executions when a command changes', function (): void {
 
     $command->markAsCompleted('done', 0);
 
-    $component->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $command->device_id, 'status' => 'completed'])
-        ->assertSee('Completed')
-        ->assertDontSee('Running');
+    $component->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $command->device_id, 'status' => 'completed']);
+
+    $executions = islandHtml($component);
+
+    expect($executions)->toContain('Completed')->not->toContain('Running');
 });
 
 it('refreshes the alert list when an alert changes', function (): void {
@@ -142,12 +151,13 @@ it('refreshes the alert list when an alert changes', function (): void {
 
     $alert = Alert::factory()->triggered()->create();
 
-    $component->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $alert->device_id, 'status' => 'triggered'])
-        ->assertSee($alert->device->hostname);
+    $component->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $alert->device_id, 'status' => 'triggered']);
+
+    expect(islandHtml($component))->toContain($alert->device->hostname);
 });
 
 it('updates the alert bell from the user notification channel without polling', function (): void {
-    $component = Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)
+    $component = Livewire::actingAs($this->user)->test(AlertBell::class)
         ->assertDontSeeHtml('wire:poll')
         ->assertViewHas('unreadCount', 0);
 

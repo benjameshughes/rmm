@@ -290,8 +290,9 @@ it('refreshes when a new inventory lands', function (): void {
 
     inventoried($this->device);
 
-    $system->dispatch("echo-private:devices.{$this->device->id},SystemInventorySynced", ['deviceId' => $this->device->id])
-        ->assertSee('7HQ2KZ3');
+    $system->dispatch("echo-private:devices.{$this->device->id},SystemInventorySynced", ['deviceId' => $this->device->id]);
+
+    expect(islandHtml($system))->toContain('7HQ2KZ3');
 });
 
 it('ties the Run now button to the inventory command, from queued to running and back', function (): void {

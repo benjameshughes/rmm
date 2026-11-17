@@ -117,7 +117,8 @@
         </flux:card>
     @endif
 
-    @if($recentCommands->count() > 0)
+    @island(name: 'executions', always: true)
+    @if($this->recentCommands->isNotEmpty())
         <flux:card>
             <flux:heading size="sm" class="mb-4">Recent Executions</flux:heading>
             <flux:table>
@@ -128,7 +129,7 @@
                     <flux:table.column>Exit Code</flux:table.column>
                 </flux:table.columns>
                 <flux:table.rows>
-                    @foreach($recentCommands as $command)
+                    @foreach($this->recentCommands as $command)
                         <flux:table.row :key="'command-'.$command->id" class="cursor-pointer" wire:click="$dispatch('show-command', { commandId: {{ $command->id }} })">
                             <flux:table.cell>
                                 <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $command->device)" wire:navigate>
@@ -157,6 +158,7 @@
             </flux:table>
         </flux:card>
     @endif
+    @endisland
 
 
     <div>

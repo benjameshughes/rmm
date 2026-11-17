@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Livewire\Settings;
 
 use Exception;
+use Illuminate\Contracts\View\View;
 use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Symfony\Component\HttpFoundation\Response;
 
+#[Lazy]
 final class TwoFactor extends Component
 {
     #[Locked]
@@ -137,6 +140,11 @@ final class TwoFactor extends Component
             'description' => __('To finish enabling two-factor authentication, scan the QR code or enter the setup key in your authenticator app.'),
             'buttonText' => __('Continue'),
         ];
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.settings.placeholders.two-factor');
     }
 
     private function loadSetupData(): void

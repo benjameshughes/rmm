@@ -53,7 +53,7 @@ function msixApp(): array
 
 function listedPackages($component): array
 {
-    return $component->viewData('packages')->pluck('package_id')->all();
+    return $component->instance()->packages->pluck('package_id')->all();
 }
 
 describe('filters', function (): void {
@@ -76,7 +76,7 @@ describe('filters', function (): void {
         $page = Livewire::actingAs($this->user)->test(Index::class)->set('isOutdatedOnly', true);
 
         expect(listedPackages($page))->toBe(['Mozilla.Firefox'])
-            ->and((int) $page->viewData('packages')->first()->device_count)->toBe(2);
+            ->and((int) $page->instance()->packages->first()->device_count)->toBe(2);
     });
 
     it('filters to packages on every device or only some', function (): void {
@@ -98,10 +98,10 @@ describe('filters', function (): void {
         $tagged = Livewire::actingAs($this->user)->test(Index::class)->set('tagFilter', (string) $tag->id);
 
         expect(listedPackages($grouped))->toBe(['Mozilla.Firefox', 'VideoLAN.VLC'])
-            ->and((int) $grouped->viewData('packages')->first()->device_count)->toBe(1)
+            ->and((int) $grouped->instance()->packages->first()->device_count)->toBe(1)
             ->and($grouped->viewData('inventoriedDevices'))->toBe(1)
             ->and(listedPackages($tagged))->toBe(['Mozilla.Firefox'])
-            ->and((int) $tagged->viewData('packages')->first()->outdated_count)->toBe(1);
+            ->and((int) $tagged->instance()->packages->first()->outdated_count)->toBe(1);
     });
 
     it('searches and keeps filters and sort in the query string', function (): void {

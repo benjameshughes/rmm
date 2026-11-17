@@ -11,9 +11,11 @@ use App\Models\AlertRule;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     public string $name = '';
@@ -103,6 +105,11 @@ final class Index extends Component
         $this->duration_minutes = 5;
         $this->severity = 'warning';
         $this->resetErrorBag();
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.alert-rules.placeholders.index');
     }
 
     public function render(): View

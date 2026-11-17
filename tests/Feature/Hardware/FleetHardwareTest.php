@@ -48,7 +48,7 @@ it('uses only the latest inventory of each device', function (): void {
     DeviceInventory::factory()->create(['device_id' => $device->id, 'collected_at' => now(), 'serial_number' => 'NEWTAG1', 'total_ram_gb' => 32]);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertViewHas('rows', fn ($rows): bool => $rows->total() === 1)
+        ->assertSet('rows', fn ($rows): bool => $rows->total() === 1)
         ->assertSee('NEWTAG1')
         ->assertSee('32 GB')
         ->assertDontSee('OLDTAG1');

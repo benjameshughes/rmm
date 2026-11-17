@@ -6,16 +6,22 @@ namespace App\Livewire\Devices;
 
 use App\Actions\Device\AssignDeviceGroup;
 use App\Actions\Device\SyncDeviceTags;
+use App\DTOs\Inventory\SystemInventory;
+use App\Enums\ApiKeyState;
 use App\Enums\DeviceTab;
 use App\Models\Device;
 use App\Models\DeviceGroup;
 use App\Models\Tag;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Details extends Component
 {
     public Device $device;
@@ -38,6 +44,8 @@ final class Details extends Component
     {
         $this->device->refresh()->load(['latestMetric.networkMetrics', 'latestInventory']);
         $this->syncSelectionsFromDevice();
+        $this->renderIsland(name: 'details');
+        $this->skipRender();
     }
 
     public function updatedSelectedGroupId(AssignDeviceGroup $action): void
@@ -73,18 +81,69 @@ final class Details extends Component
         $this->selectedTagIds = $this->device->tags->pluck('id')->map(fn ($id) => (string) $id)->toArray();
     }
 
+    public function placeholder(): View
+    {
+        return view('livewire.devices.placeholders.details');
+    }
+
     public function render(): View
     {
-        return view('livewire.devices.details', [
-            'hasSystemInventory' => $this->device->hasSystemInventory(),
-            'inventory' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot() : null,
-            'apiKeyState' => $this->device->apiKeyState(),
-            'apiKeyStateDetail' => $this->device->apiKeyStateDetail(),
-            'operatingSystem' => $this->device->operatingSystem(),
-            'totalRam' => $this->device->totalRamForHumans(),
-            'cumulativeNetworkCounters' => $this->device->platform()->hasCumulativeNetworkCounters(),
-            'allGroups' => DeviceGroup::query()->orderBy('name')->get(),
-            'allTags' => Tag::query()->orderBy('name')->get(),
-        ])->title(DeviceTab::Details->pageTitle($this->device));
+        return view('livewire.devices.details')->title(DeviceTab::Details->pageTitle($this->device));
+    }
+
+    #[Computed]
+    public function hasSystemInventory(): bool
+    {
+        return $this->device->hasSystemInventory();
+    }
+
+    #[Computed]
+    public function inventory(): ?SystemInventory
+    {
+        return $this->hasSystemInventory ? $this->device->latestInventory?->snapshot() : null;
+    }
+
+    #[Computed]
+    public function apiKeyState(): ApiKeyState
+    {
+        return $this->device->apiKeyState();
+    }
+
+    #[Computed]
+    public function apiKeyStateDetail(): ?string
+    {
+        return $this->device->apiKeyStateDetail();
+    }
+
+    #[Computed]
+    public function operatingSystem(): ?string
+    {
+        return $this->device->operatingSystem();
+    }
+
+    #[Computed]
+    public function totalRam(): ?string
+    {
+        return $this->device->totalRamForHumans();
+    }
+
+    #[Computed]
+    public function cumulativeNetworkCounters(): bool
+    {
+        return $this->device->platform()->hasCumulativeNetworkCounters();
+    }
+
+    /** @return Collection<int, DeviceGroup> */
+    #[Computed]
+    public function allGroups(): Collection
+    {
+        return DeviceGroup::query()->orderBy('name')->get();
+    }
+
+    /** @return Collection<int, Tag> */
+    #[Computed]
+    public function allTags(): Collection
+    {
+        return Tag::query()->orderBy('name')->get();
     }
 }

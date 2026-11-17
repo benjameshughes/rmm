@@ -8,6 +8,7 @@ use App\Actions\Trends\CompareTrendPeriods;
 use App\DTOs\Trends\DeviceTrendRow;
 use App\DTOs\Trends\DeviceTrendStats;
 use App\DTOs\Trends\TrendChange;
+use App\DTOs\Trends\TrendComparison;
 use App\Enums\TrendMetric;
 use App\Enums\TrendPeriod;
 use App\Enums\TrendScope;
@@ -18,6 +19,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -28,6 +30,7 @@ use Livewire\Component;
  */
 #[Layout('components.layouts.app')]
 #[Title('Trends')]
+#[Lazy]
 final class Index extends Component
 {
     #[Url]
@@ -41,6 +44,16 @@ final class Index extends Component
 
     #[Url(as: 'direction')]
     public string $sortDirection = 'asc';
+
+    private CompareTrendPeriods $compare;
+
+    private TrendQueries $trends;
+
+    public function boot(CompareTrendPeriods $compare, TrendQueries $trends): void
+    {
+        $this->compare = $compare;
+        $this->trends = $trends;
+    }
 
     public function mount(): void
     {
@@ -86,17 +99,42 @@ final class Index extends Component
         unset($this->listSort, $this->listSortDirection);
     }
 
-    public function render(CompareTrendPeriods $compare, TrendQueries $trends): View
+    #[Computed]
+    public function comparison(): TrendComparison
     {
-        $comparison = $compare($this->trendPeriod, $this->trendScope);
-        $changes = $trends->changes($comparison->window, $this->trendScope);
+        return ($this->compare)($this->trendPeriod, $this->trendScope);
+    }
+
+    /** @return Collection<int, TrendChange> */
+    #[Computed]
+    public function changes(): Collection
+    {
+        return $this->trends->changes($this->comparison->window, $this->trendScope);
+    }
+
+    /**
+     * @return Collection<int, DeviceTrendRow>
+     */
+    #[Computed]
+    public function rows(): Collection
+    {
+        return $this->rowsFor($this->comparison->stats, $this->changes);
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.trends.placeholders.index');
+    }
+
+    public function render(): View
+    {
+        $comparison = $this->comparison;
 
         return view('livewire.trends.index', [
             'comparison' => $comparison,
             'fleet' => $comparison->fleet(),
             'charts' => $comparison->charts(),
-            'changes' => $changes,
-            'rows' => $this->rows($comparison->stats, $changes),
+            'changes' => $this->changes,
             'periods' => TrendPeriod::cases(),
             'scopes' => TrendScope::cases(),
             'heroMetrics' => [TrendMetric::Ram, TrendMetric::Cpu, TrendMetric::Reboots, TrendMetric::BlankRate],
@@ -109,7 +147,7 @@ final class Index extends Component
      * @param  Collection<int, TrendChange>  $changes
      * @return Collection<int, DeviceTrendRow>
      */
-    private function rows(Collection $stats, Collection $changes): Collection
+    private function rowsFor(Collection $stats, Collection $changes): Collection
     {
         $devices = Device::query()->with(['group', 'tags'])->whereKey($stats->keys())->get()->keyBy('id');
         $labelsByDevice = $changes

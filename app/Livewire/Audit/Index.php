@@ -7,14 +7,18 @@ namespace App\Livewire\Audit;
 use App\Enums\AuditAction;
 use App\Models\AuditLog;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     use WithPagination;
@@ -31,7 +35,11 @@ final class Index extends Component
     }
 
     #[On('echo-private:audit,AuditLogged')]
-    public function refreshAuditLog(): void {}
+    public function refreshAuditLog(): void
+    {
+        $this->renderIsland(name: 'audit-log');
+        $this->skipRender();
+    }
 
     public function updatingUserFilter(): void
     {
@@ -48,18 +56,27 @@ final class Index extends Component
         $this->resetPage();
     }
 
-    public function render(): View
+    /** @return LengthAwarePaginator<int, AuditLog> */
+    #[Computed]
+    public function auditLogs(): LengthAwarePaginator
     {
-        $auditLogs = AuditLog::query()
+        return AuditLog::query()
             ->with('user')
             ->byActor($this->userFilter)
             ->when($this->actionFilter !== '', fn (Builder $q) => $q->where('action', $this->actionFilter))
             ->search($this->search)
             ->latest('id')
             ->paginate(config('audit.per_page'));
+    }
 
+    public function placeholder(): View
+    {
+        return view('livewire.audit.placeholders.index');
+    }
+
+    public function render(): View
+    {
         return view('livewire.audit.index', [
-            'auditLogs' => $auditLogs,
             'users' => User::query()->orderBy('name')->get(['id', 'name']),
             'actions' => AuditAction::cases(),
         ]);

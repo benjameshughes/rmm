@@ -212,16 +212,20 @@ it('shows Run Command as running while an ad-hoc command is in flight, live, unt
     $command = DeviceCommand::query()->sole();
     $command->markAsRunning();
 
-    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id])
-        ->assertSee('Running command...')
-        ->assertSeeHtml('data-run-command-busy');
+    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id]);
+
+    expect(islandHtml($header))
+        ->toContain('Running command...')
+        ->toContain('data-run-command-busy');
 
     $command->markAsCompleted('done', 0);
 
-    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id])
-        ->assertDontSeeHtml('data-run-command-busy')
-        ->assertDontSee('Running command...')
-        ->assertSeeHtml('data-run-command');
+    $header->dispatch('echo-private:devices.'.$device->id.',CommandUpdated', ['commandId' => $command->id]);
+
+    expect(islandHtml($header))
+        ->not->toContain('data-run-command-busy')
+        ->not->toContain('Running command...')
+        ->toContain('data-run-command');
 });
 
 it('leaves Run Command alone while only scripts run', function (): void {

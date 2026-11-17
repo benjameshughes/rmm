@@ -14,8 +14,9 @@
 
     <flux:input wire:model.live.debounce.300ms="search" placeholder="Search PCs, models, service tags, CPUs..." icon="magnifying-glass" class="max-w-sm" />
 
+    @island(name: 'hardware', always: true)
     <flux:card class="p-0! sm:p-0!">
-        @if($rows->isEmpty())
+        @if($this->rows->isEmpty())
             <div class="flex flex-col items-center gap-3 px-6 py-16 text-center" data-hardware-empty>
                 <flux:icon name="cpu-chip" class="size-10 text-zinc-300 dark:text-zinc-600" />
                 @if($search !== '')
@@ -26,7 +27,7 @@
                 @endif
             </div>
         @else
-            <flux:table :paginate="$rows" class="px-4">
+            <flux:table :paginate="$this->rows" class="px-4">
                 <flux:table.columns>
                     <x-device.list.sortable-column :sort="HardwareSort::Hostname" :current="$this->listSort" :direction="$this->listSortDirection" />
                     <x-device.list.sortable-column :sort="HardwareSort::Model" :current="$this->listSort" :direction="$this->listSortDirection" />
@@ -39,7 +40,7 @@
                     <x-device.list.sortable-column :sort="HardwareSort::Collected" :current="$this->listSort" :direction="$this->listSortDirection" class="hidden sm:table-cell" />
                 </flux:table.columns>
                 <flux:table.rows>
-                    @foreach($rows as $row)
+                    @foreach($this->rows as $row)
                         <flux:table.row :key="'hardware-'.$row->device->id">
                             <flux:table.cell class="max-w-56">
                                 <x-device.list.identity :device="$row->device" :href="route('devices.details', $row->device)" />
@@ -75,4 +76,5 @@
             </flux:table>
         @endif
     </flux:card>
+    @endisland
 </div>

@@ -68,12 +68,16 @@ final class Header extends Component
     public function refreshLatestAgentVersion(): void {}
 
     /**
-     * Re-renders so Run Command shows the ad-hoc command in flight, and goes back once it finishes.
+     * Redraws only the Run Command button, so it shows the ad-hoc command in flight and goes back once it finishes.
      */
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'run-command');
+        $this->skipRender();
+    }
 
     public function updatedSelectedScriptId(): void
     {
@@ -222,7 +226,8 @@ final class Header extends Component
     /**
      * The newest typed command still queued or running, for the busy Run Command button.
      */
-    private function inFlightAdHocCommand(): ?DeviceCommand
+    #[Computed]
+    public function inFlightAdHocCommand(): ?DeviceCommand
     {
         return $this->device->isMonitorOnly ? null : $this->device->inFlightCommands()->whereNull('script_id')->latest('id')->first();
     }
@@ -245,7 +250,6 @@ final class Header extends Component
             'printerProblem' => $this->device->printerProblemLabel(),
             'scriptGroups' => $this->showScriptModal && $this->selectedScriptId === null ? $scripts->runnableOn($this->device->platform(), $this->scriptSearch) : collect(),
             'scriptPickerEmpty' => $this->scriptSearch === '' ? 'No scripts can run on this device yet.' : "No scripts match \"{$this->scriptSearch}\".",
-            'adHocCommand' => $this->inFlightAdHocCommand(),
         ]);
     }
 }

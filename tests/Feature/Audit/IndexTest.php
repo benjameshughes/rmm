@@ -88,8 +88,9 @@ it('refreshes when an audit entry is logged over Reverb', function (): void {
 
     $auditLog = AuditLog::factory()->create(['properties' => ['label' => 'LATE-ARRIVAL']]);
 
-    $component->dispatch('echo-private:audit,AuditLogged', ['auditLogId' => $auditLog->id, 'action' => $auditLog->action->value])
-        ->assertSee('LATE-ARRIVAL');
+    $component->dispatch('echo-private:audit,AuditLogged', ['auditLogId' => $auditLog->id, 'action' => $auditLog->action->value]);
+
+    expect(islandHtml($component))->toContain('LATE-ARRIVAL');
 });
 
 it('checks the policy', function (): void {

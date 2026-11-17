@@ -1,6 +1,7 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Commands">
+    @island(name: 'commands', always: true)
     <flux:card>
-        <flux:table :paginate="$commands">
+        <flux:table :paginate="$this->commands">
             <flux:table.columns>
                 <flux:table.column>Command</flux:table.column>
                 <flux:table.column>Status</flux:table.column>
@@ -8,7 +9,7 @@
                 <flux:table.column>Queued By</flux:table.column>
             </flux:table.columns>
             <flux:table.rows>
-                @forelse($commands as $command)
+                @forelse($this->commands as $command)
                     <flux:table.row :key="'command-'.$command->id" class="cursor-pointer" wire:click="$dispatch('show-command', { commandId: {{ $command->id }} })">
                         <flux:table.cell>
                             <div class="flex items-center gap-2">
@@ -32,5 +33,6 @@
             </flux:table.rows>
         </flux:table>
     </flux:card>
+    @endisland
 
 </x-device.shell>

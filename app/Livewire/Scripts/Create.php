@@ -14,9 +14,11 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Create extends Component
 {
     use DefinesScriptParameters;
@@ -58,6 +60,11 @@ final class Create extends Component
         ]);
 
         $this->redirect(route('scripts.show', $script), navigate: true);
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.scripts.placeholders.create');
     }
 
     public function render(): View

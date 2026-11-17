@@ -8,6 +8,7 @@ use App\Models\ScheduledTask;
 use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
@@ -221,7 +222,7 @@ it('switches an existing schedule to wake and drops its script', function (): vo
 it('checks the scheduled task policy for every action', function (string $ability, Closure $act): void {
     $user = User::factory()->create();
     $task = ScheduledTask::factory()->create(['name' => 'Guarded']);
-    Illuminate\Support\Facades\Gate::before(fn (User $user, string $checked): ?bool => $checked === $ability ? false : null);
+    Gate::before(fn (User $user, string $checked): ?bool => $checked === $ability ? false : null);
 
     $act(Livewire::actingAs($user)->test(Index::class), $task)->assertForbidden();
 
@@ -235,7 +236,7 @@ it('checks the scheduled task policy for every action', function (string $abilit
 ]);
 
 it('refuses the schedules page when viewing is not allowed', function (): void {
-    Illuminate\Support\Facades\Gate::before(fn (User $user, string $checked): ?bool => $checked === 'viewAny' ? false : null);
+    Gate::before(fn (User $user, string $checked): ?bool => $checked === 'viewAny' ? false : null);
 
     Livewire::actingAs(User::factory()->create())->test(Index::class)->assertForbidden();
 });

@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
+use Tests\TestCase;
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -11,8 +15,13 @@
 |
 */
 
-pest()->extend(Tests\TestCase::class)
-    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
+    ->beforeEach(function (): void {
+        // Livewire resets this after every test render, so switch it back on each time.
+        Livewire\Livewire::withoutLazyLoading();
+        Livewire\on('flush-state', fn () => Livewire\Livewire::withoutLazyLoading());
+    })
     ->in('Feature');
 
 /*
@@ -117,4 +126,12 @@ function diskScanFixture(array $overrides = []): array
     });
 
     return $data;
+}
+
+/**
+ * The HTML of the islands a Livewire update redrew on their own.
+ */
+function islandHtml(Testable $component): string
+{
+    return implode('', $component->effects['islandFragments']);
 }

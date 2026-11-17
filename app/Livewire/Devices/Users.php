@@ -20,7 +20,9 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -31,6 +33,7 @@ use Livewire\Component;
  * unmanaged one can be adopted as a staff account, disabled or deleted.
  */
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Users extends Component
 {
     public Device $device;
@@ -60,6 +63,8 @@ final class Users extends Component
     public function refreshDevice(): void
     {
         $this->device->refresh();
+        $this->renderIsland(name: 'accounts');
+        $this->skipRender();
     }
 
     public function startAdopt(int $accountId): void
@@ -126,21 +131,41 @@ final class Users extends Component
         Flux::toast(text: "{$account->username} is being removed from {$this->device->hostname}.", heading: 'Delete queued', variant: 'success');
     }
 
+    public function placeholder(): View
+    {
+        return view('livewire.devices.placeholders.users');
+    }
+
     public function render(): View
     {
         return view('livewire.devices.users', [
-            'isWindows' => $this->device->platform() === ScriptPlatform::Windows,
-            'isSupported' => $this->device->reportsLocalAccounts(),
-            'rows' => $this->rows(),
             'adopting' => $this->adoptingId === null ? null : $this->device->localAccounts()->find($this->adoptingId),
-            'minAgentVersion' => config('local_accounts.min_agent_version'),
         ])->title(DeviceTab::Users->pageTitle($this->device));
+    }
+
+    #[Computed]
+    public function isWindows(): bool
+    {
+        return $this->device->platform() === ScriptPlatform::Windows;
+    }
+
+    #[Computed]
+    public function isSupported(): bool
+    {
+        return $this->device->reportsLocalAccounts();
+    }
+
+    #[Computed]
+    public function minAgentVersion(): string
+    {
+        return config('local_accounts.min_agent_version');
     }
 
     /**
      * @return Collection<int, LocalAccountRow>
      */
-    private function rows(): Collection
+    #[Computed]
+    public function rows(): Collection
     {
         $managed = $this->localAccounts->managedUsernames($this->device);
 

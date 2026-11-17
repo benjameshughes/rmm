@@ -9,6 +9,7 @@ use App\Actions\Software\QueuePackageCommands;
 use App\DTOs\Software\PackageCommandPlan;
 use App\Enums\PackageAction;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\DeviceSoftware;
 use App\Queries\SoftwareQueries;
 use Flux\Flux;
@@ -18,6 +19,7 @@ use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -28,6 +30,7 @@ use Livewire\Component;
  * removing it everywhere, and installing it on more devices through the install picker.
  */
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Show extends Component
 {
     #[Locked]
@@ -56,13 +59,29 @@ final class Show extends Component
 
     #[On('echo-private:devices,CommandUpdated')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'installs');
+        $this->skipRender();
+    }
 
     /** @return Collection<int, DeviceSoftware> */
     #[Computed]
     public function installs(): Collection
     {
         return $this->software->installsOf($this->packageId)->get();
+    }
+
+    /** @return BaseCollection<int, DeviceCommand> keyed by device ID */
+    #[Computed]
+    public function packageCommands(): BaseCollection
+    {
+        return $this->software->packageCommandsFor($this->packageId);
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.software.placeholders.show')->title('Software');
     }
 
     public function upgrade(int $softwareId, QueuePackageAction $action): void
@@ -123,7 +142,6 @@ final class Show extends Component
             'installs' => $installs,
             'package' => $installs->first(),
             'upgradableCount' => $installs->filter(fn (DeviceSoftware $install): bool => $install->isUpgradable)->count(),
-            'packageCommands' => $this->software->packageCommandsFor($this->packageId),
         ])->title($installs->first()?->name ?? 'Software');
     }
 }

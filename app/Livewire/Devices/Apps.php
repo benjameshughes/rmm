@@ -13,17 +13,23 @@ use App\Enums\PackageAction;
 use App\Enums\SoftwareSource;
 use App\Livewire\Concerns\QueuesSelectedPackageCommands;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\DeviceSoftware;
 use App\Queries\SoftwareQueries;
 use Flux\Flux;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Apps extends Component
 {
     use QueuesSelectedPackageCommands;
@@ -45,6 +51,13 @@ final class Apps extends Component
 
     public bool $selectAll = false;
 
+    private SoftwareQueries $queries;
+
+    public function boot(SoftwareQueries $queries): void
+    {
+        $this->queries = $queries;
+    }
+
     public function mount(Device $device): void
     {
         $this->authorize('view', $device);
@@ -63,7 +76,11 @@ final class Apps extends Component
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'software');
+        $this->skipRender();
+    }
 
     /**
      * A filter change starts again from page one with nothing ticked.
@@ -147,19 +164,53 @@ final class Apps extends Component
         );
     }
 
-    public function render(SoftwareQueries $software): View
+    public function placeholder(): View
     {
-        $hasSoftwareInventory = $this->device->hasSoftwareInventory();
+        return view('livewire.devices.placeholders.apps');
+    }
 
+    #[Computed]
+    public function hasSoftwareInventory(): bool
+    {
+        return $this->device->hasSoftwareInventory();
+    }
+
+    #[Computed]
+    public function lastChecked(): ?string
+    {
+        return $this->device->software_inventoried_at === null ? null : 'Last checked '.$this->device->software_inventoried_at->diffForHumans().' by winget.';
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, DeviceSoftware>
+     */
+    #[Computed]
+    public function software(): LengthAwarePaginator
+    {
+        return $this->queries->forDevice($this->device, $this->filters())->paginate(config('software.device_per_page'));
+    }
+
+    /**
+     * @return Collection<string, DeviceCommand>
+     */
+    #[Computed]
+    public function packageCommands(): Collection
+    {
+        return $this->queries->packageCommandsOnDevice($this->device);
+    }
+
+    #[Computed]
+    public function inventoryCommand(): ?DeviceCommand
+    {
+        return $this->device->inFlightCommands()->whereRelation('script', 'slug', config('software.inventory_slug'))->latest('id')->first();
+    }
+
+    public function render(): View
+    {
         return view('livewire.devices.apps', [
             'apps' => $this->device->latestMetric?->appMetrics,
-            'hasSoftwareInventory' => $hasSoftwareInventory,
-            'lastChecked' => $this->device->software_inventoried_at === null ? null : 'Last checked '.$this->device->software_inventoried_at->diffForHumans().' by winget.',
-            'software' => $hasSoftwareInventory ? $software->forDevice($this->device, $this->filters())->paginate(config('software.device_per_page')) : null,
-            'packageCommands' => $hasSoftwareInventory ? $software->packageCommandsOnDevice($this->device) : collect(),
             'hasSystemInventory' => $this->device->hasSystemInventory(),
             'windowsSoftware' => $this->device->hasSystemInventory() ? $this->device->latestInventory?->snapshot()->software() : null,
-            'inventoryCommand' => $hasSoftwareInventory ? $this->device->inFlightCommands()->whereRelation('script', 'slug', config('software.inventory_slug'))->latest('id')->first() : null,
         ])->title(DeviceTab::Apps->pageTitle($this->device));
     }
 }

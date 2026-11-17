@@ -104,16 +104,21 @@ it('shows the backup progress on the Backups tab and follows it live', function 
 
     reportProgress($command, halfwayProgress(), '2026-10-09T08:00:00+00:00');
 
-    $tab->dispatch("echo-private:devices.{$device->id},CommandProgressed", ['commandId' => $command->id, 'deviceId' => $device->id])
-        ->assertSee('42% · 7,612 / 18,128 files · ~5 min left')
-        ->assertSee('C:\\Users\\sophie\\Documents\\x.xlsx')
-        ->assertSeeHtml('data-run-button-percent');
+    $tab->dispatch("echo-private:devices.{$device->id},CommandProgressed", ['commandId' => $command->id, 'deviceId' => $device->id]);
+
+    expect(islandHtml($tab))
+        ->toContain(e('42% · 7,612 / 18,128 files · ~5 min left'))
+        ->toContain(e('C:\\Users\\sophie\\Documents\\x.xlsx'))
+        ->toContain('data-run-button-percent');
 
     $command->refresh()->markAsCompleted('OK: backed up', 0);
 
-    $tab->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'completed'])
-        ->assertDontSeeHtml('data-backing-up')
-        ->assertDontSee('7,612 / 18,128 files');
+    $tab->dispatch("echo-private:devices.{$device->id},CommandUpdated", ['commandId' => $command->id, 'deviceId' => $device->id, 'status' => 'completed']);
+
+    expect(islandHtml($tab))
+        ->toContain('data-backup-state')
+        ->not->toContain('data-backing-up')
+        ->not->toContain('7,612 / 18,128 files');
 });
 
 it('shows progress in the command detail while it runs, and refreshes on a progress event', function (): void {
@@ -159,6 +164,7 @@ it('updates the percent on the device header busy button from its own channel', 
 
     reportProgress($command, halfwayProgress(), '2026-10-09T08:00:00+00:00');
 
-    $header->dispatch("echo-private:devices.{$device->id},CommandProgressed", ['commandId' => $command->id, 'deviceId' => $device->id])
-        ->assertSeeHtml('data-run-button-percent');
+    $header->dispatch("echo-private:devices.{$device->id},CommandProgressed", ['commandId' => $command->id, 'deviceId' => $device->id]);
+
+    expect(islandHtml($header))->toContain('data-run-button-percent');
 });

@@ -1,7 +1,9 @@
 <x-device.shell :device="$device" :current="App\Enums\DeviceTab::Overview">
     <x-device.stats.summary :metric="$metric" :disk="$fullestDisk" :swap-label="$swapLabel" :missing-swap="$missingSwap" />
 
-    <x-device.overview.open-alerts :alerts="$openAlerts" />
+    @island(name: 'open-alerts', always: true)
+        <x-device.overview.open-alerts :alerts="$this->openAlerts" />
+    @endisland
 
     @if($hasSystemInventory)
         <x-inventory.health :device="$device" :health="$health" />
@@ -24,5 +26,7 @@
         </div>
     </div>
 
-    <x-device.overview.recent-commands :device="$device" :commands="$recentCommands" />
+    @island(name: 'recent-commands', always: true)
+        <x-device.overview.recent-commands :device="$device" :commands="$this->recentCommands" />
+    @endisland
 </x-device.shell>

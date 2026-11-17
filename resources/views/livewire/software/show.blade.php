@@ -32,6 +32,7 @@
     <flux:error name="script" />
     <flux:error name="packageId.PackageId" />
 
+    @island(name: 'installs', always: true)
     <flux:card class="p-0! sm:p-0!">
         <flux:table class="px-4">
             <flux:table.columns>
@@ -41,7 +42,7 @@
                 <flux:table.column></flux:table.column>
             </flux:table.columns>
             <flux:table.rows>
-                @foreach($installs as $install)
+                @foreach($this->installs as $install)
                     <flux:table.row :key="'install-'.$install->id">
                         <flux:table.cell>
                             <x-device.list.identity :device="$install->device" />
@@ -56,9 +57,9 @@
                             <flux:text size="sm">{{ $install->last_seen_at->diffForHumans() }}</flux:text>
                         </flux:table.cell>
                         <flux:table.cell>
-                            @if($packageCommands->has($install->device_id))
+                            @if($this->packageCommands->has($install->device_id))
                                 <div class="flex justify-end">
-                                    <x-device.commands.busy :command="$packageCommands->get($install->device_id)" />
+                                    <x-device.commands.busy :command="$this->packageCommands->get($install->device_id)" />
                                 </div>
                             @elseif($install->isUpgradable)
                                 @can('runCommands', $install->device)
@@ -73,6 +74,7 @@
             </flux:table.rows>
         </flux:table>
     </flux:card>
+    @endisland
 
     <livewire:software.install-software />
 </div>

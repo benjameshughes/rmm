@@ -5,8 +5,15 @@ declare(strict_types=1);
 use App\Actions\Script\SyncSystemScripts;
 use App\Enums\DevicePowerState;
 use App\Enums\DeviceTab;
+use App\Livewire\Devices\Apps;
+use App\Livewire\Devices\Backups;
+use App\Livewire\Devices\Details;
 use App\Livewire\Devices\Header;
 use App\Livewire\Devices\Overview;
+use App\Livewire\Devices\Printers;
+use App\Livewire\Devices\Security;
+use App\Livewire\Devices\Storage;
+use App\Livewire\Devices\Users;
 use App\Models\Alert;
 use App\Models\Device;
 use App\Models\DeviceCommand;
@@ -178,7 +185,9 @@ describe('live updates', function (): void {
 
         DeviceCommand::factory()->pending()->create(['device_id' => $this->device->id]);
 
-        $overview->dispatch('command-queued')->assertDontSee('No commands run on this device yet.');
+        $overview->dispatch('command-queued');
+
+        expect(islandHtml($overview))->not->toContain('No commands run on this device yet.');
     });
 
     it('shows open alerts for this device as they trigger and ignores other devices', function (): void {
@@ -186,12 +195,33 @@ describe('live updates', function (): void {
             ->assertDontSee('open alert');
 
         $elsewhere = Alert::factory()->triggered()->create();
-        $overview->dispatch('echo-private:devices,AlertChanged', ['alertId' => $elsewhere->id, 'deviceId' => $elsewhere->device_id, 'status' => 'triggered'])
-            ->assertDontSee('open alert');
+        $overview->dispatch('echo-private:devices,AlertChanged', ['alertId' => $elsewhere->id, 'deviceId' => $elsewhere->device_id, 'status' => 'triggered']);
+
+        expect($overview->effects)->not->toHaveKey('islandFragments');
 
         $alert = Alert::factory()->triggered()->create(['device_id' => $this->device->id]);
-        $overview->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $this->device->id, 'status' => 'triggered'])
-            ->assertSee('1 open alert')
-            ->assertSee($alert->conditionLabel());
+        $overview->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $this->device->id, 'status' => 'triggered']);
+
+        expect(islandHtml($overview))
+            ->toContain('1 open alert')
+            ->toContain(e($alert->conditionLabel()));
     });
 });
+
+it('redraws only the live island of a tab when its listener fires', function (string $component, string $listener, string $island): void {
+    $device = Device::factory()->active()->windows()->create();
+
+    $tab = Livewire::actingAs($this->user)->test($component, ['device' => $device])
+        ->call($listener);
+
+    expect(islandHtml($tab))->toContain("name={$island}")
+        ->and($tab->effects['html'] ?? null)->toBeNull();
+})->with([
+    'apps commands' => [Apps::class, 'refreshCommands', 'software'],
+    'storage commands' => [Storage::class, 'refreshCommands', 'storage'],
+    'printers commands' => [Printers::class, 'refreshCommands', 'printers'],
+    'backups commands' => [Backups::class, 'refreshCommands', 'backups'],
+    'users accounts' => [Users::class, 'refreshDevice', 'accounts'],
+    'details device' => [Details::class, 'refreshDevice', 'details'],
+    'security inventory' => [Security::class, 'refreshDevice', 'security'],
+]);

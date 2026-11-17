@@ -8,9 +8,11 @@ use App\Actions\Device\DeleteDeviceGroup;
 use App\Models\DeviceGroup;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     public string $name = '';
@@ -81,6 +83,11 @@ final class Index extends Component
         $this->reset('name', 'description', 'editingId', 'showCreateModal');
         $this->color = 'zinc';
         $this->resetErrorBag();
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.device-groups.placeholders.index');
     }
 
     public function render(): View

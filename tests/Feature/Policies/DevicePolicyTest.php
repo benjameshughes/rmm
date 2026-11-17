@@ -168,6 +168,6 @@ it('gates the alert pages and actions through the alert policy', function (): vo
     denyAbility('viewAny');
 
     Livewire::actingAs($this->user)->test(AlertsIndex::class)->assertForbidden();
-    Livewire::withoutLazyLoading()->actingAs($this->user)->test(AlertBell::class)->assertForbidden();
+    Livewire::actingAs($this->user)->test(AlertBell::class)->assertForbidden();
     expect($alert->fresh()->status)->toBe(AlertStatus::Triggered);
 });

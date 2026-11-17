@@ -20,7 +20,9 @@ use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -31,6 +33,7 @@ use Livewire\Component;
  * removing printers shared by the CUPS server.
  */
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Printers extends Component
 {
     public Device $device;
@@ -52,7 +55,11 @@ final class Printers extends Component
     #[On('echo-private:devices.{device.id},CommandUpdated')]
     #[On('echo-private:devices.{device.id},CommandProgressed')]
     #[On('command-queued')]
-    public function refreshCommands(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'printers');
+        $this->skipRender();
+    }
 
     public function clearQueue(int $printerId, QueuePrinterAction $action): void
     {
@@ -158,25 +165,73 @@ final class Printers extends Component
         Flux::toast(text: "{$text} This tab updates by itself once the agent has run it.", heading: $printerAction->queuedHeading(), variant: 'success');
     }
 
+    public function placeholder(): View
+    {
+        return view('livewire.devices.placeholders.printers');
+    }
+
     public function render(): View
     {
-        $isWindows = $this->device->platform() === ScriptPlatform::Windows;
+        return view('livewire.devices.printers')->title(DeviceTab::Printers->pageTitle($this->device));
+    }
 
-        $printers = $isWindows
+    #[Computed]
+    public function isWindows(): bool
+    {
+        return $this->device->platform() === ScriptPlatform::Windows;
+    }
+
+    /** @return Collection<int, DevicePrinter> */
+    #[Computed]
+    public function printers(): Collection
+    {
+        return $this->isWindows
             ? $this->device->printers()->get()->sortBy(fn (DevicePrinter $printer): array => [$printer->queue()->problemRank(), $printer->name])->values()
             : collect();
+    }
 
-        return view('livewire.devices.printers', [
-            'isWindows' => $isWindows,
-            'printers' => $printers,
-            'cupsQueues' => $printers->mapWithKeys(fn (DevicePrinter $printer): array => [$printer->id => $this->cupsQueueOf($printer)]),
-            'reported' => $this->device->printersReportedForHumans(),
-            'isSpoolerDown' => $this->device->spooler_down_since !== null,
-            'commands' => new PrinterCommands($isWindows ? $this->inFlightPrinterCommands() : collect()),
-            'jobsShown' => config('printers.jobs_shown'),
-            'zebraTemplate' => $isWindows ? ZebraTemplate::current() : null,
-            'cupsPrinters' => config('printers.cups.printers'),
-        ])->title(DeviceTab::Printers->pageTitle($this->device));
+    /** @return Collection<int, ?string> */
+    #[Computed]
+    public function cupsQueues(): Collection
+    {
+        return $this->printers->mapWithKeys(fn (DevicePrinter $printer): array => [$printer->id => $this->cupsQueueOf($printer)]);
+    }
+
+    #[Computed]
+    public function reported(): ?string
+    {
+        return $this->device->printersReportedForHumans();
+    }
+
+    #[Computed]
+    public function isSpoolerDown(): bool
+    {
+        return $this->device->spooler_down_since !== null;
+    }
+
+    #[Computed]
+    public function commands(): PrinterCommands
+    {
+        return new PrinterCommands($this->isWindows ? $this->inFlightPrinterCommands() : collect());
+    }
+
+    #[Computed]
+    public function jobsShown(): int
+    {
+        return config('printers.jobs_shown');
+    }
+
+    #[Computed]
+    public function zebraTemplate(): ?ZebraTemplate
+    {
+        return $this->isWindows ? ZebraTemplate::current() : null;
+    }
+
+    /** @return array<string, string> */
+    #[Computed]
+    public function cupsPrinters(): array
+    {
+        return config('printers.cups.printers');
     }
 
     /** @return Collection<int, DeviceCommand> */

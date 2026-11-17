@@ -12,13 +12,16 @@ use App\Enums\SoftwareSort;
 use App\Enums\SoftwareSource;
 use App\Livewire\Concerns\QueuesSelectedPackageCommands;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\DeviceGroup;
 use App\Models\Tag;
 use App\Queries\SoftwareQueries;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -32,6 +35,7 @@ use Livewire\WithPagination;
  */
 #[Layout('components.layouts.app')]
 #[Title('Software')]
+#[Lazy]
 final class Index extends Component
 {
     use QueuesSelectedPackageCommands;
@@ -79,9 +83,18 @@ final class Index extends Component
     }
 
     #[On('echo-private:devices,SoftwareInventorySynced')]
+    public function refreshSoftware(): void {}
+
+    /**
+     * Command progress only changes the activity under each package, so only the table redraws.
+     */
     #[On('echo-private:devices,CommandUpdated')]
     #[On('command-queued')]
-    public function refreshSoftware(): void {}
+    public function refreshCommands(): void
+    {
+        $this->renderIsland(name: 'packages');
+        $this->skipRender();
+    }
 
     /**
      * Hand-edited query string values fall back to no filter rather than erroring.
@@ -168,6 +181,31 @@ final class Index extends Component
         return $this->software->fleetPackages($this->filters, $this->listSort, $this->listSortDirection)->paginate(config('software.fleet_per_page'));
     }
 
+    /** @return Collection<string, string> */
+    #[Computed]
+    public function versionSpread(): Collection
+    {
+        return $this->software->versionSpread($this->packageIds(), $this->filters);
+    }
+
+    /** @return Collection<string, Collection<int, DeviceCommand>> */
+    #[Computed]
+    public function packageCommands(): Collection
+    {
+        return $this->software->packageCommandsByPackage($this->packageIds());
+    }
+
+    /** @return array<int, string> */
+    private function packageIds(): array
+    {
+        return $this->packages->pluck('package_id')->all();
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.software.placeholders.index');
+    }
+
     protected function planSelectedPackages(PackageAction $action): PackageCommandPlan
     {
         return PackageCommandPlan::forInstalls($action, $this->software->installsOfPackages($this->selectedPackages, $this->filters)->get());
@@ -175,12 +213,7 @@ final class Index extends Component
 
     public function render(): View
     {
-        $packageIds = $this->packages->pluck('package_id')->all();
-
         return view('livewire.software.index', [
-            'packages' => $this->packages,
-            'versionSpread' => $this->software->versionSpread($packageIds, $this->filters),
-            'packageCommands' => $this->software->packageCommandsByPackage($packageIds),
             'inventoriedDevices' => $this->software->inventoriedDeviceCount($this->filters),
             'groups' => DeviceGroup::query()->orderBy('name')->get(),
             'tags' => Tag::query()->orderBy('name')->get(),

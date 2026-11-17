@@ -3,13 +3,16 @@
 declare(strict_types=1);
 
 use App\Actions\Script\SyncSystemScripts;
+use App\Livewire\Devices\Apps;
 use App\Livewire\Software\Index;
+use App\Livewire\Software\InstallSoftware;
 use App\Livewire\Software\Show;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\DeviceSoftware;
 use App\Models\Script;
 use App\Models\User;
+use App\Queries\SoftwareQueries;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -46,7 +49,7 @@ it('rolls packages up across devices with their version spread, most devices beh
     pcWith([chrome('131.0'), zip(), ['package_id' => 'Old.Tool', 'name' => 'Old Tool', 'installed_version' => '1.0', 'latest_version' => '2.0', 'is_update_available' => true]]);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertViewHas('packages', fn ($packages): bool => $packages->pluck('package_id')->all() === ['Google.Chrome', 'Old.Tool', '7zip.7zip']
+        ->assertSet('packages', fn ($packages): bool => $packages->pluck('package_id')->all() === ['Google.Chrome', 'Old.Tool', '7zip.7zip']
             && (int) $packages->first()->device_count === 4
             && (int) $packages->first()->outdated_count === 3)
         ->assertSee('129.0 ×3, 131.0 ×1')
@@ -61,7 +64,7 @@ it('leaves monitor-only and unapproved devices out of the fleet view', function 
     pcWith([zip()]);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertViewHas('packages', fn ($packages): bool => $packages->pluck('package_id')->all() === ['7zip.7zip']);
+        ->assertSet('packages', fn ($packages): bool => $packages->pluck('package_id')->all() === ['7zip.7zip']);
 });
 
 it('searches packages by name or ID', function (): void {
@@ -203,7 +206,7 @@ describe('fleet install and uninstall', function (): void {
             ->assertSeeHtml('data-install-more')
             ->assertSeeHtml("packageId: '7zip.7zip'");
 
-        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+        Livewire::actingAs($this->user)->test(InstallSoftware::class)
             ->dispatch('open-install-software', packageId: '7zip.7zip')
             ->assertSet('isPackageFixed', true)
             ->assertSee('Install 7zip.7zip: 3 commands across 3 devices.')
@@ -225,7 +228,7 @@ describe('fleet install and uninstall', function (): void {
         Livewire::actingAs($this->user)->test(Show::class, ['packageId' => 'ARP\Machine\X64\Thing'])
             ->assertDontSeeHtml('data-install-more');
 
-        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+        Livewire::actingAs($this->user)->test(InstallSoftware::class)
             ->dispatch('open-install-software', packageId: 'ARP\Machine\X64\Thing')
             ->call('install')
             ->assertHasErrors(['packageId' => 'regex']);
@@ -271,16 +274,19 @@ describe('package command status', function (): void {
 
         $command->markAsSent();
         $command->markAsRunning();
-        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertSee('Upgrading...');
+        $page->dispatch('echo-private:devices,CommandUpdated', []);
+        expect(islandHtml($page))->toContain('Upgrading...');
 
         $command->markAsCompleted('OK', 0);
-        $page->dispatch('echo-private:devices,CommandUpdated', [])->assertDontSeeHtml('data-run-button-busy');
+        $page->dispatch('echo-private:devices,CommandUpdated', []);
+        expect($page->effects['islandFragments'])->not->toBeEmpty()
+            ->and(islandHtml($page))->not->toContain('data-run-button-busy');
     });
 
     it('shows the in-flight uninstall on the device apps tab, only on that app\'s row', function (): void {
         $device = pcWith([zip(), chrome('130.0')]);
 
-        Livewire::actingAs($this->user)->test(App\Livewire\Devices\Apps::class, ['device' => $device])
+        Livewire::actingAs($this->user)->test(Apps::class, ['device' => $device])
             ->call('uninstallPackage', $device->software()->where('package_id', '7zip.7zip')->sole()->id)
             ->assertSee('Queued: Uninstall')
             ->assertSee('Uninstall');
@@ -309,7 +315,7 @@ describe('closing the app first', function (): void {
         pcWith([zip()]);
         pcWith([]);
 
-        Livewire::actingAs($this->user)->test(App\Livewire\Software\InstallSoftware::class)
+        Livewire::actingAs($this->user)->test(InstallSoftware::class)
             ->dispatch('open-install-software', packageId: '7zip.7zip')
             ->call('install')
             ->assertHasNoErrors();
@@ -320,7 +326,7 @@ describe('closing the app first', function (): void {
     it('passes it from the device apps tab too', function (): void {
         $device = pcWith([zip()]);
 
-        Livewire::actingAs($this->user)->test(App\Livewire\Devices\Apps::class, ['device' => $device])
+        Livewire::actingAs($this->user)->test(Apps::class, ['device' => $device])
             ->set('closeAppFirst', true)
             ->call('uninstallPackage', $device->software()->sole()->id);
 
@@ -331,7 +337,7 @@ describe('closing the app first', function (): void {
 it('hides the Microsoft runtimes other apps depend on, but not Microsoft apps', function (array $package): void {
     pcWith([chrome('131.0'), $package, ['package_id' => 'Microsoft.Edge', 'name' => 'Microsoft Edge', 'source' => 'winget']]);
 
-    expect(app(App\Queries\SoftwareQueries::class)->fleetPackages()->pluck('package_id')->all())
+    expect(app(SoftwareQueries::class)->fleetPackages()->pluck('package_id')->all())
         ->toContain('Google.Chrome', 'Microsoft.Edge')
         ->not->toContain($package['package_id']);
 })->with([
@@ -345,5 +351,5 @@ it('hides the Microsoft runtimes other apps depend on, but not Microsoft apps', 
 it('hides the runtimes on a device page too', function (): void {
     $device = pcWith([chrome('131.0'), ['package_id' => 'Microsoft.WindowsAppRuntime.1.8', 'name' => 'Windows App Runtime 1.8']]);
 
-    expect(app(App\Queries\SoftwareQueries::class)->forDevice($device)->pluck('package_id')->all())->toBe(['Google.Chrome']);
+    expect(app(SoftwareQueries::class)->forDevice($device)->pluck('package_id')->all())->toBe(['Google.Chrome']);
 });

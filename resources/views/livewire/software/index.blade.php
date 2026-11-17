@@ -44,8 +44,9 @@
         @endif
     </div>
 
+    @island(name: 'packages', always: true)
     <flux:card class="p-0! sm:p-0! overflow-x-auto">
-        @if($packages->isEmpty())
+        @if($this->packages->isEmpty())
             <div class="flex flex-col items-center gap-3 px-6 py-16 text-center" data-software-empty>
                 <flux:icon name="squares-plus" class="size-10 text-zinc-300 dark:text-zinc-600" />
                 @if($this->filters->isFiltered())
@@ -57,7 +58,7 @@
                 @endif
             </div>
         @else
-            <flux:table :paginate="$packages" class="px-4">
+            <flux:table :paginate="$this->packages" class="px-4">
                 <flux:table.columns>
                     <flux:table.column class="w-8">
                         <flux:checkbox wire:model.live="selectAll" aria-label="Select every app on this page" />
@@ -68,7 +69,7 @@
                     <x-device.list.sortable-column :sort="SoftwareSort::Behind" :current="$this->listSort" :direction="$this->listSortDirection" />
                 </flux:table.columns>
                 <flux:table.rows>
-                    @foreach($packages as $package)
+                    @foreach($this->packages as $package)
                         <flux:table.row :key="'package-'.$package->package_id">
                             <flux:table.cell>
                                 <flux:checkbox wire:model="selectedPackages" value="{{ $package->package_id }}" />
@@ -79,14 +80,14 @@
                                         <span class="block truncate font-semibold text-zinc-800 hover:underline dark:text-white">{{ $package->name }}</span>
                                         <span class="block truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">{{ $package->package_id }}</span>
                                     </a>
-                                    <x-software.activity :commands="$packageCommands->get($package->package_id)" />
+                                    <x-software.activity :commands="$this->packageCommands->get($package->package_id)" />
                                 </div>
                             </flux:table.cell>
                             <flux:table.cell>
                                 <flux:text size="sm" class="tabular-nums">{{ $package->device_count }} {{ Str::plural('device', $package->device_count) }}</flux:text>
                             </flux:table.cell>
                             <flux:table.cell class="hidden md:table-cell">
-                                <flux:text size="sm" class="font-mono">{{ $versionSpread->get($package->package_id) }}</flux:text>
+                                <flux:text size="sm" class="font-mono">{{ $this->versionSpread->get($package->package_id) }}</flux:text>
                             </flux:table.cell>
                             <flux:table.cell>
                                 @if($package->outdated_count > 0)
@@ -103,6 +104,7 @@
             </flux:table>
         @endif
     </flux:card>
+    @endisland
 
     <x-bulk-bar selection="selectedPackages" noun="app">
         <flux:button size="sm" variant="ghost" icon="arrow-up-circle" wire:click="planPackageCommands('{{ App\Enums\PackageAction::Upgrade->value }}')" data-bulk-upgrade>

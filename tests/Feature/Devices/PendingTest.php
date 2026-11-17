@@ -96,7 +96,7 @@ it('warns when a pending device reuses an enrolled hostname', function (): void 
         ->test(Pending::class)
         ->assertSee('Duplicate hostnames detected')
         ->assertSee('Hostname already enrolled')
-        ->assertViewHas('enrolledHostnames', ['finance-pc' => true]);
+        ->assertSet('enrolledHostnames', ['finance-pc' => true]);
 });
 
 it('does not warn when hostnames are unique', function (): void {

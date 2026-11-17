@@ -9,6 +9,7 @@ use App\Actions\Dashboard\BuildFleetGrid;
 use App\Actions\Dashboard\BuildHeroMeters;
 use App\DTOs\Dashboard\AttentionRow;
 use App\DTOs\Dashboard\BusiestRow;
+use App\DTOs\Dashboard\FleetGroup;
 use App\DTOs\Dashboard\HeroFigures;
 use App\DTOs\Dashboard\Ring;
 use App\DTOs\Dashboard\RingSegment;
@@ -21,7 +22,11 @@ use App\Queries\AgentVersionQueries;
 use App\Queries\DashboardChartQueries;
 use App\Queries\DashboardQueries;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
@@ -29,10 +34,27 @@ use Livewire\Component;
 
 #[Layout('components.layouts.app')]
 #[Title('Dashboard')]
+#[Lazy]
 final class Dashboard extends Component
 {
     #[Locked]
     public int $renderedAt = 0;
+
+    private DashboardQueries $dashboard;
+
+    private DashboardChartQueries $charts;
+
+    private AgentVersionQueries $agentVersions;
+
+    private BuildFleetGrid $buildGrid;
+
+    public function boot(DashboardQueries $dashboard, DashboardChartQueries $charts, AgentVersionQueries $agentVersions, BuildFleetGrid $buildGrid): void
+    {
+        $this->buildGrid = $buildGrid;
+        $this->dashboard = $dashboard;
+        $this->charts = $charts;
+        $this->agentVersions = $agentVersions;
+    }
 
     public function mount(): void
     {
@@ -43,6 +65,7 @@ final class Dashboard extends Component
 
     /**
      * Heartbeats arrive every few seconds across the fleet, so they only redraw a dashboard that has gone stale.
+     * The fleet grid and charts are islands that redraw with it.
      */
     #[On('echo-private:devices,DeviceUpdated')]
     public function refreshFromHeartbeat(): void
@@ -64,19 +87,74 @@ final class Dashboard extends Component
         $this->renderedAt = now()->getTimestamp();
     }
 
-    public function render(DashboardQueries $dashboard, DashboardChartQueries $charts, AgentVersionQueries $agentVersions, BuildAttentionChips $buildChips, BuildFleetGrid $buildGrid, BuildHeroMeters $buildMeters): View
+    /** @return EloquentCollection<int, Device> */
+    #[Computed]
+    public function fleet(): EloquentCollection
     {
-        $fleet = $dashboard->fleet();
-        $latestAgentVersion = $agentVersions->latest();
-        [$needsAttention, $worthKnowing] = $dashboard->needsAttention($fleet, $latestAgentVersion)
+        return $this->dashboard->fleet();
+    }
+
+    #[Computed]
+    public function latestAgentVersion(): ?string
+    {
+        return $this->agentVersions->latest();
+    }
+
+    /**
+     * What needs acting on, then what is only worth knowing.
+     *
+     * @return Collection<int, Collection<int, DeviceAttention>>
+     */
+    #[Computed]
+    public function attention(): Collection
+    {
+        return $this->dashboard->needsAttention($this->fleet, $this->latestAgentVersion)
             ->partition(fn (DeviceAttention $attention): bool => $attention->severity()->isActionable());
-        $summary = $dashboard->summary();
-        $busiest = $dashboard->busiest($fleet, config('dashboard.busiest_devices'));
-        $sparklines = $charts->cpuSparklines($busiest->modelKeys());
-        $alertsPerBucket = $charts->alertsPerBucket();
-        $offlineDevices = $dashboard->offlineDevices($fleet);
-        $agentRing = $dashboard->agentRing($fleet, $latestAgentVersion);
-        $diskRing = $dashboard->diskRing($fleet);
+    }
+
+    /** @return Collection<int, FleetGroup> */
+    #[Computed]
+    public function fleetGrid(): Collection
+    {
+        return ($this->buildGrid)($this->fleet, $this->attention->first());
+    }
+
+    /** @return Collection<int, array{time: string, warning: int, critical: int, total: int}> */
+    #[Computed]
+    public function alertsPerBucket(): Collection
+    {
+        return $this->charts->alertsPerBucket();
+    }
+
+    #[Computed]
+    public function isQuietDay(): bool
+    {
+        return $this->alertsPerBucket->sum('total') === 0;
+    }
+
+    /** @return Collection<int, array{time: string, cpu: ?float, ram: ?float, threshold: int}> */
+    #[Computed]
+    public function fleetLoad(): Collection
+    {
+        return $this->charts->fleetLoad($this->fleet->modelKeys());
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.dashboard.placeholders.index');
+    }
+
+    public function render(BuildAttentionChips $buildChips, BuildHeroMeters $buildMeters): View
+    {
+        $fleet = $this->fleet;
+        $latestAgentVersion = $this->latestAgentVersion;
+        [$needsAttention, $worthKnowing] = $this->attention;
+        $summary = $this->dashboard->summary();
+        $busiest = $this->dashboard->busiest($fleet, config('dashboard.busiest_devices'));
+        $sparklines = $this->charts->cpuSparklines($busiest->modelKeys());
+        $offlineDevices = $this->dashboard->offlineDevices($fleet);
+        $agentRing = $this->dashboard->agentRing($fleet, $latestAgentVersion);
+        $diskRing = $this->dashboard->diskRing($fleet);
         $toRow = fn (DeviceAttention $attention): AttentionRow => new AttentionRow(
             attention: $attention,
             device: $attention->device,
@@ -96,7 +174,7 @@ final class Dashboard extends Component
                 openAlerts: $summary['openAlerts'],
                 fullDisks: $needsAttention->sum(fn (DeviceAttention $item): int => $item->disks->count()),
                 failedUnits: $needsAttention->sum(fn (DeviceAttention $item): int => $item->failedUnits->count()),
-                alertTrend: $charts->alertTrend(),
+                alertTrend: $this->charts->alertTrend(),
             ),
             'onlineRing' => new Ring(collect([
                 new RingSegment(label: 'Online', value: $summary['online'], ink: ChartInk::Online),
@@ -105,12 +183,8 @@ final class Dashboard extends Component
             ])),
             'offlineNames' => $offlineDevices->take(config('dashboard.offline_names')),
             'hiddenOfflineCount' => max(0, $offlineDevices->count() - config('dashboard.offline_names')),
-            'alertMiniBars' => $charts->alertMiniBars($alertsPerBucket),
+            'alertMiniBars' => $this->charts->alertMiniBars($this->alertsPerBucket),
             'heroMeters' => $buildMeters($fleet, $needsAttention),
-            'alertsPerBucket' => $alertsPerBucket,
-            'isQuietDay' => $alertsPerBucket->sum('total') === 0,
-            'fleetGrid' => $buildGrid($fleet, $needsAttention),
-            'fleetLoad' => $charts->fleetLoad($fleet->modelKeys()),
             'agentRing' => $agentRing,
             'agentsCurrent' => $agentRing->segments->first()->value,
             'agentsBehindLabel' => "{$agentRing->problemTotal()} behind",
@@ -122,7 +196,7 @@ final class Dashboard extends Component
             'hiddenAttentionCount' => max(0, $needsAttention->count() - config('dashboard.attention_rows')),
             'worthKnowing' => $worthKnowing->values(),
             'worthKnowingRows' => $worthKnowing->take(config('dashboard.worth_knowing_rows'))->map($toRow)->values(),
-            'fullestDisks' => $dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),
+            'fullestDisks' => $this->dashboard->fullestDisks($fleet, config('dashboard.disk_rows')),
             'diskLinkLabel' => "All {$fleet->count()} disks",
             'disksLabel' => 'Disks >'.config('devices.disk.warning_percent').'%',
             'disksRingCaption' => 'over '.config('devices.disk.warning_percent').'%',

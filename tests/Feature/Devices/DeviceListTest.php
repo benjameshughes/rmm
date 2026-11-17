@@ -39,7 +39,7 @@ it('sums the fleet up in the summary strip', function (): void {
     Alert::factory()->triggered()->create(['device_id' => $devices['offline']->id]);
 
     Livewire::actingAs($this->user)->test(Index::class)
-        ->assertViewHas('summary', [
+        ->assertSet('summary', [
             'total' => 4,
             'online' => 1,
             'poweringOff' => 1,
@@ -231,12 +231,12 @@ it('refreshes the open alert count when an alert changes', function (): void {
     $device = Device::factory()->active()->create();
 
     $list = Livewire::actingAs($this->user)->test(Index::class)
-        ->assertViewHas('summary', fn (array $summary): bool => $summary['openAlerts'] === 0);
+        ->assertSet('summary', fn (array $summary): bool => $summary['openAlerts'] === 0);
 
     $alert = Alert::factory()->triggered()->create(['device_id' => $device->id]);
 
     $list->dispatch('echo-private:devices,AlertChanged', ['alertId' => $alert->id, 'deviceId' => $device->id, 'status' => 'triggered'])
-        ->assertViewHas('summary', fn (array $summary): bool => $summary['openAlerts'] === 1);
+        ->assertSet('summary', fn (array $summary): bool => $summary['openAlerts'] === 1);
 });
 
 it('runs the same number of queries however many devices the page shows', function (): void {

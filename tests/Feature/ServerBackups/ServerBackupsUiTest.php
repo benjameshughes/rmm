@@ -139,8 +139,9 @@ it('narrows the fleet list to backups that need attention', function (): void {
     serverJobWithSnapshots($this->server, 'mariadb', attributes: ['last_exit_code' => 1]);
 
     Livewire::actingAs($this->user)->test(BackupsIndex::class)
-        ->assertSee('forgejo')
-        ->set('filter', 'attention')
+        ->assertSee('forgejo');
+
+    Livewire::withQueryParams(['show' => 'attention'])->actingAs($this->user)->test(BackupsIndex::class)
         ->assertSee('mariadb')
         ->assertDontSee('forgejo');
 });
@@ -151,8 +152,7 @@ it('shows calm empty and all clear states on the fleet list', function (): void 
 
     serverJobWithSnapshots($this->server, 'forgejo');
 
-    Livewire::actingAs($this->user)->test(BackupsIndex::class)
-        ->set('filter', 'attention')
+    Livewire::withQueryParams(['show' => 'attention'])->actingAs($this->user)->test(BackupsIndex::class)
         ->assertSee('All clear');
 });
 
@@ -162,10 +162,13 @@ it('refreshes the fleet list live and throttles routine device updates', functio
 
     serverJobWithSnapshots($this->server, 'cantina');
 
-    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $this->server->id])
-        ->assertDontSee('cantina')
-        ->dispatch('echo-private:devices,ServerBackupsReported', ['deviceId' => $this->server->id])
-        ->assertSee('cantina');
+    $component->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $this->server->id]);
+
+    expect($component->effects['islandFragments'] ?? [])->toBeEmpty();
+
+    $component->dispatch('echo-private:devices,ServerBackupsReported', ['deviceId' => $this->server->id]);
+
+    expect(islandHtml($component))->toContain('cantina');
 });
 
 it('keeps a flat query count as the fleet grows', function (): void {

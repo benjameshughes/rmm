@@ -19,6 +19,7 @@ use App\Models\ScheduledTask;
 use App\Models\Script;
 use App\Models\User;
 use App\Notifications\AlertTriggered;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
@@ -45,7 +46,7 @@ function queueScheduledCommand(ScheduledTask $task): DeviceCommand
 }
 
 /**
- * @return Illuminate\Database\Eloquent\Collection<int, Alert>
+ * @return Collection<int, Alert>
  */
 function scheduledScriptAlerts()
 {

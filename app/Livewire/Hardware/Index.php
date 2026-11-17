@@ -8,9 +8,11 @@ use App\DTOs\Inventory\HardwareRow;
 use App\Enums\HardwareSort;
 use App\Models\Device;
 use App\Queries\HardwareQueries;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -19,6 +21,7 @@ use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
 #[Title('Hardware')]
+#[Lazy]
 final class Index extends Component
 {
     use WithPagination;
@@ -31,6 +34,13 @@ final class Index extends Component
 
     #[Url(as: 'direction')]
     public string $sortDirection = 'asc';
+
+    private HardwareQueries $hardware;
+
+    public function boot(HardwareQueries $hardware): void
+    {
+        $this->hardware = $hardware;
+    }
 
     public function mount(): void
     {
@@ -76,13 +86,24 @@ final class Index extends Component
         $this->resetPage();
     }
 
-    public function render(HardwareQueries $hardware): View
+    /** @return LengthAwarePaginator<int, HardwareRow> */
+    #[Computed]
+    public function rows(): LengthAwarePaginator
+    {
+        return $this->hardware->fleet(search: $this->search, sort: $this->listSort, direction: $this->listSortDirection)
+            ->paginate(config('inventory.fleet_per_page'))
+            ->through(HardwareRow::for(...));
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.hardware.placeholders.index');
+    }
+
+    public function render(): View
     {
         return view('livewire.hardware.index', [
-            'rows' => $hardware->fleet(search: $this->search, sort: $this->listSort, direction: $this->listSortDirection)
-                ->paginate(config('inventory.fleet_per_page'))
-                ->through(HardwareRow::for(...)),
-            'devicesWithoutInventory' => $hardware->devicesWithoutInventoryCount(),
+            'devicesWithoutInventory' => $this->hardware->devicesWithoutInventoryCount(),
         ]);
     }
 }

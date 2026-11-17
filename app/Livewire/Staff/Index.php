@@ -28,11 +28,13 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     public string $username = '';
@@ -244,6 +246,11 @@ final class Index extends Component
     public function latestSyncs(): Collection
     {
         return $this->staffAccounts->latestSyncs(collect($this->accounts->modelKeys()));
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.staff.placeholders.index');
     }
 
     public function render(): View

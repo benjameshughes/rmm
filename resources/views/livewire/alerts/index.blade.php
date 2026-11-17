@@ -22,8 +22,9 @@
         </flux:select>
     </div>
 
+    @island(name: 'alerts', always: true)
     <flux:card>
-        <flux:table :paginate="$alerts">
+        <flux:table :paginate="$this->alerts">
             <flux:table.columns>
                 <flux:table.column>Device</flux:table.column>
                 <flux:table.column>Condition</flux:table.column>
@@ -34,7 +35,7 @@
                 <flux:table.column></flux:table.column>
             </flux:table.columns>
             <flux:table.rows>
-                @forelse ($alerts as $alert)
+                @forelse ($this->alerts as $alert)
                     <flux:table.row wire:key="alert-{{ $alert->id }}">
                         <flux:table.cell>
                             <flux:button as="a" size="sm" variant="ghost" :href="route('devices.show', $alert->device)" wire:navigate>
@@ -81,4 +82,5 @@
             </flux:table.rows>
         </flux:table>
     </flux:card>
+    @endisland
 </div>

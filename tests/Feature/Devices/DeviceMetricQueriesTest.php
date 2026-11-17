@@ -160,7 +160,7 @@ describe('metrics tab', function (): void {
         reportAt('11:51:00', $attributes);
 
         Livewire::actingAs($this->user)->test(Metrics::class, ['device' => $this->device])
-            ->assertViewHas('charts', fn (array $charts): bool => collect($charts[1]->series)->pluck('label')->all() === [$shown])
+            ->assertSet('charts', fn (array $charts): bool => collect($charts[1]->series)->pluck('label')->all() === [$shown])
             ->assertDontSee($hidden);
     })->with([
         'windows' => [['load1' => null, 'cpu_queue_length' => 0.25], 'CPU queue', 'Load average'],

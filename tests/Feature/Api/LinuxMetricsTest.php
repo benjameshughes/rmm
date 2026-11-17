@@ -12,6 +12,7 @@ use App\Models\Device;
 use App\Models\DeviceMetric;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 
 pest()->use(RefreshDatabase::class);
@@ -19,7 +20,7 @@ pest()->use(RefreshDatabase::class);
 /**
  * @param  array<int, array<string, mixed>>  $disks
  */
-function postLinuxDisks(array $disks): Illuminate\Testing\TestResponse
+function postLinuxDisks(array $disks): TestResponse
 {
     return test()->withHeaders(['X-Device-Key' => 'LINUX-KEY'])->postJson('/api/metrics', [
         'monitor_only' => true,
@@ -87,7 +88,7 @@ it('raises a disk alert in the bell when a Linux volume crosses the threshold', 
         ->and($alert->metric)->toBe(AlertMetric::Disk)
         ->and($alert->current_value)->toBe(96.5);
 
-    Livewire::withoutLazyLoading()->actingAs($user)->test(AlertBell::class)
+    Livewire::actingAs($user)->test(AlertBell::class)
         ->assertViewHas('unreadCount', 1)
         ->assertSee('pve-backup');
 });

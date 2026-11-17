@@ -52,7 +52,7 @@ function sortableFleet(): array
 
 function listedHostnames(Testable $list): array
 {
-    return $list->viewData('devices')->pluck('hostname')->all();
+    return $list->get('devices')->pluck('hostname')->all();
 }
 
 it('sorts by hostname A to Z by default, whatever was seen last', function (): void {
@@ -163,7 +163,7 @@ it('keeps the summary as one slim strip that still filters', function (): void {
         ->assertSeeHtml('data-summary-strip')
         ->call('filterByStatus', 'offline')
         ->assertSet('statusFilter', 'offline')
-        ->assertViewHas('devices', fn ($devices): bool => $devices->pluck('hostname')->all() === ['ALPHA']);
+        ->assertSet('devices', fn ($devices): bool => $devices->pluck('hostname')->all() === ['ALPHA']);
 });
 
 describe('live refresh', function (): void {
@@ -177,14 +177,15 @@ describe('live refresh', function (): void {
         DeviceMetric::factory()->create(['device_id' => $device->id, 'cpu' => 87.0]);
         $this->travelBack();
 
-        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false])
-            ->assertSee('11%')
-            ->assertDontSee('87%');
+        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false]);
+
+        expect($list->effects)->not->toHaveKey('islandFragments');
 
         $this->travel(config('devices.list.refresh_seconds') + 1)->seconds();
 
-        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false])
-            ->assertSee('87%');
+        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false]);
+
+        expect(islandHtml($list))->toContain('87%');
     });
 
     it('redraws at once for a state change, an older payload or an enrolment', function (string $event, array $payload): void {
@@ -195,9 +196,11 @@ describe('live refresh', function (): void {
         $device->update(['last_seen' => now()]);
         Device::factory()->create(['hostname' => 'NEWCOMER']);
 
-        $list->dispatch($event, ['deviceId' => $device->id, ...$payload])
-            ->assertSeeHtml('data-device-status="Online"')
-            ->assertSee('NEWCOMER');
+        $list->dispatch($event, ['deviceId' => $device->id, ...$payload]);
+
+        expect(islandHtml($list))
+            ->toContain('data-device-status="Online"')
+            ->toContain('NEWCOMER');
     })->with([
         'state change' => ['echo-private:devices,DeviceUpdated', ['status' => 'active', 'isStateChange' => true]],
         'payload without the flag' => ['echo-private:devices,DeviceUpdated', ['status' => 'active']],
@@ -215,8 +218,25 @@ describe('live refresh', function (): void {
 
         DeviceMetric::factory()->create(['device_id' => $device->id, 'cpu' => 87.0, 'recorded_at' => now()->addMinute()]);
 
-        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false])
-            ->assertDontSee('87%');
+        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false]);
+
+        expect($list->effects)->not->toHaveKey('islandFragments');
+    });
+
+    it('restarts the quiet period after a live redraw of the list alone', function (): void {
+        $device = Device::factory()->active()->create(['last_seen' => now(), 'disks' => null]);
+        DeviceMetric::factory()->create(['device_id' => $device->id, 'cpu' => 11.0]);
+
+        $list = Livewire::actingAs($this->user)->test(Index::class);
+
+        $this->travel(config('devices.list.refresh_seconds') + 1)->seconds();
+        $list->dispatch('echo-private:devices,DeviceEnrolled', ['deviceId' => $device->id]);
+
+        DeviceMetric::factory()->create(['device_id' => $device->id, 'cpu' => 87.0, 'recorded_at' => now()->addMinute()]);
+
+        $list->dispatch('echo-private:devices,DeviceUpdated', ['deviceId' => $device->id, 'status' => 'active', 'isStateChange' => false]);
+
+        expect($list->effects)->not->toHaveKey('islandFragments');
     });
 });
 
@@ -292,12 +312,12 @@ describe('what each device is doing', function (): void {
 
         $command->markAsSent();
         $command->markAsRunning();
-        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id])
-            ->assertSee('Running Flush DNS');
+        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id]);
+        expect(islandHtml($list))->toContain('Running Flush DNS');
 
         $command->markAsCompleted('done', 0);
-        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id])
-            ->assertDontSeeHtml('data-device-activity');
+        $list->dispatch('echo-private:devices,CommandUpdated', ['commandId' => $command->id, 'deviceId' => $device->id]);
+        expect(islandHtml($list))->not->toContain('data-device-activity');
 
         expect($idle->inFlight()->current())->toBeNull();
     });

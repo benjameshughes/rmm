@@ -131,7 +131,7 @@ it('shows security and alert notifications in the bell', function (): void {
     Alert::factory()->triggered()->create(['device_id' => $device->id]);
     $this->post(route('login.store'), ['email' => 'ben@example.com', 'password' => 'not-the-password']);
 
-    Livewire::withoutLazyLoading()->actingAs($this->colleague)->test(AlertBell::class)
+    Livewire::actingAs($this->colleague)->test(AlertBell::class)
         ->assertViewHas('unreadCount', 2)
         ->assertSee('ALERTING-BOX')
         ->assertSee('Failed sign-in');
@@ -154,7 +154,7 @@ it('still shows alert notifications stored before the bell fields existed', func
 
     $notification = $this->colleague->notifications()->where('type', AlertTriggered::class)->sole();
 
-    Livewire::withoutLazyLoading()->actingAs($this->colleague)->test(AlertBell::class)
+    Livewire::actingAs($this->colleague)->test(AlertBell::class)
         ->assertSee('LEGACY-BOX')
         ->assertSee('CPU &gt; 90%', false)
         ->assertSee('Critical')
@@ -166,7 +166,7 @@ it('opens a security notification on the audit page', function (): void {
     $this->post(route('login.store'), ['email' => 'ben@example.com', 'password' => 'not-the-password']);
     $notification = $this->colleague->notifications()->where('type', SecurityEvent::class)->sole();
 
-    Livewire::withoutLazyLoading()->actingAs($this->colleague)->test(AlertBell::class)
+    Livewire::actingAs($this->colleague)->test(AlertBell::class)
         ->call('open', $notification->id)
         ->assertRedirect(route('audit.index'));
 
@@ -174,7 +174,7 @@ it('opens a security notification on the audit page', function (): void {
 });
 
 it('toasts a security notification that arrives over Reverb', function (): void {
-    $component = Livewire::withoutLazyLoading()->actingAs($this->colleague)->test(AlertBell::class, ['showsToasts' => true]);
+    $component = Livewire::actingAs($this->colleague)->test(AlertBell::class, ['showsToasts' => true]);
 
     AuditLog::factory()->create(['action' => AuditAction::LoginFailed, 'properties' => ['label' => 'ben@example.com', 'email' => 'ben@example.com']]);
     $notification = $this->colleague->notifications()->where('type', SecurityEvent::class)->sole();

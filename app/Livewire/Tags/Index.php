@@ -8,9 +8,11 @@ use App\Actions\Device\DeleteTag;
 use App\Models\Tag;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     public string $name = '';
@@ -38,6 +40,11 @@ final class Index extends Component
     public function delete(Tag $tag, DeleteTag $deleteAction): void
     {
         $deleteAction($tag);
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.tags.placeholders.index');
     }
 
     public function render(): View

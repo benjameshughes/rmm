@@ -16,10 +16,12 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
+#[Lazy]
 final class Index extends Component
 {
     use EntersScriptParameterValues;
@@ -44,6 +46,11 @@ final class Index extends Component
     {
         abort_unless(! $script->is_system, 403);
         $script->delete();
+    }
+
+    public function placeholder(): View
+    {
+        return view('livewire.scripts.placeholders.index');
     }
 
     public function render(ScriptQueries $scriptQueries): View
