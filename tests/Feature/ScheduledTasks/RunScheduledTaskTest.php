@@ -161,3 +161,21 @@ it('still queues the script when the queued copy has different parameters', func
 
     expect(app(RunScheduledTask::class)($task))->toBe(1);
 });
+
+it('skips devices that have been offline longer than the configured days', function (): void {
+    $user = User::factory()->create();
+    $script = Script::factory()->create();
+    Device::factory()->active()->create();
+    $gone = Device::factory()->active()->create([
+        'last_seen' => now()->subDays(config('commands.schedule_skip_offline_days'))->subHour(),
+    ]);
+
+    $task = ScheduledTask::factory()->create([
+        'script_id' => $script->id,
+        'target_type' => ScheduleTargetType::All,
+        'created_by' => $user->id,
+    ]);
+
+    expect(app(RunScheduledTask::class)($task))->toBe(1)
+        ->and(DeviceCommand::where('device_id', $gone->id)->exists())->toBeFalse();
+});

@@ -142,3 +142,19 @@ it('takes the grace period from config', function (): void {
 
     expect($command->refresh()->status)->toBe(CommandStatus::TimedOut);
 });
+
+it('cancels pending commands nobody fetched within the abandoned window', function (): void {
+    $abandoned = DeviceCommand::factory()->create([
+        'status' => CommandStatus::Pending,
+        'queued_at' => now()->subDays(config('commands.abandoned_pending_days'))->subMinute(),
+    ]);
+    $recent = DeviceCommand::factory()->create([
+        'status' => CommandStatus::Pending,
+        'queued_at' => now()->subDays(3),
+    ]);
+
+    $this->artisan('commands:expire-stale')->assertSuccessful();
+
+    expect($abandoned->refresh()->status)->toBe(CommandStatus::Cancelled)
+        ->and($recent->refresh()->status)->toBe(CommandStatus::Pending);
+});

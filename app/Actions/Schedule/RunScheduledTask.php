@@ -46,6 +46,26 @@ final class RunScheduledTask
     }
 
     /**
+     * A device gone longer than the configured days is left out, so it does not pile up a queue it may never run.
+     *
+     * @return Collection<int, Device>
+     */
+    private function devicesSeenRecently(ScheduledTask $task): Collection
+    {
+        $cutoff = now()->subDays(config('commands.schedule_skip_offline_days'));
+
+        [$recent, $longOffline] = $task->resolveDevices()
+            ->partition(fn (Device $device): bool => $device->last_seen?->isAfter($cutoff) ?? false);
+
+        $longOffline->each(fn (Device $device) => Log::info('schedule.skipped_long_offline', [
+            'scheduled_task_id' => $task->id,
+            'device_id' => $device->id,
+        ]));
+
+        return $recent;
+    }
+
+    /**
      * Offline devices never collect their commands, so without this every run of the schedule
      * stacks another copy of the same script on them. A device that still has this script with
      * the same parameters pending, sent or running is skipped until that run finishes.
@@ -54,7 +74,7 @@ final class RunScheduledTask
      */
     private function devicesWithoutQueuedRun(ScheduledTask $task): Collection
     {
-        $devices = $task->resolveDevices();
+        $devices = $this->devicesSeenRecently($task);
         $parameters = $task->parameters ?: null;
 
         $alreadyQueued = DeviceCommand::query()

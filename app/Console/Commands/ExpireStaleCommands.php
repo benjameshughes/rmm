@@ -13,7 +13,7 @@ final class ExpireStaleCommands extends Command
 {
     protected $signature = 'commands:expire-stale';
 
-    protected $description = 'Requeue sent commands the agent never started and time out commands that outlived their timeout';
+    protected $description = 'Requeue sent commands the agent never started, time out commands that outlived their timeout and cancel pending ones nobody fetched';
 
     public function handle(): int
     {
@@ -37,8 +37,15 @@ final class ExpireStaleCommands extends Command
             ->filter(fn (DeviceCommand $command): bool => $this->hasOutlivedTimeout($command))
             ->each(fn (DeviceCommand $command) => $command->markAsTimedOut());
 
+        $abandoned = DeviceCommand::query()
+            ->pending()
+            ->where('queued_at', '<=', now()->subDays(config('commands.abandoned_pending_days')))
+            ->get()
+            ->filter(fn (DeviceCommand $command): bool => $command->cancel());
+
         $this->info("Requeued {$requeued->count()} unstarted commands.");
         $this->info("Timed out {$expired->count()} stale commands.");
+        $this->info("Cancelled {$abandoned->count()} abandoned pending commands.");
 
         return self::SUCCESS;
     }

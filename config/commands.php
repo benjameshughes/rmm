@@ -45,6 +45,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Abandoned Pending Commands
+    |--------------------------------------------------------------------------
+    |
+    | A pending command the agent still has not fetched after this many days
+    | is cancelled, so a device that comes back from a long absence does not
+    | run a backlog of stale work.
+    |
+    */
+
+    'abandoned_pending_days' => 14,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Long Offline Devices
+    |--------------------------------------------------------------------------
+    |
+    | Scheduled tasks skip a device that has not checked in for this many
+    | days, so a PC in a cupboard does not collect a queue it will never run.
+    |
+    */
+
+    'schedule_skip_offline_days' => 7,
+
+    /*
+    |--------------------------------------------------------------------------
     | Ad-hoc Commands
     |--------------------------------------------------------------------------
     |
