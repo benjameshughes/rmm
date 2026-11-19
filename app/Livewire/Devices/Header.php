@@ -8,6 +8,7 @@ use App\Actions\Device\RunAdHocCommand;
 use App\Actions\Device\WakeDevice;
 use App\Actions\Script\ExecuteScriptOnDevice;
 use App\Actions\Script\ValidateScriptParameterValues;
+use App\Enums\CommandRunAs;
 use App\Enums\ScriptPlatform;
 use App\Enums\ScriptType;
 use App\Exceptions\ScriptCannotBeRunDirectly;
@@ -48,6 +49,8 @@ final class Header extends Component
     public string $commandType = '';
 
     public int $commandTimeoutSeconds = 0;
+
+    public string $commandRunAs = '';
 
     public function mount(Device $device): void
     {
@@ -166,6 +169,7 @@ final class Header extends Component
             'commandText' => ['required', 'string', "max:{$limits['max_length']}"],
             'commandType' => ['required', Rule::enum(ScriptType::class)->only($this->commandTypes)],
             'commandTimeoutSeconds' => ['required', 'integer', "min:{$limits['timeout_seconds']['min']}", "max:{$limits['timeout_seconds']['max']}"],
+            'commandRunAs' => ['required', Rule::enum(CommandRunAs::class)->only($this->runAsOptions)],
         ], [
             'commandText.required' => 'Type the command to run.',
             'commandText.max' => 'Commands may not be longer than :max characters.',
@@ -175,9 +179,18 @@ final class Header extends Component
             'commandTimeoutSeconds.integer' => 'Set a timeout in whole seconds.',
             'commandTimeoutSeconds.min' => 'The timeout must be at least :min seconds.',
             'commandTimeoutSeconds.max' => 'The timeout may not be more than :max seconds.',
+            'commandRunAs.required' => 'Choose who to run the command as.',
+            'commandRunAs.enum' => 'Choose who to run the command as.',
         ]);
 
-        $action($this->device, auth()->user(), $this->commandText, ScriptType::from($this->commandType), $this->commandTimeoutSeconds);
+        $action(
+            $this->device,
+            auth()->user(),
+            $this->commandText,
+            ScriptType::from($this->commandType),
+            $this->commandTimeoutSeconds,
+            runAs: CommandRunAs::from($this->commandRunAs),
+        );
 
         $this->showCommandModal = false;
         $this->resetCommandForm();
@@ -195,6 +208,27 @@ final class Header extends Component
     public function commandTypes(): array
     {
         return $this->device->platform()->adHocScriptTypes();
+    }
+
+    /**
+     * Who a typed command can run as. Only Windows agents can start a command
+     * as the logged-in user.
+     *
+     * @return array<int, CommandRunAs>
+     */
+    #[Computed]
+    public function runAsOptions(): array
+    {
+        return $this->device->platform() === ScriptPlatform::Windows ? CommandRunAs::cases() : [CommandRunAs::System];
+    }
+
+    /**
+     * Whether there is any choice to offer beyond System.
+     */
+    #[Computed]
+    public function offersRunAs(): bool
+    {
+        return count($this->runAsOptions) > 1;
     }
 
     /**
@@ -234,10 +268,11 @@ final class Header extends Component
 
     private function resetCommandForm(): void
     {
-        $this->resetValidation(['commandText', 'commandType', 'commandTimeoutSeconds']);
+        $this->resetValidation(['commandText', 'commandType', 'commandTimeoutSeconds', 'commandRunAs']);
         $this->commandText = '';
         $this->commandType = $this->commandTypes[0]->value;
         $this->commandTimeoutSeconds = config('commands.ad_hoc.timeout_seconds.default');
+        $this->commandRunAs = CommandRunAs::System->value;
     }
 
     public function render(AgentVersionQueries $agentVersions, ScriptQueries $scripts): View

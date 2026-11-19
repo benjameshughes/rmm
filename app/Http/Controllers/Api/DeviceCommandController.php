@@ -54,6 +54,7 @@ final class DeviceCommandController
                 'script_content' => $command->script_content,
                 'script_type' => $command->script_type,
                 'timeout_seconds' => $command->timeout_seconds,
+                'run_as' => $command->runsAs()->value,
                 'parameters' => (object) [...($command->parameters ?? []), ...$resolveSecrets($command)],
             ],
         ]);

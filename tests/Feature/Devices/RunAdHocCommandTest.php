@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\AuditAction;
+use App\Enums\CommandRunAs;
 use App\Enums\CommandStatus;
 use App\Enums\ScriptPlatform;
 use App\Livewire\Commands\Detail;
@@ -160,6 +161,7 @@ it('hands the command to the agent like any other, with empty parameters', funct
                 'script_content' => 'df -h',
                 'script_type' => 'bash',
                 'timeout_seconds' => 45,
+                'run_as' => 'system',
                 'parameters' => [],
             ],
         ]);
@@ -259,4 +261,133 @@ it('lists an ad-hoc command on the commands tab and opens its detail', function 
         ->assertSee('Ad-hoc command: Get-Service Spooler')
         ->assertSee('Spooler restarted')
         ->assertSee('Restart-Service Spooler');
+});
+
+it('runs as System unless told otherwise', function (): void {
+    $device = Device::factory()->active()->windows()->create();
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->assertSet('commandRunAs', 'system')
+        ->set('commandText', 'whoami')
+        ->call('runAdHocCommand')
+        ->assertHasNoErrors()
+        ->assertSet('commandRunAs', 'system');
+
+    expect(DeviceCommand::query()->sole()->runsAs())->toBe(CommandRunAs::System);
+});
+
+it('queues a command as the logged-in user and hands run_as to the agent', function (CommandRunAs $runAs): void {
+    config()->set('agent.run_as_min_version', '0.12.0');
+    $device = Device::factory()->active()->windows()->withApiKey('RUN-AS-KEY')->create(['agent_version' => '0.12.0']);
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('commandText', 'scoop update *')
+        ->set('commandRunAs', $runAs->value)
+        ->call('runAdHocCommand')
+        ->assertHasNoErrors()
+        ->assertSet('commandRunAs', 'system');
+
+    $command = DeviceCommand::query()->sole();
+    expect($command->run_as)->toBe($runAs);
+
+    $this->withHeaders(['X-Agent-Key' => 'RUN-AS-KEY'])
+        ->getJson('/api/commands/pending')
+        ->assertSuccessful()
+        ->assertJsonPath('command.run_as', $runAs->value);
+})->with([
+    'user' => [CommandRunAs::User],
+    'elevated' => [CommandRunAs::UserElevated],
+]);
+
+it('refuses to queue a logged-in user command on an agent too old to honour it', function (?string $agentVersion, string $message): void {
+    config()->set('agent.run_as_min_version', '0.12.0');
+    $device = Device::factory()->active()->windows()->create(['hostname' => 'TILL-01', 'agent_version' => $agentVersion]);
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('commandText', 'scoop update *')
+        ->set('commandRunAs', 'user_elevated')
+        ->call('runAdHocCommand')
+        ->assertHasErrors(['commandRunAs'])
+        ->assertSee($message)
+        ->assertNotDispatched('command-queued');
+
+    expect(DeviceCommand::query()->count())->toBe(0);
+})->with([
+    'older agent' => ['0.11.1', 'TILL-01 runs agent 0.11.1. Running as the logged-in user needs agent 0.12.0 or newer, so update the agent first.'],
+    'unknown version' => [null, 'TILL-01 runs an unknown agent version. Running as the logged-in user needs agent 0.12.0 or newer'],
+]);
+
+it('still runs System commands on old agents', function (): void {
+    $device = Device::factory()->active()->windows()->create(['agent_version' => '0.11.1']);
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('commandText', 'whoami')
+        ->call('runAdHocCommand')
+        ->assertHasNoErrors();
+
+    expect(DeviceCommand::query()->sole()->runsAs())->toBe(CommandRunAs::System);
+});
+
+it('only offers System on Linux and rejects anything else', function (): void {
+    $device = Device::factory()->active()->linux()->create(['agent_version' => '0.12.0']);
+
+    $component = Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('showCommandModal', true)
+        ->assertDontSee('Logged-in user');
+
+    expect($component->instance()->runAsOptions)->toBe([CommandRunAs::System]);
+
+    $component->set('commandText', 'uptime')
+        ->set('commandRunAs', 'user')
+        ->call('runAdHocCommand')
+        ->assertHasErrors(['commandRunAs' => 'Choose who to run the command as.']);
+
+    expect(DeviceCommand::query()->count())->toBe(0);
+});
+
+it('offers every run-as choice on Windows', function (): void {
+    $device = Device::factory()->active()->windows()->create();
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('showCommandModal', true)
+        ->assertSee('Run as')
+        ->assertSee('Logged-in user (elevated)');
+});
+
+it('reads a command queued before run-as existed as System', function (): void {
+    $command = DeviceCommand::factory()->create(['run_as' => null]);
+
+    expect($command->runsAs())->toBe(CommandRunAs::System)
+        ->and($command->runsAsUser())->toBeFalse();
+});
+
+it('badges logged-in user commands in the history and the detail, but not System ones', function (): void {
+    $device = Device::factory()->active()->windows()->create();
+    DeviceCommand::factory()->completed()->create(['device_id' => $device->id, 'script_content' => 'whoami', 'run_as' => CommandRunAs::System]);
+
+    Livewire::actingAs($this->user)->test(Commands::class, ['device' => $device])
+        ->assertSee('Ad-hoc command: whoami')
+        ->assertDontSeeHtml('data-run-as-badge');
+
+    $elevated = DeviceCommand::factory()->completed()->create(['device_id' => $device->id, 'script_content' => 'scoop update *', 'run_as' => CommandRunAs::UserElevated]);
+
+    Livewire::actingAs($this->user)->test(Commands::class, ['device' => $device])
+        ->assertSeeHtml('data-run-as-badge')
+        ->assertSeeInOrder(['Ad-hoc command: scoop update *', 'Logged-in user (elevated)']);
+
+    Livewire::actingAs($this->user)->test(Detail::class)
+        ->dispatch('show-command', commandId: $elevated->id)
+        ->assertSee('Logged-in user (elevated)');
+});
+
+it('audits who an ad-hoc command runs as', function (): void {
+    config()->set('agent.run_as_min_version', '0.12.0');
+    $device = Device::factory()->active()->windows()->create(['agent_version' => '0.12.0']);
+
+    Livewire::actingAs($this->user)->test(Header::class, ['device' => $device])
+        ->set('commandText', 'scoop update *')
+        ->set('commandRunAs', 'user')
+        ->call('runAdHocCommand');
+
+    expect(AuditLog::query()->where('action', AuditAction::CommandQueued)->sole()->properties['run_as'])->toBe('user');
 });

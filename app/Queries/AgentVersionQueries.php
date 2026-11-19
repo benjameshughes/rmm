@@ -27,6 +27,16 @@ final class AgentVersionQueries
     }
 
     /**
+     * Agents older than the configured version ignore run-as and would run a
+     * logged-in user command as SYSTEM, so they only get System commands.
+     */
+    public function supportsRunAs(Device $device): bool
+    {
+        return $device->agent_version !== null
+            && version_compare($device->agent_version, config('agent.run_as_min_version'), '>=');
+    }
+
+    /**
      * Versions are compared in PHP with version_compare because SQL sorts them
      * as strings (0.10.0 < 0.9.0). Fine for a fleet of a few dozen devices.
      *

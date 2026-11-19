@@ -6,6 +6,7 @@
                     <flux:heading size="lg">{{ $command->displayName() }}</flux:heading>
                     <flux:badge size="sm" :color="$command->status->color()">{{ $command->status->label() }}</flux:badge>
                     <flux:badge size="sm" color="zinc">{{ $command->script_type }}</flux:badge>
+                    <x-device.commands.run-as :run-as="$command->runsAs()" />
                     @can('cancel', $command)
                         <flux:button size="sm" variant="ghost" icon="x-circle" x-on:click="$dispatch('confirm-action', { heading: 'Cancel command', message: 'Cancel this command before it runs?', confirm: 'Cancel command', danger: true, action: () => $wire.cancelCommand({{ $command->id }}) })">Cancel</flux:button>
                     @endcan

@@ -17,6 +17,7 @@
 #![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
 use crate::command_progress::{ProgressLines, ProgressSender};
+use crate::run_as::RunAs;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -101,7 +102,7 @@ pub struct ExecutionResult {
 }
 
 impl ExecutionResult {
-    fn failed(message: String, started: Instant) -> Self {
+    pub fn failed(message: String, started: Instant) -> Self {
         Self {
             exit_code: -1,
             output: String::new(),
@@ -165,18 +166,19 @@ pub async fn run_script(
     script_type: &ScriptType,
     content: &str,
     parameters: &HashMap<String, String>,
+    run_as: RunAs,
     command_id: u64,
     limits: &RunLimits,
     progress: ProgressSender,
 ) -> ExecutionResult {
     #[cfg(windows)]
     {
-        run_script_unchecked(script_type, content, parameters, command_id, limits, progress).await
+        run_script_unchecked(script_type, content, parameters, run_as, command_id, limits, progress).await
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (script_type, content, parameters, command_id, limits, progress);
+        let _ = (script_type, content, parameters, run_as, command_id, limits, progress);
         ExecutionResult::failed(MONITOR_ONLY_REFUSAL.to_string(), Instant::now())
     }
 }
@@ -185,6 +187,7 @@ async fn run_script_unchecked(
     script_type: &ScriptType,
     content: &str,
     parameters: &HashMap<String, String>,
+    run_as: RunAs,
     command_id: u64,
     limits: &RunLimits,
     progress: ProgressSender,
@@ -202,6 +205,11 @@ async fn run_script_unchecked(
         );
     }
 
+    let user_token = match console_user_token(run_as) {
+        Ok(token) => token,
+        Err(message) => return ExecutionResult::failed(message, started),
+    };
+
     let script_path = match write_script(script_type, content, &limits.work_dir, command_id) {
         Ok(path) => path,
         Err(e) => {
@@ -212,9 +220,124 @@ async fn run_script_unchecked(
         }
     };
 
-    let result = execute(script_type, &script_path, parameters, limits, progress, started).await;
+    let result = match user_token {
+        None => execute(script_type, &script_path, parameters, limits, progress, started).await,
+        Some(token) => {
+            execute_as_user(token, script_type, &script_path, parameters, limits, progress, started)
+                .await
+        }
+    };
     let _ = std::fs::remove_file(&script_path);
     result
+}
+
+/// The console user's token for a User or Elevated run, `None` for SYSTEM.
+/// Fails before anything touches disk when nobody suitable is logged in.
+#[cfg(windows)]
+fn console_user_token(run_as: RunAs) -> Result<Option<UserToken>, String> {
+    let hostname = crate::run_as::hostname();
+    crate::run_as::token_for(&crate::user_process::WtsSessions, run_as, &hostname)
+}
+
+#[cfg(not(windows))]
+fn console_user_token(run_as: RunAs) -> Result<Option<UserToken>, String> {
+    match run_as {
+        RunAs::System => Ok(None),
+        _ => Err("Running as the logged-in user is only supported on Windows".to_string()),
+    }
+}
+
+#[cfg(windows)]
+type UserToken = std::os::windows::io::OwnedHandle;
+
+#[cfg(not(windows))]
+type UserToken = std::convert::Infallible;
+
+/// Runs the script as the console user with the same output capture,
+/// progress lines, timeout and tree kill as a SYSTEM run.
+#[cfg(windows)]
+async fn execute_as_user(
+    token: UserToken,
+    script_type: &ScriptType,
+    script_path: &Path,
+    parameters: &HashMap<String, String>,
+    limits: &RunLimits,
+    progress: ProgressSender,
+    started: Instant,
+) -> ExecutionResult {
+    use crate::user_process::{self, Waited};
+    use std::sync::Arc;
+
+    if let Err(message) = user_process::grant_read(script_path, &token) {
+        return ExecutionResult::failed(message, started);
+    }
+
+    let (program, arguments) = interpreter_argv(script_type, script_path);
+    let command_line = user_process::command_line(&program.to_string_lossy(), &arguments);
+
+    let child = match user_process::spawn(&token, &command_line, &parameter_env_vars(parameters)) {
+        Ok(child) => child,
+        Err(message) => return ExecutionResult::failed(message, started),
+    };
+    drop(token);
+
+    let byte_limit = limits.output_limit.saturating_mul(4);
+    let stdout_buffer = Capture::scanning_progress(byte_limit, progress);
+    let stderr_buffer = Capture::plain(byte_limit);
+    let stdout_pipe = tokio::fs::File::from_std(std::fs::File::from(child.stdout));
+    let stderr_pipe = tokio::fs::File::from_std(std::fs::File::from(child.stderr));
+    let stdout_task = tokio::spawn(read_capped(Some(stdout_pipe), stdout_buffer.clone()));
+    let stderr_task = tokio::spawn(read_capped(Some(stderr_pipe), stderr_buffer.clone()));
+
+    let process = Arc::new(child.process);
+    let waiting = Arc::clone(&process);
+    let timeout = limits.timeout;
+    let waited = tokio::task::spawn_blocking(move || user_process::wait(&waiting, timeout))
+        .await
+        .unwrap_or_else(|e| Waited::Failed(format!("Lost track of the command's process: {}", e)));
+
+    let (exit_code, timed_out) = match waited {
+        Waited::Exited(code) => (code, false),
+        Waited::TimedOut => {
+            kill_process_tree(Some(child.pid));
+            user_process::terminate(&process);
+            (-1, true)
+        }
+        Waited::Failed(message) => {
+            kill_process_tree(Some(child.pid));
+            user_process::terminate(&process);
+            return ExecutionResult::failed(message, started);
+        }
+    };
+
+    let stdout = drain(stdout_task, &stdout_buffer, limits.drain_grace).await;
+    let stderr = drain(stderr_task, &stderr_buffer, limits.drain_grace).await;
+
+    ExecutionResult {
+        exit_code,
+        output: combine_output(&stdout, &stderr, limits.output_limit),
+        error_message: timed_out.then(|| {
+            format!(
+                "Command timed out after {} seconds",
+                limits.timeout.as_secs()
+            )
+        }),
+        timed_out,
+        duration: started.elapsed(),
+    }
+}
+
+#[cfg(not(windows))]
+async fn execute_as_user(
+    token: UserToken,
+    _script_type: &ScriptType,
+    _script_path: &Path,
+    _parameters: &HashMap<String, String>,
+    _limits: &RunLimits,
+    _progress: ProgressSender,
+    _started: Instant,
+) -> ExecutionResult {
+    match token {}
 }
 
 fn write_script(
@@ -409,35 +532,39 @@ async fn drain(mut task: tokio::task::JoinHandle<()>, captured: &CapturedOutput,
     lock(captured).take()
 }
 
+/// The interpreter and its arguments, shared by SYSTEM and logged-in-user runs.
 #[cfg(windows)]
-fn interpreter_command(script_type: &ScriptType, script_path: &Path) -> Command {
+fn interpreter_argv(script_type: &ScriptType, script_path: &Path) -> (PathBuf, Vec<String>) {
     use crate::data_dir_security::system32_tool;
 
     let system_root = std::env::var("SystemRoot").ok();
+    let script_path = script_path.to_string_lossy().into_owned();
 
     match script_type {
-        ScriptType::Cmd => {
-            let mut command = Command::new(system32_tool(system_root.as_deref(), "cmd.exe"));
-            command.arg("/d").arg("/c").arg(script_path);
-            command
-        }
-        _ => {
-            let mut command = Command::new(system32_tool(
+        ScriptType::Cmd => (
+            system32_tool(system_root.as_deref(), "cmd.exe"),
+            vec!["/d".to_string(), "/c".to_string(), script_path],
+        ),
+        _ => (
+            system32_tool(
                 system_root.as_deref(),
                 r"WindowsPowerShell\v1.0\powershell.exe",
-            ));
-            command
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                ])
-                .arg(script_path);
-            command
-        }
+            ),
+            ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]
+                .into_iter()
+                .map(str::to_string)
+                .chain(Some(script_path))
+                .collect(),
+        ),
     }
+}
+
+#[cfg(windows)]
+fn interpreter_command(script_type: &ScriptType, script_path: &Path) -> Command {
+    let (program, arguments) = interpreter_argv(script_type, script_path);
+    let mut command = Command::new(program);
+    command.args(arguments);
+    command
 }
 
 #[cfg(not(windows))]
@@ -561,6 +688,7 @@ mod tests {
             &foreign,
             "echo hi",
             &HashMap::new(),
+            RunAs::System,
             1,
             &limits(dir.path(), 5, 100),
             crate::command_progress::channel().0,
@@ -580,6 +708,7 @@ mod tests {
             &ScriptType::Unknown("cobol".to_string()),
             "DISPLAY 'HI'",
             &HashMap::new(),
+            RunAs::System,
             1,
             &limits(dir.path(), 5, 100),
             crate::command_progress::channel().0,
@@ -599,6 +728,7 @@ mod tests {
             &ScriptType::Sh,
             "echo hello\necho problem >&2\nexit 3\n",
             &HashMap::new(),
+            RunAs::System,
             7,
             &limits(dir.path(), 10, 1000),
             crate::command_progress::channel().0,
@@ -637,6 +767,7 @@ mod tests {
                 &script_type,
                 "touch should-not-exist",
                 &HashMap::new(),
+                RunAs::System,
                 1,
                 &limits(dir.path(), 5, 100),
                 crate::command_progress::channel().0,
@@ -678,6 +809,7 @@ mod tests {
             &ScriptType::Bash,
             "printf '%s' \"$RMM_PackageId\"\n",
             &parameters,
+            RunAs::System,
             11,
             &limits(dir.path(), 10, 1000),
             crate::command_progress::channel().0,
@@ -698,6 +830,7 @@ mod tests {
             &ScriptType::Powershell,
             "Write-Output $env:RMM_PackageId",
             &parameters,
+            RunAs::System,
             12,
             &limits(dir.path(), 60, 1000),
             crate::command_progress::channel().0,
@@ -760,6 +893,7 @@ mod tests {
             &ScriptType::Sh,
             "echo start\necho 'PROGRESS: {\"percent\":50}'\necho 'PROGRESS: {\"percent\":100}'\necho end\necho 'PROGRESS: {\"x\":1}' >&2\n",
             &HashMap::new(),
+            RunAs::System,
             13,
             &limits(dir.path(), 10, 1000),
             sender,
@@ -784,6 +918,7 @@ mod tests {
             &ScriptType::Sh,
             "echo before\nsleep 30 &\nsleep 30\n",
             &HashMap::new(),
+            RunAs::System,
             8,
             &limits(dir.path(), 1, 1000),
             crate::command_progress::channel().0,
@@ -809,6 +944,7 @@ mod tests {
             &ScriptType::Powershell,
             "Write-Output 'hello from powershell'\nexit 4",
             &HashMap::new(),
+            RunAs::System,
             9,
             &limits(dir.path(), 60, 1000),
             crate::command_progress::channel().0,
@@ -829,6 +965,7 @@ mod tests {
             &ScriptType::Cmd,
             "@echo off\r\necho hello from cmd\r\nexit /b 0\r\n",
             &HashMap::new(),
+            RunAs::System,
             10,
             &limits(dir.path(), 60, 1000),
             crate::command_progress::channel().0,

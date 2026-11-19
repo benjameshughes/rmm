@@ -25,12 +25,14 @@ mod power_state;
 #[cfg(windows)]
 mod printer_spooler;
 mod printers;
+mod run_as;
 mod runtime_config;
 mod startup_grace;
 mod storage;
 mod sysinfo;
 mod release_source;
 mod updater;
+mod user_process;
 
 use agent::Agent;
 use anyhow::{Context, Result};

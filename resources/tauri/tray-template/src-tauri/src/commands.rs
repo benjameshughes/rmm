@@ -16,6 +16,7 @@ use crate::config::{Config, PROGRESS_POST_INTERVAL};
 use crate::keep_awake::KeepAwake;
 use crate::metrics::{KeyHealth, RequestOutcome};
 use crate::power::PowerController;
+use crate::run_as::RunAs;
 use crate::startup_grace::{Milestone, StartupProgress};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -40,6 +41,9 @@ struct PendingCommand {
     /// Servers older than script parameters leave this out entirely.
     #[serde(default)]
     parameters: HashMap<String, String>,
+    /// Who to run it as. Servers older than run-as leave this out (SYSTEM).
+    #[serde(default)]
+    run_as: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -266,6 +270,15 @@ impl CommandClient {
             return false;
         }
 
+        let run_as = match RunAs::parse(command.run_as.as_deref()) {
+            Ok(run_as) => run_as,
+            Err(message) => {
+                let result = ExecutionResult::failed(message, std::time::Instant::now());
+                self.report_result(api_key, command.id, &result, key_health).await;
+                return true;
+            }
+        };
+
         let (progress, updates) = command_progress::channel();
         let sink = ServerProgress {
             client: self,
@@ -279,6 +292,7 @@ impl CommandClient {
                 &script_type,
                 &command.script_content,
                 &command.parameters,
+                run_as,
                 command.id,
                 &self.run_limits(command.timeout_seconds),
                 progress,
@@ -785,6 +799,28 @@ mod tests {
         .unwrap();
 
         assert!(body.command.unwrap().parameters.is_empty());
+    }
+
+    #[test]
+    fn reads_run_as_and_treats_a_missing_one_as_system() {
+        let parse = |json: &str| {
+            let body: PendingResponse = serde_json::from_str(json).unwrap();
+            RunAs::parse(body.command.unwrap().run_as.as_deref())
+        };
+
+        assert_eq!(
+            parse(r#"{"command":{"id":45,"script_content":"scoop update","script_type":"powershell","timeout_seconds":60,"run_as":"user"}}"#),
+            Ok(RunAs::User)
+        );
+        assert_eq!(
+            parse(r#"{"command":{"id":46,"script_content":"x","script_type":"cmd","timeout_seconds":60,"run_as":"user_elevated"}}"#),
+            Ok(RunAs::UserElevated)
+        );
+        assert_eq!(
+            parse(r#"{"command":{"id":47,"script_content":"x","script_type":"cmd","timeout_seconds":60}}"#),
+            Ok(RunAs::System)
+        );
+        assert!(parse(r#"{"command":{"id":48,"script_content":"x","script_type":"cmd","timeout_seconds":60,"run_as":"root"}}"#).is_err());
     }
 
     #[test]

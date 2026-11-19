@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\DTOs\CommandProgress;
+use App\Enums\CommandRunAs;
 use App\Enums\CommandStatus;
 use App\Enums\PackageAction;
 use App\Events\CommandUpdated;
@@ -31,6 +32,7 @@ final class DeviceCommand extends Model
         'scheduled_task_id',
         'script_content',
         'script_type',
+        'run_as',
         'status',
         'output',
         'exit_code',
@@ -62,6 +64,7 @@ final class DeviceCommand extends Model
             'timeout_seconds' => 'integer',
             'exit_code' => 'integer',
             'status' => CommandStatus::class,
+            'run_as' => CommandRunAs::class,
             'parameters' => 'array',
             'progress' => 'array',
             'progress_at' => 'datetime',
@@ -109,6 +112,20 @@ final class DeviceCommand extends Model
         $secret->delete();
 
         return $secret->expires_at->isFuture() ? (string) $secret->value : '';
+    }
+
+    /**
+     * Who the agent runs it as. Commands queued before run-as existed, and every
+     * script, run as System.
+     */
+    public function runsAs(): CommandRunAs
+    {
+        return $this->run_as ?? CommandRunAs::System;
+    }
+
+    public function runsAsUser(): bool
+    {
+        return ! $this->runsAs()->isSystem();
     }
 
     public function isAdHoc(): bool

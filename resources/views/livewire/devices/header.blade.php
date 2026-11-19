@@ -122,6 +122,14 @@
                 <flux:input wire:model="commandTimeoutSeconds" type="number" label="Timeout (seconds)" :min="config('commands.ad_hoc.timeout_seconds.min')" :max="config('commands.ad_hoc.timeout_seconds.max')" />
             </div>
 
+            @if($this->offersRunAs)
+                <flux:select wire:model="commandRunAs" label="Run as" description="The logged-in user runs it at the console with their own profile and PATH, for Scoop or user-scope winget. Elevated needs that user to be an administrator.">
+                    @foreach($this->runAsOptions as $runAs)
+                        <flux:select.option value="{{ $runAs->value }}">{{ $runAs->label() }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            @endif
+
             <div class="flex justify-end gap-2">
                 <flux:button wire:click="$set('showCommandModal', false)" variant="ghost">Cancel</flux:button>
                 <flux:button type="submit" variant="primary" icon="play">Run</flux:button>

@@ -15,6 +15,9 @@
                             <div class="flex items-center gap-2">
                                 <flux:text class="font-medium text-zinc-800 dark:text-white">{{ $command->displayName() }}</flux:text>
                                 <flux:text size="sm" class="font-mono">{{ $command->script_type }}</flux:text>
+                                @if($command->runsAsUser())
+                                    <x-device.commands.run-as :run-as="$command->run_as" data-run-as-badge />
+                                @endif
                             </div>
                         </flux:table.cell>
                         <flux:table.cell>

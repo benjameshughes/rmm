@@ -158,12 +158,12 @@ final class RecordModelChange
      * carries the script's name; an ad-hoc command has no script, so its full text
      * is the only record of what ran.
      *
-     * @return array{script_name?: string, command?: string}
+     * @return array{script_name?: string, command?: string, run_as?: string}
      */
     private function commandDetails(DeviceCommand $command): array
     {
         return $command->script_id === null
-            ? ['command' => $command->script_content]
+            ? ['command' => $command->script_content, 'run_as' => $command->runsAs()->value]
             : ['script_name' => $command->script?->name];
     }
 
