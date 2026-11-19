@@ -1,6 +1,7 @@
 //! Auto-updater module for RMM Agent
 //!
-//! Checks GitHub releases for a newer version, downloads `rmm.exe` together
+//! Checks the latest release (GitHub or Forgejo, wherever the server points it)
+//! for a newer version, downloads `rmm.exe` together
 //! with its published `rmm.exe.sha256`, verifies the SHA-256 in memory and only
 //! then replaces the installed executable and restarts the service.
 //!
@@ -21,9 +22,10 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::config::{Config, AGENT_VERSION, GITHUB_RELEASES_URL};
+use crate::config::{Config, AGENT_VERSION};
+use crate::release_source::ReleaseSource;
 
-/// Name of the executable asset in the GitHub release.
+/// Name of the executable asset in the release.
 pub const EXE_ASSET_NAME: &str = "rmm.exe";
 /// Name of the checksum asset (lowercase hex SHA-256 of rmm.exe).
 pub const CHECKSUM_ASSET_NAME: &str = "rmm.exe.sha256";
@@ -50,10 +52,10 @@ pub fn update_assets() -> Option<(&'static str, &'static str)> {
 /// Pick the binary and checksum assets by name. Both must be present: an
 /// update is never installed without its published checksum.
 fn select_assets<'a>(
-    assets: &'a [GitHubAsset],
+    assets: &'a [ReleaseAsset],
     binary_name: &str,
     checksum_name: &str,
-) -> Result<(&'a GitHubAsset, &'a GitHubAsset)> {
+) -> Result<(&'a ReleaseAsset, &'a ReleaseAsset)> {
     let binary = assets
         .iter()
         .find(|asset| asset.name == binary_name)
@@ -92,19 +94,20 @@ pub struct UpdateInfo {
     pub size: Option<u64>,
 }
 
-/// GitHub release API response
+/// Latest-release API response (GitHub and Forgejo share these fields)
 #[derive(Debug, Deserialize)]
-struct GitHubRelease {
+struct Release {
     tag_name: String,
-    assets: Vec<GitHubAsset>,
+    assets: Vec<ReleaseAsset>,
 }
 
-/// GitHub asset in a release
+/// An asset in a release
 #[derive(Debug, Deserialize)]
-struct GitHubAsset {
+struct ReleaseAsset {
     name: String,
     browser_download_url: String,
-    size: u64,
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 /// Parse the contents of a checksum file. Accepts a bare hash or
@@ -337,42 +340,44 @@ pub fn auto_update_supported() -> bool {
 pub struct Updater {
     config: Config,
     client: reqwest::Client,
+    source: ReleaseSource,
 }
 
 impl Updater {
     /// Create a new updater instance
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Config, source: ReleaseSource) -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .user_agent(format!("RMM-Agent/{}", AGENT_VERSION))
             .build()
             .context("Failed to create HTTP client")?;
 
-        Ok(Self { config, client })
+        Ok(Self { config, client, source })
     }
 
-    /// Check GitHub for a newer version
+    /// Check the latest release for a newer version
     pub async fn check_for_update(&self) -> Result<Option<UpdateInfo>> {
-        info!("Checking for updates at {}", GITHUB_RELEASES_URL);
+        let releases_url = self.source.current();
+        info!("Checking for updates at {}", releases_url);
 
         let response = self
             .client
-            .get(GITHUB_RELEASES_URL)
-            .header("Accept", "application/vnd.github.v3+json")
+            .get(&releases_url)
+            .header("Accept", "application/json")
             .send()
             .await
-            .context("Failed to fetch GitHub releases")?;
+            .context("Failed to fetch the latest release")?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("GitHub API returned {}: {}", status, body);
+            anyhow::bail!("Releases API returned {}: {}", status, body);
         }
 
-        let release: GitHubRelease = response
+        let release: Release = response
             .json()
             .await
-            .context("Failed to parse GitHub release JSON")?;
+            .context("Failed to parse release JSON")?;
 
         // Parse the tag name (e.g., "v0.4.0" -> "0.4.0")
         let remote_version_str = release.tag_name.trim_start_matches('v');
@@ -411,7 +416,7 @@ impl Updater {
             version: remote.to_string(),
             download_url: exe_asset.browser_download_url.clone(),
             checksum_url: checksum_asset.browser_download_url.clone(),
-            size: Some(exe_asset.size),
+            size: exe_asset.size,
         }))
     }
 
@@ -571,6 +576,12 @@ impl Updater {
             "Starting update check loop (interval: {}s)",
             self.config.update_check_interval
         );
+
+        // Give the first heartbeat a moment to name the releases URL
+        tokio::select! {
+            _ = cancellation_token.cancelled() => return,
+            _ = self.source.wait_for_server(Duration::from_secs(self.config.release_source_wait)) => {}
+        }
 
         // Check immediately on startup
         if self.check_and_install().await {
@@ -822,8 +833,8 @@ mod tests {
         assert_eq!(update_assets_for("macos", "aarch64"), None);
     }
 
-    fn release_assets() -> Vec<GitHubAsset> {
-        let release: GitHubRelease = serde_json::from_str(
+    fn release_assets() -> Vec<ReleaseAsset> {
+        let release: Release = serde_json::from_str(
             r#"{"tag_name":"v0.7.0","assets":[
                 {"name":"benjh-rmm-0.7.0-x86_64.msi","browser_download_url":"https://example.test/msi","size":5},
                 {"name":"rmm.exe","browser_download_url":"https://example.test/exe","size":10},
@@ -843,13 +854,13 @@ mod tests {
             select_assets(&assets, LINUX_X86_64_ASSET_NAME, LINUX_X86_64_CHECKSUM_ASSET_NAME).unwrap();
 
         assert_eq!(binary.browser_download_url, "https://example.test/linux");
-        assert_eq!(binary.size, 20);
+        assert_eq!(binary.size, Some(20));
         assert_eq!(checksum.browser_download_url, "https://example.test/linux.sha256");
     }
 
     #[test]
     fn refuses_a_release_without_the_checksum() {
-        let assets: Vec<GitHubAsset> = release_assets()
+        let assets: Vec<ReleaseAsset> = release_assets()
             .into_iter()
             .filter(|asset| asset.name != LINUX_X86_64_CHECKSUM_ASSET_NAME)
             .collect();
@@ -858,6 +869,30 @@ mod tests {
             .unwrap_err();
         assert!(format!("{error:#}").contains("refusing to update"));
         assert!(select_assets(&assets, "rmm-linux-aarch64", "x").is_err());
+    }
+
+    #[test]
+    fn parses_a_forgejo_release() {
+        let release: Release = serde_json::from_str(
+            r#"{"id":12,"tag_name":"v0.7.0","name":"v0.7.0","draft":false,"prerelease":false,
+                "assets":[
+                {"id":1,"name":"rmm.exe","size":10,"download_count":0,"created_at":"2026-11-19T06:00:00Z","uuid":"a1",
+                 "browser_download_url":"https://git.example.test/ben/rmm/releases/download/v0.7.0/rmm.exe"},
+                {"id":2,"name":"rmm.exe.sha256","download_count":0,"uuid":"a2",
+                 "browser_download_url":"https://git.example.test/ben/rmm/releases/download/v0.7.0/rmm.exe.sha256"}
+            ]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(release.tag_name, "v0.7.0");
+        let (binary, checksum) =
+            select_assets(&release.assets, EXE_ASSET_NAME, CHECKSUM_ASSET_NAME).unwrap();
+        assert_eq!(binary.size, Some(10));
+        assert_eq!(
+            checksum.browser_download_url,
+            "https://git.example.test/ben/rmm/releases/download/v0.7.0/rmm.exe.sha256"
+        );
+        assert_eq!(checksum.size, None);
     }
 
     #[test]

@@ -9,14 +9,16 @@ return [
     | Latest Release
     |--------------------------------------------------------------------------
     |
-    | `agent:check-version` asks GitHub for the newest agent release every
-    | hour and caches its version forever under `latest_version_cache_key`,
-    | so pages and metrics posts never call GitHub themselves. A failed check
-    | keeps the previously cached version.
+    | `agent:check-version` asks the releases API (GitHub or Forgejo, both
+    | answer with `tag_name`) for the newest agent release every hour and
+    | caches its version forever under `latest_version_cache_key`, so pages
+    | and metrics posts never call it themselves. A failed check keeps the
+    | previously cached version. Agents are handed the same URL in every
+    | heartbeat response and update from that release.
     |
     */
 
-    'releases_url' => 'https://api.github.com/repos/benjameshughes/rmm/releases/latest',
+    'releases_url' => env('AGENT_RELEASES_URL', 'https://api.github.com/repos/benjameshughes/rmm/releases/latest'),
 
     'latest_version_cache_key' => 'agent.latest_version',
 

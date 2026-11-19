@@ -21,6 +21,7 @@ final class HeartbeatController
             'status' => 'ok',
             'server_time' => now()->toIso8601String(),
             'heartbeat_interval_seconds' => config('devices.heartbeat.interval_seconds'),
+            'agent_releases_url' => config('agent.releases_url'),
         ]);
     }
 }

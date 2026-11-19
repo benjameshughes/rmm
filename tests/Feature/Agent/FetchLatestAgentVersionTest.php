@@ -29,6 +29,19 @@ it('accepts a tag without a v prefix', function (): void {
     expect(app(FetchLatestAgentVersion::class)())->toBe('0.6.0');
 });
 
+it('reads the latest version from a Forgejo release', function (): void {
+    config(['agent.releases_url' => 'https://git.example.test/api/v1/repos/ben/rmm/releases/latest']);
+    Http::fake(['git.example.test/*' => Http::response([
+        'id' => 12,
+        'tag_name' => 'v0.7.0',
+        'name' => 'v0.7.0',
+        'assets' => [['id' => 1, 'name' => 'rmm.exe', 'size' => 10, 'uuid' => 'a1', 'browser_download_url' => 'https://git.example.test/ben/rmm/releases/download/v0.7.0/rmm.exe']],
+    ])]);
+
+    expect(app(FetchLatestAgentVersion::class)())->toBe('0.7.0');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://git.example.test/api/v1/repos/ben/rmm/releases/latest');
+});
+
 it('keeps the previous version when the release check fails', function (mixed $response): void {
     Cache::forever(config('agent.latest_version_cache_key'), '0.5.0');
     Http::fake([config('agent.releases_url') => $response]);

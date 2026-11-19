@@ -14,6 +14,7 @@ use crate::power::{self, PowerController, PowerNotifier};
 use crate::power_state::{self, PowerNotice, PowerReason};
 #[cfg(windows)]
 use crate::printers::PrinterReporter;
+use crate::release_source::ReleaseSource;
 use crate::startup_grace::{self, Milestone, StartupProgress};
 use crate::storage::Storage;
 use crate::sysinfo::SystemInfo;
@@ -343,11 +344,15 @@ impl Agent {
             self.announce_boot_if_fresh();
         }
 
+        // The heartbeat learns the releases URL from the server; the updater reads it.
+        let release_source = ReleaseSource::new();
+
         // Spawn heartbeat loop as a separate task
         let heartbeat_api_key = api_key.clone();
         let heartbeat_token = session_token.clone();
         let heartbeat_health = key_health.clone();
         let heartbeat_gate = self.power.gate();
+        let heartbeat_release_source = release_source.clone();
         let heartbeat_handle = tokio::spawn(async move {
             heartbeat_collector
                 .start_heartbeat_loop(
@@ -355,6 +360,7 @@ impl Agent {
                     heartbeat_token,
                     heartbeat_health,
                     heartbeat_gate,
+                    heartbeat_release_source,
                 )
                 .await;
         });
@@ -387,7 +393,7 @@ impl Agent {
         let update_config = self.config.clone();
         let update_token = session_token.clone();
         let update_handle = tokio::spawn(async move {
-            match Updater::new(update_config) {
+            match Updater::new(update_config, release_source) {
                 Ok(updater) => {
                     updater.start_update_loop(update_token).await;
                 }

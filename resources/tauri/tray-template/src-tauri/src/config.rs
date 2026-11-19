@@ -24,6 +24,9 @@ pub const DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS: u64 = 30;
 /// Default interval for checking for updates (24 hours)
 pub const DEFAULT_UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 
+/// Longest the first update check waits for a heartbeat to name the releases URL
+pub const DEFAULT_RELEASE_SOURCE_WAIT_SECS: u64 = 60;
+
 /// Default interval for asking the server for queued commands
 pub const DEFAULT_COMMAND_POLL_INTERVAL_SECS: u64 = 30;
 
@@ -198,8 +201,9 @@ pub const NETDATA_WINDOW_MAX_SECS: u64 = 300;
 /// Default base URL placeholder (replaced at build time)
 pub const DEFAULT_BASE_URL: &str = "https://rmm.fnstr.uk";
 
-/// GitHub releases API URL for auto-updates
-pub const GITHUB_RELEASES_URL: &str = "https://api.github.com/repos/benjameshughes/rmm/releases/latest";
+/// Latest-release API URL used until the server names one (older servers,
+/// first contact). GitHub and Forgejo answer in the same shape.
+pub const DEFAULT_RELEASES_URL: &str = "https://api.github.com/repos/benjameshughes/rmm/releases/latest";
 
 /// Current agent version (from Cargo.toml)
 pub const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -229,6 +233,8 @@ pub struct Config {
     pub enrollment_poll_interval: u64,
     /// Update check interval in seconds
     pub update_check_interval: u64,
+    /// Longest the first update check waits for the server-named releases URL
+    pub release_source_wait: u64,
     /// Command poll interval in seconds
     pub command_poll_interval: u64,
     /// Shortest allowed command timeout in seconds
@@ -312,6 +318,7 @@ impl Default for Config {
             status_check_interval: DEFAULT_STATUS_CHECK_INTERVAL_SECS,
             enrollment_poll_interval: DEFAULT_ENROLLMENT_POLL_INTERVAL_SECS,
             update_check_interval: DEFAULT_UPDATE_CHECK_INTERVAL_SECS,
+            release_source_wait: DEFAULT_RELEASE_SOURCE_WAIT_SECS,
             command_poll_interval: DEFAULT_COMMAND_POLL_INTERVAL_SECS,
             command_min_timeout: DEFAULT_COMMAND_MIN_TIMEOUT_SECS,
             command_max_timeout: DEFAULT_COMMAND_MAX_TIMEOUT_SECS,

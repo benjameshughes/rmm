@@ -29,6 +29,7 @@ mod runtime_config;
 mod startup_grace;
 mod storage;
 mod sysinfo;
+mod release_source;
 mod updater;
 
 use agent::Agent;
@@ -827,7 +828,7 @@ fn check_for_updates(check_only: bool) -> Result<()> {
     println!("Current version: {}", AGENT_VERSION);
     println!();
 
-    let updater = updater::Updater::new(config)?;
+    let updater = updater::Updater::new(config, release_source::ReleaseSource::new())?;
     let rt = tokio::runtime::Runtime::new()?;
 
     rt.block_on(async {

@@ -17,6 +17,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::{Config, NETDATA_GROUP_BY_INSTANCE, NETDATA_WINDOW_MAX_SECS};
 use crate::power::PowerGate;
+use crate::release_source::ReleaseSource;
 use crate::startup_grace::{Milestone, StartupProgress};
 
 // ============================================================================
@@ -155,22 +156,22 @@ impl KeyHealth {
 }
 
 // ============================================================================
-// Heartbeat interval (set by the server)
+// Heartbeat response (interval and releases URL set by the server)
 // ============================================================================
 
 /// The part of a heartbeat response the agent uses. Older servers send no
-/// interval (or no JSON at all).
+/// interval or releases URL (or no JSON at all).
 #[derive(Debug, Default, Deserialize)]
-struct HeartbeatResponse {
+pub struct HeartbeatResponse {
     #[serde(default)]
-    heartbeat_interval_seconds: Option<u64>,
+    pub heartbeat_interval_seconds: Option<u64>,
+    #[serde(default)]
+    pub agent_releases_url: Option<String>,
 }
 
-/// The interval a heartbeat response asks for, if it asks for one.
-fn requested_heartbeat_interval(body: &str) -> Option<u64> {
-    serde_json::from_str::<HeartbeatResponse>(body)
-        .ok()
-        .and_then(|response| response.heartbeat_interval_seconds)
+/// What a heartbeat response asks for; empty when it is not usable JSON.
+fn parse_heartbeat_response(body: &str) -> HeartbeatResponse {
+    serde_json::from_str(body).unwrap_or_default()
 }
 
 /// Keep a server-requested interval within `[min, max]` seconds.
@@ -772,9 +773,9 @@ impl MetricsCollector {
         info!("Metrics collection loop stopped");
     }
 
-    /// Send a lightweight heartbeat to the backend. Also returns the interval
-    /// the server asked for, if any.
-    pub async fn send_heartbeat(&self, api_key: &str) -> (RequestOutcome, Option<u64>) {
+    /// Send a lightweight heartbeat to the backend. Also returns what the
+    /// server asked for (interval, releases URL), if anything.
+    pub async fn send_heartbeat(&self, api_key: &str) -> (RequestOutcome, HeartbeatResponse) {
         let url = format!("{}/api/heartbeat", self.config.base_url);
 
         debug!("Sending heartbeat to: {}", url);
@@ -790,13 +791,13 @@ impl MetricsCollector {
             Ok(resp) => {
                 let status = resp.status();
                 let outcome = RequestOutcome::from_status(status);
-                let mut requested_interval = None;
+                let mut requested = HeartbeatResponse::default();
 
                 match outcome {
                     RequestOutcome::Success => {
                         debug!("Heartbeat OK");
                         let body = resp.text().await.unwrap_or_default();
-                        requested_interval = requested_heartbeat_interval(&body);
+                        requested = parse_heartbeat_response(&body);
                     }
                     RequestOutcome::Unauthorized => {
                         let body = resp.text().await.unwrap_or_default();
@@ -813,11 +814,11 @@ impl MetricsCollector {
                     }
                 }
 
-                (outcome, requested_interval)
+                (outcome, requested)
             }
             Err(e) => {
                 warn!("Heartbeat network error: {}", e);
-                (RequestOutcome::Inconclusive, None)
+                (RequestOutcome::Inconclusive, HeartbeatResponse::default())
             }
         }
     }
@@ -831,6 +832,7 @@ impl MetricsCollector {
         cancellation_token: CancellationToken,
         key_health: Arc<KeyHealth>,
         mut power_gate: PowerGate,
+        release_source: ReleaseSource,
     ) {
         info!(
             "Starting heartbeat loop (interval: {}s)",
@@ -839,6 +841,7 @@ impl MetricsCollector {
 
         let api_key = &api_key;
         let key_health = &key_health;
+        let release_source = &release_source;
         run_heartbeats(
             Duration::from_secs(self.config.heartbeat_interval),
             (
@@ -848,9 +851,10 @@ impl MetricsCollector {
             &mut power_gate,
             &cancellation_token,
             || async move {
-                let (outcome, requested_interval) = self.send_heartbeat(api_key).await;
+                let (outcome, requested) = self.send_heartbeat(api_key).await;
                 key_health.record(outcome);
-                requested_interval
+                release_source.offer(requested.agent_releases_url.as_deref());
+                requested.heartbeat_interval_seconds
             },
         )
         .await;
@@ -1176,11 +1180,24 @@ mod tests {
     #[test]
     fn reads_the_interval_from_a_heartbeat_response() {
         assert_eq!(
-            requested_heartbeat_interval(
+            parse_heartbeat_response(
                 r#"{"status":"ok","server_time":"2026-10-03T10:00:00Z","heartbeat_interval_seconds":15}"#
-            ),
+            )
+            .heartbeat_interval_seconds,
             Some(15)
         );
+    }
+
+    #[test]
+    fn reads_the_releases_url_from_a_heartbeat_response() {
+        let response = parse_heartbeat_response(
+            r#"{"status":"ok","heartbeat_interval_seconds":15,"agent_releases_url":"https://git.example.test/api/v1/repos/ben/rmm/releases/latest"}"#,
+        );
+        assert_eq!(
+            response.agent_releases_url.as_deref(),
+            Some("https://git.example.test/api/v1/repos/ben/rmm/releases/latest")
+        );
+        assert_eq!(response.heartbeat_interval_seconds, Some(15));
     }
 
     #[test]
@@ -1193,7 +1210,8 @@ mod tests {
             r#"{"heartbeat_interval_seconds":-5}"#,
             r#"{"heartbeat_interval_seconds":"15"}"#,
         ] {
-            assert_eq!(requested_heartbeat_interval(body), None, "{body}");
+            assert_eq!(parse_heartbeat_response(body).heartbeat_interval_seconds, None, "{body}");
+            assert_eq!(parse_heartbeat_response(body).agent_releases_url, None, "{body}");
         }
     }
 

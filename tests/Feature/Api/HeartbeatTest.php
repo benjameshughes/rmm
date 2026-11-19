@@ -109,3 +109,13 @@ it('tells the agent how often to heartbeat', function (): void {
         ->assertSuccessful()
         ->assertJsonPath('heartbeat_interval_seconds', 20);
 });
+
+it('tells the agent where to look for releases', function (): void {
+    config(['agent.releases_url' => 'https://git.example.test/api/v1/repos/ben/rmm/releases/latest']);
+    Device::factory()->active()->withApiKey('RELEASES-KEY')->create();
+
+    $this->withHeaders(['X-Device-Key' => 'RELEASES-KEY'])
+        ->postJson('/api/heartbeat')
+        ->assertSuccessful()
+        ->assertJsonPath('agent_releases_url', 'https://git.example.test/api/v1/repos/ben/rmm/releases/latest');
+});
