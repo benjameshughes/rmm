@@ -1,5 +1,5 @@
 # Installs the "Daily Lock Up" reminder: a large, calm, always-on-top
-# window that appears for whoever is logged in at 04:00 every day.
+# window that appears for whoever is logged in at 16:00 every day.
 # Done closes it, Snooze brings it back after 10 minutes.
 #
 # The window has to run as the logged-in user, because the agent runs as
@@ -117,7 +117,7 @@ if (-not (Test-Path $popupPath)) {
 
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$popupPath`""
 $triggers = @(
-    New-ScheduledTaskTrigger -Daily -At '04:00'
+    New-ScheduledTaskTrigger -Daily -At '16:00'
 )
 $principal = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-545' -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
@@ -129,6 +129,6 @@ if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) 
     exit 1
 }
 
-Write-Output "OK: daily lock up reminder installed for 04:00 every day"
+Write-Output "OK: daily lock up reminder installed for 16:00 every day"
 Write-Output "Popup: $popupPath"
 Write-Output "Task: $taskName"

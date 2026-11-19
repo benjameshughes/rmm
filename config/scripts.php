@@ -794,7 +794,7 @@ return [
         ],
         'daily-lock-up-reminder' => [
             'name' => 'Daily Lock Up Reminder',
-            'description' => 'Install a large on-screen "Daily Lock Up" reminder for whoever is logged in at 04:00 every day, with Done and Snooze 10m buttons. Safe to rerun',
+            'description' => 'Install a large on-screen "Daily Lock Up" reminder for whoever is logged in at 16:00 every day, with Done and Snooze 10m buttons. Safe to rerun',
             'category' => 'user',
             'platform' => 'windows',
             'file' => 'windows/daily-lock-up-reminder.ps1',
