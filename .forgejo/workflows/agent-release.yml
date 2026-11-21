@@ -63,16 +63,17 @@ jobs:
       RUSTUP_HOME: C:\rust\rustup
       CARGO_HOME: C:\rust\cargo
     steps:
+      # Built in C:\rmm-build, not the runner's workspace: as SYSTEM that sits under
+      # C:\Windows\System32, which Windows silently swaps for SysWOW64 when a 32-bit
+      # program like WiX's candle.exe looks there. Kept between runs, so cargo reuses target\.
       - name: Fetch the code
-        env:
-          TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          if (Test-Path src) { Remove-Item src -Recurse -Force }
-          git init -q src
-          git -C src fetch -q --depth 1 "https://ben:$env:TOKEN@git.fnstr.uk/ben/rmm.git" "${{ github.sha }}"
-          git -C src checkout -q FETCH_HEAD
+          if (-not (Test-Path C:\rmm-build\src\.git)) { git init -q C:\rmm-build\src }
+          git -C C:\rmm-build\src fetch -q --depth 1 https://git.fnstr.uk/ben/rmm.git "${{ github.sha }}"
+          git -C C:\rmm-build\src checkout -q -f FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the code' }
+          git -C C:\rmm-build\src clean -q -fdx -e target
 
       - name: Rust, cargo-wix and WiX
         run: |
@@ -92,7 +93,7 @@ jobs:
           cargo --version
 
       - name: Build and test
-        working-directory: src/resources/tauri/tray-template/src-tauri
+        working-directory: C:\rmm-build\src\resources\tauri\tray-template\src-tauri
         run: |
           $env:Path = "C:\rust\cargo\bin;C:\wix;$env:Path"
           cargo build --release
@@ -102,20 +103,19 @@ jobs:
 
       # Agents refuse to auto-update unless rmm.exe matches this checksum
       - name: rmm.exe SHA-256 and the MSI
-        working-directory: src/resources/tauri/tray-template/src-tauri
+        working-directory: C:\rmm-build\src\resources\tauri\tray-template\src-tauri
         run: |
           $ErrorActionPreference = 'Stop'
           $env:Path = "C:\rust\cargo\bin;C:\wix;$env:Path"
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath target\release\rmm.exe).Hash.ToLowerInvariant()
           Set-Content -LiteralPath target\release\rmm.exe.sha256 -Value "$hash  rmm.exe" -NoNewline -Encoding ascii
           Write-Host "rmm.exe SHA-256: $hash"
-          Get-ChildItem wix -Force | Format-Table Name, Length, Attributes -AutoSize | Out-String | Write-Host
           cargo wix --no-build --nocapture
           if ($LASTEXITCODE -ne 0) { throw 'cargo wix failed' }
 
       # This runner is a real PC, not a throwaway VM: never install the MSI over an agent that lives here.
       - name: Test the MSI installs and uninstalls
-        working-directory: src/resources/tauri/tray-template/src-tauri
+        working-directory: C:\rmm-build\src\resources\tauri\tray-template\src-tauri
         run: |
           $ErrorActionPreference = 'Stop'
           if (Get-Service BenJHRMM -ErrorAction SilentlyContinue) {
@@ -136,7 +136,7 @@ jobs:
           Write-Host 'MSI install and uninstall OK'
 
       - name: Upload to the draft release
-        working-directory: src/resources/tauri/tray-template/src-tauri
+        working-directory: C:\rmm-build\src\resources\tauri\tray-template\src-tauri
         env:
           TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
