@@ -163,13 +163,16 @@ jobs:
           "$HOME/.cargo/bin/rustup" target add x86_64-unknown-linux-musl
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Test and build
+      - name: Test
+        working-directory: resources/tauri/tray-template/src-tauri
+        run: cargo test --release
+
+      # crt-static only on the musl build: on the host target it breaks proc-macros.
+      - name: Build static binary
         working-directory: resources/tauri/tray-template/src-tauri
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
-        run: |
-          cargo test --release
-          cargo build --release --target x86_64-unknown-linux-musl
+        run: cargo build --release --target x86_64-unknown-linux-musl
 
       # Agents refuse to auto-update unless the binary matches this checksum
       - name: Package and upload to the draft release
