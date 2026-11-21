@@ -13,10 +13,9 @@
 set -euo pipefail
 
 SERVER_URL="{BASE_URL}"
-GITHUB_REPO="benjameshughes/rmm"
+RELEASES_URL="{RELEASES_URL}"
 ASSET="rmm-linux-x86_64"
 INSTALL_PATH="/usr/local/bin/rmm"
-DOWNLOAD_BASE="https://github.com/${GITHUB_REPO}/releases/latest/download"
 
 fail() {
     echo "Error: $*" >&2
@@ -40,9 +39,21 @@ cat > "${WORK_DIR}/install-netdata.sh" <<'NETDATA_INSTALLER'
 NETDATA_INSTALLER
 bash "${WORK_DIR}/install-netdata.sh"
 
-echo "Downloading ${ASSET} from the latest ${GITHUB_REPO} release..."
-curl -fsSL -o "${WORK_DIR}/${ASSET}" "${DOWNLOAD_BASE}/${ASSET}"
-curl -fsSL -o "${WORK_DIR}/${ASSET}.sha256" "${DOWNLOAD_BASE}/${ASSET}.sha256"
+echo "Looking up the latest agent release..."
+RELEASE_JSON="$(curl -fsSL "$RELEASES_URL")" || fail "could not read the latest release from ${RELEASES_URL}"
+
+# No jq on a fresh box, so pull each download URL out of the JSON by hand.
+asset_url() {
+    printf '%s' "$RELEASE_JSON" | tr ',' '\n' | sed -n 's/.*"browser_download_url" *: *"\([^"]*\)".*/\1/p' | grep "/$1\$" | head -n 1
+}
+
+ASSET_URL="$(asset_url "$ASSET")"
+CHECKSUM_URL="$(asset_url "${ASSET}.sha256")"
+[ -n "$ASSET_URL" ] && [ -n "$CHECKSUM_URL" ] || fail "the latest release has no ${ASSET} or its checksum"
+
+echo "Downloading ${ASSET}..."
+curl -fsSL -o "${WORK_DIR}/${ASSET}" "$ASSET_URL"
+curl -fsSL -o "${WORK_DIR}/${ASSET}.sha256" "$CHECKSUM_URL"
 
 echo "Verifying checksum..."
 (cd "$WORK_DIR" && sha256sum -c "${ASSET}.sha256") || fail "checksum verification failed, nothing was installed"

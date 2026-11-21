@@ -9,7 +9,7 @@
 $ErrorActionPreference = "Stop"
 
 $ServerUrl    = "{BASE_URL}"
-$GitHubRepo   = "benjameshughes/rmm"
+$ReleasesUrl  = "{RELEASES_URL}"
 $ServiceName  = "BenJHRMM"
 $ProductName  = "BenJH RMM"
 $LogFile      = Join-Path $env:TEMP "benjh-rmm-install.log"
@@ -103,7 +103,7 @@ if (-not (Test-Path "$env:SystemRoot\System32\vcruntime140.dll")) {
 }
 
 Log "Looking up the latest agent release..."
-$release = Invoke-RestMethod -Headers @{ 'User-Agent' = 'rmm-installer' } -Uri "https://api.github.com/repos/$GitHubRepo/releases/latest"
+$release = Invoke-RestMethod -Headers @{ 'User-Agent' = 'rmm-installer' } -Uri $ReleasesUrl
 $msiAsset = $release.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 
 if (-not $msiAsset) {

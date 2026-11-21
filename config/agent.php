@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'releases_url' => env('AGENT_RELEASES_URL', 'https://api.github.com/repos/benjameshughes/rmm/releases/latest'),
+    'releases_url' => env('AGENT_RELEASES_URL', 'https://git.fnstr.uk/api/v1/repos/ben/rmm-agent/releases/latest'),
 
     'latest_version_cache_key' => 'agent.latest_version',
 

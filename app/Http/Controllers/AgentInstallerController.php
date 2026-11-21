@@ -28,7 +28,7 @@ final class AgentInstallerController
     /** @param array<string, string> $inserts */
     private function installer(string $path, string $filename, array $inserts = []): Response
     {
-        $script = strtr(File::get($path), ['{BASE_URL}' => url('/'), ...$inserts]);
+        $script = strtr(File::get($path), ['{BASE_URL}' => url('/'), '{RELEASES_URL}' => config('agent.releases_url'), ...$inserts]);
 
         return response($script, 200, [
             'Content-Type' => 'text/plain; charset=utf-8',

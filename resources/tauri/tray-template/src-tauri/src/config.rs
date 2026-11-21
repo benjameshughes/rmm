@@ -203,7 +203,7 @@ pub const DEFAULT_BASE_URL: &str = "https://rmm.fnstr.uk";
 
 /// Latest-release API URL used until the server names one (older servers,
 /// first contact). GitHub and Forgejo answer in the same shape.
-pub const DEFAULT_RELEASES_URL: &str = "https://api.github.com/repos/benjameshughes/rmm/releases/latest";
+pub const DEFAULT_RELEASES_URL: &str = "https://git.fnstr.uk/api/v1/repos/ben/rmm-agent/releases/latest";
 
 /// Current agent version (from Cargo.toml)
 pub const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");

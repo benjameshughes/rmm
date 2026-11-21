@@ -1,0 +1,216 @@
+name: Agent Release
+
+# Bumping the version in Cargo.toml releases the agent: the Windows runner builds
+# the MSI and rmm.exe, this runner builds the static Linux agent, and both land on
+# the public ben/rmm-agent releases (rmm itself is private, so agents and
+# installers can't read its releases without a token).
+#
+# No Node actions on Windows: the runner there is a bare box with only the C++
+# build tools and Git. Rust, cargo-wix and WiX download themselves on first run.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'resources/tauri/tray-template/**'
+  workflow_dispatch:
+
+env:
+  API: https://git.fnstr.uk/api/v1
+  RELEASES: https://git.fnstr.uk/api/v1/repos/ben/rmm-agent/releases
+  AGENT_DIR: resources/tauri/tray-template/src-tauri
+
+jobs:
+  prepare:
+    runs-on: self-hosted
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open a draft release for a new version
+        id: release
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$AGENT_DIR/Cargo.toml" | head -1)
+          test -n "$version" || { echo "Couldn't read the agent version from Cargo.toml"; exit 1; }
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A published release means this version is done. A draft is a failed run: start it again.
+          existing=$(curl -sf -H "Authorization: token $TOKEN" "$RELEASES?limit=50" | jq -r --arg t "$tag" '.[] | select(.tag_name == $t) | "\(.id) \(.draft)"' | head -1)
+          case "$existing" in
+            *" false") echo "$tag is already released, nothing to do (bump the version in Cargo.toml to release)"; exit 0;;
+            *" true") curl -sf -X DELETE -H "Authorization: token $TOKEN" "$RELEASES/${existing%% *}";;
+          esac
+
+          id=$(curl -sf -X POST "$RELEASES" -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg t "$tag" '{tag_name: $t, target_commitish: "main", name: "RMM Agent \($t)", draft: true, body: "Built from ben/rmm \($t). Agents only take files whose SHA-256 matches the .sha256 next to them."}')" | jq -r .id)
+          test -n "$id" && test "$id" != null || { echo "Couldn't create the $tag draft release"; exit 1; }
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+          echo "Draft $tag is release $id"
+
+  windows:
+    needs: prepare
+    if: needs.prepare.outputs.release_id != ''
+    runs-on: windows
+    defaults:
+      run:
+        shell: powershell
+    env:
+      RUSTUP_HOME: C:\rust\rustup
+      CARGO_HOME: C:\rust\cargo
+    steps:
+      - name: Fetch the code
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path src) { Remove-Item src -Recurse -Force }
+          git init -q src
+          git -C src fetch -q --depth 1 "https://ben:$env:TOKEN@git.fnstr.uk/ben/rmm.git" "${{ github.sha }}"
+          git -C src checkout -q FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the code' }
+
+      - name: Rust, cargo-wix and WiX
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $env:Path = "C:\rust\cargo\bin;C:\wix;$env:Path"
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile "$env:TEMP\rustup-init.exe" -UseBasicParsing
+            & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --profile minimal --no-modify-path
+          }
+          rustup update stable --no-self-update
+          if (-not (Get-Command cargo-wix -ErrorAction SilentlyContinue)) { cargo install cargo-wix }
+          if (-not (Test-Path C:\wix\candle.exe)) {
+            Invoke-WebRequest https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip -OutFile "$env:TEMP\wix.zip" -UseBasicParsing
+            Expand-Archive "$env:TEMP\wix.zip" -DestinationPath C:\wix -Force
+          }
+          cargo --version
+
+      - name: Build and test
+        working-directory: src/resources/tauri/tray-template/src-tauri
+        run: |
+          $env:Path = "C:\rust\cargo\bin;C:\wix;$env:Path"
+          cargo build --release
+          if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+          cargo test --release
+          if ($LASTEXITCODE -ne 0) { throw 'cargo test failed' }
+
+      # Agents refuse to auto-update unless rmm.exe matches this checksum
+      - name: rmm.exe SHA-256 and the MSI
+        working-directory: src/resources/tauri/tray-template/src-tauri
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "C:\rust\cargo\bin;C:\wix;$env:Path"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath target\release\rmm.exe).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath target\release\rmm.exe.sha256 -Value "$hash  rmm.exe" -NoNewline -Encoding ascii
+          Write-Host "rmm.exe SHA-256: $hash"
+          cargo wix --no-build --nocapture
+          if ($LASTEXITCODE -ne 0) { throw 'cargo wix failed' }
+
+      # This runner is a real PC, not a throwaway VM: never install the MSI over an agent that lives here.
+      - name: Test the MSI installs and uninstalls
+        working-directory: src/resources/tauri/tray-template/src-tauri
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Get-Service BenJHRMM -ErrorAction SilentlyContinue) {
+            Write-Host 'The RMM agent is installed on this runner, so the MSI test is skipped to leave it alone'
+            exit 0
+          }
+          function Invoke-Msi([string] $arguments, [string] $log) {
+            $process = Start-Process msiexec.exe -ArgumentList "$arguments /qn /norestart /l*v `"$log`"" -Wait -PassThru
+            if ($process.ExitCode -notin 0, 3010) { throw "msiexec $arguments exited $($process.ExitCode)" }
+          }
+          $msi = (Get-ChildItem target\wix\*.msi | Select-Object -First 1).FullName
+          Invoke-Msi "/i `"$msi`"" install.log
+          $service = Get-CimInstance Win32_Service -Filter "Name='BenJHRMM'"
+          if ($null -eq $service) { throw 'The MSI did not register the service' }
+          if ($service.StartMode -ne 'Auto') { throw "The service start mode is $($service.StartMode), expected Auto" }
+          Invoke-Msi "/x `"$msi`"" uninstall.log
+          if (Get-Service BenJHRMM -ErrorAction SilentlyContinue) { throw 'The service is still registered after uninstall' }
+          Write-Host 'MSI install and uninstall OK'
+
+      - name: Upload to the draft release
+        working-directory: src/resources/tauri/tray-template/src-tauri
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @((Get-ChildItem target\wix\*.msi | Select-Object -First 1).FullName, 'target\release\rmm.exe', 'target\release\rmm.exe.sha256')
+          foreach ($file in $files) {
+            $name = Split-Path $file -Leaf
+            curl.exe -sf -X POST "$env:RELEASES/${{ needs.prepare.outputs.release_id }}/assets?name=$name" -H "Authorization: token $env:TOKEN" -F "attachment=@$file" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Upload of $name failed" }
+            Write-Host "Uploaded $name"
+          }
+
+  # Read-only monitoring agent for Linux servers/LXCs: one static musl binary.
+  linux:
+    needs: prepare
+    if: needs.prepare.outputs.release_id != ''
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        run: |
+          command -v musl-gcc >/dev/null || { echo "musl-gcc is missing on this runner: goat install musl-tools -h runner"; exit 1; }
+          [ -x "$HOME/.cargo/bin/cargo" ] || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --no-modify-path
+          "$HOME/.cargo/bin/rustup" update stable --no-self-update
+          "$HOME/.cargo/bin/rustup" target add x86_64-unknown-linux-musl
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Test and build
+        working-directory: resources/tauri/tray-template/src-tauri
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: |
+          cargo test --release
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      # Agents refuse to auto-update unless the binary matches this checksum
+      - name: Package and upload to the draft release
+        working-directory: resources/tauri/tray-template/src-tauri
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          mkdir -p dist-linux
+          cp target/x86_64-unknown-linux-musl/release/rmm dist-linux/rmm-linux-x86_64
+          chmod 755 dist-linux/rmm-linux-x86_64
+          cd dist-linux
+          # ldd exits 0 on static-pie binaries too, so trust file's verdict instead.
+          file rmm-linux-x86_64 | grep -Eq 'statically linked|static-pie linked' || { echo "rmm-linux-x86_64 is not statically linked"; exit 1; }
+          ./rmm-linux-x86_64 --version
+          sha256sum rmm-linux-x86_64 > rmm-linux-x86_64.sha256
+          for name in rmm-linux-x86_64 rmm-linux-x86_64.sha256; do
+            curl -sf -X POST "$RELEASES/${{ needs.prepare.outputs.release_id }}/assets?name=$name" -H "Authorization: token $TOKEN" -F "attachment=@$name" > /dev/null
+            echo "Uploaded $name"
+          done
+
+  # Only once both platforms are up does the release go public and become latest.
+  publish:
+    needs: [prepare, windows, linux]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish and tag
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          id=${{ needs.prepare.outputs.release_id }}
+          assets=$(curl -sf -H "Authorization: token $TOKEN" "$RELEASES/$id" | jq '.assets | length')
+          [ "$assets" -ge 5 ] || { echo "Release $id has $assets assets, expected 5 (MSI, rmm.exe, its .sha256, the Linux agent and its .sha256)"; exit 1; }
+          curl -sf -X PATCH "$RELEASES/$id" -H "Authorization: token $TOKEN" -H "Content-Type: application/json" -d '{"draft": false}' > /dev/null
+          latest=$(curl -sf "$RELEASES/latest" | jq -r .tag_name)
+          [ "$latest" = "v$VERSION" ] || { echo "v$VERSION is published but latest is $latest"; exit 1; }
+          echo "v$VERSION is live at https://git.fnstr.uk/ben/rmm-agent/releases/tag/v$VERSION"
+
+          # The tag also reaches the GitHub mirror, which builds the same version there for agents still on 0.11.1.
+          git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null || { git tag "v$VERSION"; git push origin "v$VERSION"; }
