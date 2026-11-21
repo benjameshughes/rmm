@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'resources/tauri/tray-template/**'
+      - '.forgejo/workflows/agent-release.yml'
   workflow_dispatch:
 
 env:
@@ -108,6 +109,7 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath target\release\rmm.exe).Hash.ToLowerInvariant()
           Set-Content -LiteralPath target\release\rmm.exe.sha256 -Value "$hash  rmm.exe" -NoNewline -Encoding ascii
           Write-Host "rmm.exe SHA-256: $hash"
+          Get-ChildItem wix -Force | Format-Table Name, Length, Attributes -AutoSize | Out-String | Write-Host
           cargo wix --no-build --nocapture
           if ($LASTEXITCODE -ne 0) { throw 'cargo wix failed' }
 
